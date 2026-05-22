@@ -1,0 +1,13 @@
+# CMake build directory
+/build/
+/out/
+
+# IDE files
+/.vs/
+/.idea/
+/*.user
+/*.suo
+
+# Local or temp files
+/bin/
+/lib/
