@@ -15,6 +15,7 @@
 #include "../objetos/plano_inclinado.h"
 #include "../objetos/bola.h"
 #include "../objetos/trampolin.h"
+#include "../objetos/balancin.h"
 #include "colisiones.h"
 #include <vector>
 #include <algorithm>
@@ -105,6 +106,7 @@ private:
     void aplicar_gravedad() {
         for (auto* e : entidades) {
             if (!e->get_es_estatico() && e->get_masa() > MathUtils::EPSILON) {
+                if (dynamic_cast<Balancin*>(e)) continue; // El balancín está pivotado y fijo linealmente
                 // F = m * g
                 e->aplicar_fuerza(gravedad * e->get_masa());
             }
@@ -212,10 +214,17 @@ private:
         if (bola && tramp) {
             // Si la colisión es en la lona del trampolín (la parte superior, normal hacia arriba en pantalla Y-)
             if (normal_para_bola.y < -0.4) {
+                // Obtener velocidad vertical previa para estimar la fuerza del impacto
+                double velocidad_impacto = std::abs(bola->get_velocidad().y);
+
                 // Forzar velocidad vertical hacia arriba
                 Vector2D vel = bola->get_velocidad();
                 vel.y = -tramp->get_fuerza_rebote();
                 bola->set_velocidad(vel);
+
+                // Deformar la lona proporcionalmente a la velocidad del impacto
+                double nueva_def = std::max(10.0, velocidad_impacto * 0.04);
+                tramp->set_deformacion(std::min(24.0, nueva_def));
 
                 // Aplicar un giro (torque) basado en qué tan lejos del centro cayó para un efecto más interactivo
                 double centro_tramp = tramp->get_posicion().x + tramp->get_ancho() / 2.0;
@@ -231,12 +240,23 @@ private:
     // Helper: Círculo (circ_ent) vs Polígono (poly_ent)
     InfoColision colision_circulo_poligono(EntidadFisica* circ_ent, EntidadFisica* poly_ent) {
         auto* bola = dynamic_cast<Bola*>(circ_ent);
+        if (!bola) return InfoColision{};
+
         auto* rampa = dynamic_cast<PlanoInclinado*>(poly_ent);
-        if (bola && rampa) {
+        if (rampa) {
             return Colisiones::circulo_vs_poligono(
                 bola->get_posicion(), bola->get_radio(),
                 rampa->get_vertices());
         }
+
+        auto* balancin = dynamic_cast<Balancin*>(poly_ent);
+        if (balancin) {
+            return Colisiones::circulo_vs_balancin(
+                bola->get_posicion(), bola->get_radio(),
+                balancin->get_posicion(), balancin->get_angulo(),
+                balancin->get_largo(), balancin->get_espesor());
+        }
+
         return InfoColision{};
     }
 };

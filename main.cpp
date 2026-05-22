@@ -20,6 +20,7 @@
 #include "objetos/plano_inclinado.h"
 #include "objetos/bola.h"
 #include "objetos/trampolin.h"
+#include "objetos/balancin.h"
 #include "fisica/colisiones.h"
 #include "fisica/motor_fisica.h"
 
@@ -59,6 +60,52 @@ int contador_bolas = 0;
 // Feedback visual de spawn fallido
 float spawn_error_timer = 0.0f;
 Vector2D spawn_error_pos;
+
+// Objeto seleccionado para spawn (0 = Bola, 1 = Trampolín, 2 = Balancín)
+int seleccion_objeto = 0;
+
+// Estado del sistema Drag & Drop
+EntidadFisica* entidad_arrastrada = nullptr;
+Vector2D offset_arrastre;
+
+// Obtener qué objeto móvil/colocable está debajo del cursor del mouse
+EntidadFisica* obtener_entidad_bajo_mouse(const MotorFisica& motor, Vector2D mouse_pos) {
+    for (auto* e : motor.get_entidades()) {
+        TipoForma forma = e->get_tipo_forma();
+        if (forma == TipoForma::CIRCULO) {
+            const Bola* b = dynamic_cast<const Bola*>(e);
+            if (b) {
+                double dist = (b->get_posicion() - mouse_pos).magnitud();
+                if (dist < b->get_radio() + 15.0) {
+                    return const_cast<Bola*>(b);
+                }
+            }
+        }
+        else if (forma == TipoForma::AABB) {
+            const Trampolin* t = dynamic_cast<const Trampolin*>(e);
+            if (t) {
+                Vector2D pos = t->get_posicion();
+                double w = t->get_ancho();
+                double h = t->get_alto();
+                if (mouse_pos.x >= pos.x - 10 && mouse_pos.x <= pos.x + w + 10 &&
+                    mouse_pos.y >= pos.y - 10 && mouse_pos.y <= pos.y + h + 10) {
+                    return const_cast<Trampolin*>(t);
+                }
+            }
+        }
+        else if (forma == TipoForma::POLIGONO) {
+            const Balancin* bal = dynamic_cast<const Balancin*>(e);
+            if (bal) {
+                // Pivot central del balancín
+                double dist = (bal->get_posicion() - mouse_pos).magnitud();
+                if (dist < 45.0) {
+                    return const_cast<Balancin*>(bal);
+                }
+            }
+        }
+    }
+    return nullptr;
+}
 
 // ============================================================================
 // Crear escena inicial
@@ -131,8 +178,82 @@ bool posicion_valida_para_bola(const MotorFisica& motor, Vector2D pos, double ra
                     pos, radio, ramp->get_vertices());
                 if (info.hay_colision) return false;
             }
+            const Balancin* bal = dynamic_cast<const Balancin*>(e);
+            if (bal) {
+                InfoColision info = Colisiones::circulo_vs_balancin(
+                    pos, radio, bal->get_posicion(), bal->get_angulo(),
+                    bal->get_largo(), bal->get_espesor());
+                if (info.hay_colision) return false;
+            }
         }
     }
+    return true;
+}
+
+// Validación para crear balancín
+bool posicion_valida_para_balancin(const MotorFisica& motor, Vector2D pos, double w, double h) {
+    for (const auto* e : motor.get_entidades()) {
+        TipoForma forma = e->get_tipo_forma();
+
+        if (forma == TipoForma::CIRCULO) {
+            const Bola* b = dynamic_cast<const Bola*>(e);
+            if (b) {
+                InfoColision info = Colisiones::circulo_vs_aabb(
+                    b->get_posicion(), b->get_radio(),
+                    pos, Vector2D(pos.x + w, pos.y + h));
+                if (info.hay_colision) return false;
+            }
+        }
+        else if (forma == TipoForma::AABB) {
+            const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
+            const Trampolin* t = dynamic_cast<const Trampolin*>(e);
+            Vector2D min_b = p ? p->get_min() : (t ? t->get_min() : pos);
+            Vector2D max_b = p ? p->get_max() : (t ? t->get_max() : pos);
+
+            if (p || t) {
+                bool overlap = (pos.x < max_b.x && pos.x + w > min_b.x &&
+                                pos.y < max_b.y && pos.y + h > min_b.y);
+                if (overlap) return false;
+            }
+        }
+        else if (forma == TipoForma::POLIGONO) {
+            const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
+            const Balancin* bal = dynamic_cast<const Balancin*>(e);
+            if (ramp) {
+                for (const auto& v : ramp->get_vertices()) {
+                    if (v.x >= pos.x && v.x <= pos.x + w &&
+                        v.y >= pos.y && v.y <= pos.y + h) {
+                        return false;
+                    }
+                }
+            }
+            if (bal) {
+                // Evitar superponer pivotes demasiado cerca
+                Vector2D diff = (pos + Vector2D(w/2.0, h/2.0)) - bal->get_posicion();
+                if (diff.magnitud() < 40.0) return false;
+            }
+        }
+    }
+    return true;
+}
+
+// Crear balancín en la posición del mouse
+bool crear_balancin(MotorFisica& motor, Vector2D pos) {
+    double w = 200.0;
+    double h = 6.0;
+
+    // Centrar en el mouse (el pivot es su posición)
+    Vector2D pivot_pos = pos;
+    Vector2D spawn_min(pos.x - w / 2.0, pos.y - h / 2.0);
+
+    if (!posicion_valida_para_balancin(motor, spawn_min, w, h)) {
+        spawn_error_timer = 0.5f;
+        spawn_error_pos = pos;
+        return false;
+    }
+
+    Balancin* b = new Balancin(motor.generar_id(), pivot_pos, w, h);
+    motor.agregar_entidad(b);
     return true;
 }
 
@@ -275,29 +396,71 @@ void dibujar_entidad(const EntidadFisica* e) {
         const Trampolin* tramp = dynamic_cast<const Trampolin*>(e);
         if (tramp) {
             Vector2D pos = tramp->get_posicion();
-            int px = static_cast<int>(pos.x);
-            int py = static_cast<int>(pos.y);
-            int pw = static_cast<int>(tramp->get_ancho());
-            int ph = static_cast<int>(tramp->get_alto());
+            float px = static_cast<float>(pos.x);
+            float py = static_cast<float>(pos.y);
+            float pw = static_cast<float>(tramp->get_ancho());
+            float ph = static_cast<float>(tramp->get_alto());
+            float def = static_cast<float>(tramp->get_deformacion());
 
-            // Dibujar patas/soporte del trampolín (metal en X)
-            DrawLineEx({static_cast<float>(px + 8), static_cast<float>(py + ph)}, {static_cast<float>(px + 18), static_cast<float>(py + 8)}, 2.5f, GRAY);
-            DrawLineEx({static_cast<float>(px + 18), static_cast<float>(py + ph)}, {static_cast<float>(px + 8), static_cast<float>(py + 8)}, 2.5f, GRAY);
-            DrawLineEx({static_cast<float>(px + pw - 8), static_cast<float>(py + ph)}, {static_cast<float>(px + pw - 18), static_cast<float>(py + 8)}, 2.5f, GRAY);
-            DrawLineEx({static_cast<float>(px + pw - 18), static_cast<float>(py + ph)}, {static_cast<float>(px + pw - 8), static_cast<float>(py + 8)}, 2.5f, GRAY);
+            // 1. Dibujar patas de soporte de acero cromado (estructura triangular estable)
+            DrawLineEx({px + 6, py + ph}, {px + 12, py + 8}, 3.0f, DARKGRAY);
+            DrawLineEx({px + 18, py + ph}, {px + 12, py + 8}, 3.0f, DARKGRAY);
+            DrawLineEx({px + pw - 6, py + ph}, {px + pw - 12, py + 8}, 3.0f, DARKGRAY);
+            DrawLineEx({px + pw - 18, py + ph}, {px + pw - 12, py + 8}, 3.0f, DARKGRAY);
 
-            // Estructura/barra inferior de unión
-            DrawLineEx({static_cast<float>(px + 18), static_cast<float>(py + ph - 2)}, {static_cast<float>(px + pw - 18), static_cast<float>(py + ph - 2)}, 2.0f, DARKGRAY);
+            // Barra inferior metálica horizontal de unión
+            DrawLineEx({px + 18, py + ph - 2}, {px + pw - 18, py + ph - 2}, 2.5f, GRAY);
 
-            // Dibujar resortes elásticos decorativos
-            for (int rx = px + 10; rx < px + pw - 10; rx += 10) {
-                DrawLine(rx, py + 4, rx + 4, py + 8, GOLD);
-                DrawLine(rx + 4, py + 8, rx + 8, py + 4, GOLD);
+            // 2. Dibujar marcos rígidos laterales en los extremos (donde se anclan los resortes)
+            DrawRectangleRec({px, py, 6.0f, 10.0f}, GRAY);
+            DrawRectangleLinesEx({px, py, 6.0f, 10.0f}, 1.0f, DARKGRAY);
+            DrawRectangleRec({px + pw - 6.0f, py, 6.0f, 10.0f}, GRAY);
+            DrawRectangleLinesEx({px + pw - 6.0f, py, 6.0f, 10.0f}, 1.0f, DARKGRAY);
+
+            // 3. Dibujar resortes elásticos dorados estirándose hacia la lona curvada
+            int num_resortes = 6;
+            for (int i = 0; i < num_resortes; ++i) {
+                // Anclaje en marco izquierdo
+                float lx_start = px + 6.0f;
+                float ly_start = py + 3.0f + i * 1.2f;
+                
+                // Fin en lona izquierda (interpolación hasta el centro)
+                float t = static_cast<float>(i) / (num_resortes - 1);
+                float lx_end = px + 6.0f + (pw / 2.0f - 14.0f) * t;
+                float ly_end = py + 4.0f + def * t;
+                
+                // Dibujar resorte como zigzag dorado
+                float mx = (lx_start + lx_end) / 2.0f;
+                float my = (ly_start + ly_end) / 2.0f + 2.5f; // zigzag wave
+                DrawLineEx({lx_start, ly_start}, {mx, my}, 1.5f, GOLD);
+                DrawLineEx({mx, my}, {lx_end, ly_end}, 1.5f, GOLD);
+
+                // Anclaje en marco derecho
+                float rx_start = px + pw - 6.0f;
+                float ry_start = py + 3.0f + i * 1.2f;
+                
+                // Fin en lona derecha
+                float rx_end = px + pw - 6.0f - (pw / 2.0f - 14.0f) * t;
+                float ry_end = py + 4.0f + def * t;
+
+                float rmx = (rx_start + rx_end) / 2.0f;
+                float rmy = (ry_start + ry_end) / 2.0f + 2.5f;
+                DrawLineEx({rx_start, ry_start}, {rmx, rmy}, 1.5f, GOLD);
+                DrawLineEx({rmx, rmy}, {rx_end, ry_end}, 1.5f, GOLD);
             }
 
-            // Dibujar lona elástica superior (rojo brillante con relieve sutil)
-            DrawRectangle(px + 4, py, pw - 8, 6, RED);
-            DrawRectangleLines(px + 4, py, pw - 8, 6, ORANGE);
+            // 4. Dibujar la lona elástica central curvada por la deformación (rojo intenso con contorno naranja)
+            Vector2 p_left = { px + 10.0f, py + 4.0f };
+            Vector2 p_center = { px + pw / 2.0f, py + 4.0f + def };
+            Vector2 p_right = { px + pw - 10.0f, py + 4.0f };
+
+            // Lona elástica gruesa
+            DrawLineEx(p_left, p_center, 6.0f, RED);
+            DrawLineEx(p_center, p_right, 6.0f, RED);
+
+            // Borde brillante superior
+            DrawLineEx({p_left.x, p_left.y - 2.0f}, {p_center.x, p_center.y - 2.0f}, 1.5f, ORANGE);
+            DrawLineEx({p_center.x, p_center.y - 2.0f}, {p_right.x, p_right.y - 2.0f}, 1.5f, ORANGE);
             return;
         }
 
@@ -314,6 +477,79 @@ void dibujar_entidad(const EntidadFisica* e) {
         DrawRectangleLines(px, py, pw, ph, COLOR_PARED_BORDE);
     }
     else if (forma == TipoForma::POLIGONO) {
+        const Balancin* bal = dynamic_cast<const Balancin*>(e);
+        if (bal) {
+            Vector2D pos = bal->get_posicion();
+            int px = static_cast<int>(pos.x);
+            int py = static_cast<int>(pos.y);
+            int largo = static_cast<int>(bal->get_largo());
+            int espesor = static_cast<int>(bal->get_espesor());
+
+            // 1. Dibujar soporte del pivot (triángulo metálico)
+            DrawTriangle(
+                {static_cast<float>(px), static_cast<float>(py)},
+                {static_cast<float>(px - 16), static_cast<float>(py + 40)},
+                {static_cast<float>(px + 16), static_cast<float>(py + 40)},
+                DARKGRAY
+            );
+            DrawTriangleLines(
+                {static_cast<float>(px), static_cast<float>(py)},
+                {static_cast<float>(px - 16), static_cast<float>(py + 40)},
+                {static_cast<float>(px + 16), static_cast<float>(py + 40)},
+                GRAY
+            );
+
+            // 2. Dibujar la tabla giratoria (plank)
+            Rectangle rec = { static_cast<float>(px), static_cast<float>(py), static_cast<float>(largo), static_cast<float>(espesor) };
+            Vector2 origin = { static_cast<float>(largo / 2.0), static_cast<float>(espesor / 2.0) };
+            float rot_deg = static_cast<float>(bal->get_angulo() * 180.0 / MathUtils::TIM_PI);
+
+            // Madera ocre con relieve
+            DrawRectanglePro(rec, origin, rot_deg, Color{190, 110, 50, 255});
+            
+            // Dibujar contorno ocre rotado usando las 4 esquinas del tablón
+            double cos_a = std::cos(bal->get_angulo());
+            double sin_a = std::sin(bal->get_angulo());
+            double hl = largo / 2.0;
+            double ht = espesor / 2.0;
+
+            // Ejes locales rotados
+            Vector2D dir_x(cos_a, sin_a);
+            Vector2D dir_y(-sin_a, cos_a);
+
+            // Calcular las 4 esquinas rotadas y trasladadas
+            Vector2D c1 = pos - dir_x * hl - dir_y * ht;
+            Vector2D c2 = pos + dir_x * hl - dir_y * ht;
+            Vector2D c3 = pos + dir_x * hl + dir_y * ht;
+            Vector2D c4 = pos - dir_x * hl + dir_y * ht;
+
+            Color color_borde = Color{220, 140, 70, 255};
+            DrawLineEx({(float)c1.x, (float)c1.y}, {(float)c2.x, (float)c2.y}, 1.5f, color_borde);
+            DrawLineEx({(float)c2.x, (float)c2.y}, {(float)c3.x, (float)c3.y}, 1.5f, color_borde);
+            DrawLineEx({(float)c3.x, (float)c3.y}, {(float)c4.x, (float)c4.y}, 1.5f, color_borde);
+            DrawLineEx({(float)c4.x, (float)c4.y}, {(float)c1.x, (float)c1.y}, 1.5f, color_borde);
+
+            // 3. Asientos rojos en los extremos
+            Vector2 seat_l = {
+                static_cast<float>(px - (largo / 2.0 - 5.0) * cos_a),
+                static_cast<float>(py - (largo / 2.0 - 5.0) * sin_a)
+            };
+            DrawCircle(seat_l.x, seat_l.y, 6.0f, RED);
+            DrawCircleLines(seat_l.x, seat_l.y, 6.0f, MAROON);
+
+            Vector2 seat_r = {
+                static_cast<float>(px + (largo / 2.0 - 5.0) * cos_a),
+                static_cast<float>(py + (largo / 2.0 - 5.0) * sin_a)
+            };
+            DrawCircle(seat_r.x, seat_r.y, 6.0f, RED);
+            DrawCircleLines(seat_r.x, seat_r.y, 6.0f, MAROON);
+
+            // 4. Perno central negro/gris
+            DrawCircle(px, py, 6, BLACK);
+            DrawCircle(px, py, 4, LIGHTGRAY);
+            return;
+        }
+
         const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
         if (!ramp) return;
 
@@ -369,6 +605,15 @@ void dibujar_hud(const MotorFisica& motor) {
     DrawText(TextFormat("Gravedad: %.0f px/s2", motor.get_gravedad().y),
              margin, y + 66, 16, COLOR_HUD);
 
+    // Objeto seleccionado
+    const char* obj_name = "BOLA";
+    if (seleccion_objeto == 1) obj_name = "TRAMPOLIN";
+    else if (seleccion_objeto == 2) obj_name = "BALANCIN";
+
+    char sel_text[64];
+    sprintf(sel_text, "SELECCIONADO [1/2/3]: %s", obj_name);
+    DrawText(sel_text, margin, y + 90, 16, Color{100, 200, 255, 255});
+
     // Indicador de pausa
     if (motor.get_pausado()) {
         int pause_w = MeasureText("|| PAUSADO", 30);
@@ -382,7 +627,7 @@ void dibujar_hud(const MotorFisica& motor) {
     }
 
     // Controles
-    DrawText("[L-CLICK] Bola  [R-CLICK] Trampolin  [SPACE] Pausa  [D] Debug  [R] Reset",
+    DrawText("[1/2/3] Cambiar Obj  [L-CLICK] Crear Obj  [SPACE] Pausa  [D] Debug  [R] Reset",
              margin, ALTO - 30, 14, COLOR_CONTROLES);
 }
 
@@ -408,13 +653,51 @@ int main() {
     while (!WindowShouldClose()) {
         // ======== INPUT ========
 
-        // Click izquierdo: crear bola
+        // Cambiar selección de objeto
+        if (IsKeyPressed(KEY_ONE)) seleccion_objeto = 0;
+        if (IsKeyPressed(KEY_TWO)) seleccion_objeto = 1;
+        if (IsKeyPressed(KEY_THREE)) seleccion_objeto = 2;
+
+        // Click izquierdo: arrastrar objeto existente o crear uno nuevo
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             Vector2D mouse_pos(GetMouseX(), GetMouseY());
-            crear_bola(motor, mouse_pos);
+            EntidadFisica* clicked = obtener_entidad_bajo_mouse(motor, mouse_pos);
+            if (clicked) {
+                entidad_arrastrada = clicked;
+                offset_arrastre = clicked->get_posicion() - mouse_pos;
+            } else {
+                if (seleccion_objeto == 0) {
+                    crear_bola(motor, mouse_pos);
+                }
+                else if (seleccion_objeto == 1) {
+                    crear_trampolin(motor, mouse_pos);
+                }
+                else if (seleccion_objeto == 2) {
+                    crear_balancin(motor, mouse_pos);
+                }
+            }
         }
 
-        // Click derecho: crear trampolín
+        // Mientras se mantiene presionado el click izquierdo: arrastrar objeto
+        if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && entidad_arrastrada != nullptr) {
+            Vector2D mouse_pos(GetMouseX(), GetMouseY());
+            Vector2D nueva_pos = mouse_pos + offset_arrastre;
+
+            // Clampear la posición dentro de los límites del escenario
+            nueva_pos.x = std::max(30.0, std::min(double(ANCHO - 30.0), nueva_pos.x));
+            nueva_pos.y = std::max(30.0, std::min(double(ALTO - 30.0), nueva_pos.y));
+
+            entidad_arrastrada->set_posicion(nueva_pos);
+            entidad_arrastrada->set_velocidad(Vector2D(0.0, 0.0));
+            entidad_arrastrada->set_velocidad_angular(0.0);
+        }
+
+        // Al soltar el click izquierdo: liberar el objeto arrastrado
+        if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+            entidad_arrastrada = nullptr;
+        }
+
+        // Click derecho heredado: crear trampolín directamente por comodidad
         if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
             Vector2D mouse_pos(GetMouseX(), GetMouseY());
             crear_trampolin(motor, mouse_pos);

@@ -16,6 +16,7 @@
 #include "../core/vector2d.h"
 #include "../core/math_utils.h"
 #include "../core/entidad_fisica.h"
+#include "../objetos/balancin.h"
 #include <vector>
 #include <cmath>
 #include <algorithm>
@@ -176,6 +177,56 @@ namespace Colisiones {
     }
 
     // ========================================================================
+    // 4. Círculo vs Balancín (Lever / Seesaw OBB)
+    //    Transforma el círculo a coordenadas locales del balancín (AABB)
+    //    para reutilizar circulo_vs_aabb.
+    // ========================================================================
+    inline InfoColision circulo_vs_balancin(
+        const Vector2D& pos_circ, double radio,
+        const Vector2D& pos_pivot, double angulo,
+        double largo, double espesor)
+    {
+        // 1. Pasar posición del círculo a coordenadas locales (origen en el pivot)
+        Vector2D local_pos = pos_circ - pos_pivot;
+        double cos_ang = std::cos(-angulo);
+        double sin_ang = std::sin(-angulo);
+        Vector2D local_circ(
+            local_pos.x * cos_ang - local_pos.y * sin_ang,
+            local_pos.x * sin_ang + local_pos.y * cos_ang
+        );
+
+        // 2. Definir AABB local del balancín
+        Vector2D aabb_min(-largo / 2.0, -espesor / 2.0);
+        Vector2D aabb_max(largo / 2.0, espesor / 2.0);
+
+        // 3. Ejecutar circulo_vs_aabb local
+        InfoColision local_info = circulo_vs_aabb(local_circ, radio, aabb_min, aabb_max);
+
+        if (!local_info.hay_colision) return local_info;
+
+        // 4. Transformar los resultados de vuelta a coordenadas del mundo
+        InfoColision world_info;
+        world_info.hay_colision = true;
+        world_info.profundidad = local_info.profundidad;
+
+        // Rotar normal de vuelta al mundo (por +angulo)
+        double cos_w = std::cos(angulo);
+        double sin_w = std::sin(angulo);
+        world_info.normal = Vector2D(
+            local_info.normal.x * cos_w - local_info.normal.y * sin_w,
+            local_info.normal.x * sin_w + local_info.normal.y * cos_w
+        );
+
+        // Rotar y trasladar punto de contacto de vuelta al mundo
+        world_info.punto_contacto = Vector2D(
+            local_info.punto_contacto.x * cos_w - local_info.punto_contacto.y * sin_w,
+            local_info.punto_contacto.x * sin_w + local_info.punto_contacto.y * cos_w
+        ) + pos_pivot;
+
+        return world_info;
+    }
+
+    // ========================================================================
     // Resolución de Colisión — Método de impulsos con rotación
     //
     // 1. Corrección posicional (evita que los objetos se hundan)
@@ -192,11 +243,15 @@ namespace Colisiones {
     {
         if (!info.hay_colision) return;
 
-        double inv_masa_a = a->get_es_estatico() ? 0.0 : 1.0 / a->get_masa();
-        double inv_masa_b = b->get_es_estatico() ? 0.0 : 1.0 / b->get_masa();
+        // Si es un balancín, su masa lineal es conceptualmente infinita (inv_masa = 0.0)
+        // ya que está fijo en su pivote. Conserva sin embargo su inercia rotacional.
+        double inv_masa_a = (a->get_es_estatico() || dynamic_cast<Balancin*>(a)) ? 0.0 : 1.0 / a->get_masa();
+        double inv_masa_b = (b->get_es_estatico() || dynamic_cast<Balancin*>(b)) ? 0.0 : 1.0 / b->get_masa();
         double inv_masa_total = inv_masa_a + inv_masa_b;
 
-        if (inv_masa_total < MathUtils::EPSILON) return; // Ambos estáticos
+        if (inv_masa_total < MathUtils::EPSILON && !dynamic_cast<Balancin*>(a) && !dynamic_cast<Balancin*>(b)) {
+            return; // Ambos completamente estáticos
+        }
 
         // Vectores del centro al punto de contacto
         Vector2D r_a = info.punto_contacto - a->get_posicion();
@@ -211,13 +266,16 @@ namespace Colisiones {
         // ---- 1. Corrección Posicional ----
         const double correccion_pct = 0.8;
         const double slop = 0.5;
+        double inv_m_total_corr = inv_masa_total;
+        if (inv_m_total_corr < MathUtils::EPSILON) inv_m_total_corr = MathUtils::EPSILON;
+        
         double correccion = std::max(info.profundidad - slop, 0.0)
-                            * correccion_pct / inv_masa_total;
+                            * correccion_pct / inv_m_total_corr;
 
-        if (!a->get_es_estatico()) {
+        if (!a->get_es_estatico() && !dynamic_cast<Balancin*>(a)) {
             a->set_posicion(a->get_posicion() + info.normal * (correccion * inv_masa_a));
         }
-        if (!b->get_es_estatico()) {
+        if (!b->get_es_estatico() && !dynamic_cast<Balancin*>(b)) {
             b->set_posicion(b->get_posicion() - info.normal * (correccion * inv_masa_b));
         }
 
@@ -238,16 +296,33 @@ namespace Colisiones {
         if (vel_normal > 0.0) return;
 
         double e = std::min(a->get_restitucion(), b->get_restitucion());
-        // Para círculos, r es paralelo a normal → cross(r, n) ≈ 0,
-        // así que la masa efectiva normal ≈ inv_masa_total (sin rotación).
-        double j = -(1.0 + e) * vel_normal / inv_masa_total;
+        
+        // Masa efectiva normal (incluye contribución rotacional de inercia)
+        // 1/m_eff = 1/m_a + 1/m_b + (r_a × n)²/I_a + (r_b × n)²/I_b
+        double rn_a = Vector2D::cross(r_a, info.normal);
+        double rn_b = Vector2D::cross(r_b, info.normal);
+        double inv_masa_normal = inv_masa_total
+                               + rn_a * rn_a * inv_I_a
+                               + rn_b * rn_b * inv_I_b;
+
+        if (inv_masa_normal < MathUtils::EPSILON) inv_masa_normal = MathUtils::EPSILON;
+
+        double j = -(1.0 + e) * vel_normal / inv_masa_normal;
         Vector2D impulso = info.normal * j;
 
         if (!a->get_es_estatico()) {
             a->set_velocidad(a->get_velocidad() + impulso * inv_masa_a);
+            if (inv_I_a > 0.0) {
+                double delta_omega_a = Vector2D::cross(r_a, impulso) * inv_I_a;
+                a->set_velocidad_angular(a->get_velocidad_angular() + delta_omega_a);
+            }
         }
         if (!b->get_es_estatico()) {
             b->set_velocidad(b->get_velocidad() - impulso * inv_masa_b);
+            if (inv_I_b > 0.0) {
+                double delta_omega_b = Vector2D::cross(r_b, impulso) * inv_I_b;
+                b->set_velocidad_angular(b->get_velocidad_angular() - delta_omega_b);
+            }
         }
 
         // ---- 3. Impulso Tangencial (Fricción + Rolling) ----
