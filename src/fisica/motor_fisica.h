@@ -14,6 +14,7 @@
 #include "../objetos/pared_rectangular.h"
 #include "../objetos/plano_inclinado.h"
 #include "../objetos/bola.h"
+#include "../objetos/trampolin.h"
 #include "colisiones.h"
 #include <vector>
 #include <algorithm>
@@ -127,6 +128,7 @@ private:
                 InfoColision info = detectar_colision(a, b);
                 if (info.hay_colision) {
                     Colisiones::resolver_colision(a, b, info);
+                    aplicar_efecto_trampolin(a, b, info);
                 }
             }
         }
@@ -176,13 +178,54 @@ private:
     // Helper: Círculo (circ_ent) vs AABB (aabb_ent)
     InfoColision colision_circulo_aabb(EntidadFisica* circ_ent, EntidadFisica* aabb_ent) {
         auto* bola = dynamic_cast<Bola*>(circ_ent);
+        if (!bola) return InfoColision{};
+
         auto* pared = dynamic_cast<ParedRectangular*>(aabb_ent);
-        if (bola && pared) {
+        if (pared) {
             return Colisiones::circulo_vs_aabb(
                 bola->get_posicion(), bola->get_radio(),
                 pared->get_min(), pared->get_max());
         }
+
+        auto* tramp = dynamic_cast<Trampolin*>(aabb_ent);
+        if (tramp) {
+            return Colisiones::circulo_vs_aabb(
+                bola->get_posicion(), bola->get_radio(),
+                tramp->get_min(), tramp->get_max());
+        }
+
         return InfoColision{};
+    }
+
+    // Helper para aplicar el rebote elástico hacia arriba del Trampolín
+    void aplicar_efecto_trampolin(EntidadFisica* a, EntidadFisica* b, const InfoColision& info) {
+        Bola* bola = dynamic_cast<Bola*>(a);
+        Trampolin* tramp = dynamic_cast<Trampolin*>(b);
+        Vector2D normal_para_bola = info.normal; // Normal de separación para A
+
+        if (!bola || !tramp) {
+            bola = dynamic_cast<Bola*>(b);
+            tramp = dynamic_cast<Trampolin*>(a);
+            normal_para_bola = info.normal * -1.0;
+        }
+
+        if (bola && tramp) {
+            // Si la colisión es en la lona del trampolín (la parte superior, normal hacia arriba en pantalla Y-)
+            if (normal_para_bola.y < -0.4) {
+                // Forzar velocidad vertical hacia arriba
+                Vector2D vel = bola->get_velocidad();
+                vel.y = -tramp->get_fuerza_rebote();
+                bola->set_velocidad(vel);
+
+                // Aplicar un giro (torque) basado en qué tan lejos del centro cayó para un efecto más interactivo
+                double centro_tramp = tramp->get_posicion().x + tramp->get_ancho() / 2.0;
+                double offset = bola->get_posicion().x - centro_tramp;
+                
+                // Agregamos rotación proporcional al descentrado
+                double kick_rotacional = offset * 0.4;
+                bola->set_velocidad_angular(bola->get_velocidad_angular() + kick_rotacional);
+            }
+        }
     }
 
     // Helper: Círculo (circ_ent) vs Polígono (poly_ent)

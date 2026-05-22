@@ -19,6 +19,7 @@
 #include "objetos/pared_rectangular.h"
 #include "objetos/plano_inclinado.h"
 #include "objetos/bola.h"
+#include "objetos/trampolin.h"
 #include "fisica/colisiones.h"
 #include "fisica/motor_fisica.h"
 
@@ -116,6 +117,12 @@ bool posicion_valida_para_bola(const MotorFisica& motor, Vector2D pos, double ra
                     pos, radio, p->get_min(), p->get_max());
                 if (info.hay_colision) return false;
             }
+            const Trampolin* t = dynamic_cast<const Trampolin*>(e);
+            if (t) {
+                InfoColision info = Colisiones::circulo_vs_aabb(
+                    pos, radio, t->get_min(), t->get_max());
+                if (info.hay_colision) return false;
+            }
         }
         else if (forma == TipoForma::POLIGONO) {
             const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
@@ -126,6 +133,69 @@ bool posicion_valida_para_bola(const MotorFisica& motor, Vector2D pos, double ra
             }
         }
     }
+    return true;
+}
+
+// Validación para crear trampolín (evita colisiones con paredes, otras rampas, bolas)
+bool posicion_valida_para_trampolin(const MotorFisica& motor, Vector2D pos, double w, double h) {
+    for (const auto* e : motor.get_entidades()) {
+        TipoForma forma = e->get_tipo_forma();
+
+        if (forma == TipoForma::CIRCULO) {
+            const Bola* b = dynamic_cast<const Bola*>(e);
+            if (b) {
+                InfoColision info = Colisiones::circulo_vs_aabb(
+                    b->get_posicion(), b->get_radio(),
+                    pos, Vector2D(pos.x + w, pos.y + h));
+                if (info.hay_colision) return false;
+            }
+        }
+        else if (forma == TipoForma::AABB) {
+            const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
+            const Trampolin* t = dynamic_cast<const Trampolin*>(e);
+            Vector2D min_b = p ? p->get_min() : (t ? t->get_min() : pos);
+            Vector2D max_b = p ? p->get_max() : (t ? t->get_max() : pos);
+
+            if (p || t) {
+                // Intersección AABB vs AABB
+                bool overlap = (pos.x < max_b.x && pos.x + w > min_b.x &&
+                                pos.y < max_b.y && pos.y + h > min_b.y);
+                if (overlap) return false;
+            }
+        }
+        else if (forma == TipoForma::POLIGONO) {
+            const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
+            if (ramp) {
+                // Verificación simple para evitar spawn encima de vértices de la rampa
+                for (const auto& v : ramp->get_vertices()) {
+                    if (v.x >= pos.x && v.x <= pos.x + w &&
+                        v.y >= pos.y && v.y <= pos.y + h) {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+    return true;
+}
+
+// ============================================================================
+// Crear trampolín en posición del mouse (con validación)
+// ============================================================================
+bool crear_trampolin(MotorFisica& motor, Vector2D pos) {
+    double w = 80.0;
+    double h = 20.0;
+    // Centrar en el mouse
+    Vector2D spawn_pos(pos.x - w / 2.0, pos.y - h / 2.0);
+
+    if (!posicion_valida_para_trampolin(motor, spawn_pos, w, h)) {
+        spawn_error_timer = 0.5f;
+        spawn_error_pos = pos;
+        return false;
+    }
+
+    Trampolin* t = new Trampolin(motor.generar_id(), spawn_pos, w, h);
+    motor.agregar_entidad(t);
     return true;
 }
 
@@ -201,6 +271,36 @@ void dibujar_entidad(const EntidadFisica* e) {
         }
     }
     else if (forma == TipoForma::AABB) {
+        // Primero verificamos si es un Trampolin
+        const Trampolin* tramp = dynamic_cast<const Trampolin*>(e);
+        if (tramp) {
+            Vector2D pos = tramp->get_posicion();
+            int px = static_cast<int>(pos.x);
+            int py = static_cast<int>(pos.y);
+            int pw = static_cast<int>(tramp->get_ancho());
+            int ph = static_cast<int>(tramp->get_alto());
+
+            // Dibujar patas/soporte del trampolín (metal en X)
+            DrawLineEx({static_cast<float>(px + 8), static_cast<float>(py + ph)}, {static_cast<float>(px + 18), static_cast<float>(py + 8)}, 2.5f, GRAY);
+            DrawLineEx({static_cast<float>(px + 18), static_cast<float>(py + ph)}, {static_cast<float>(px + 8), static_cast<float>(py + 8)}, 2.5f, GRAY);
+            DrawLineEx({static_cast<float>(px + pw - 8), static_cast<float>(py + ph)}, {static_cast<float>(px + pw - 18), static_cast<float>(py + 8)}, 2.5f, GRAY);
+            DrawLineEx({static_cast<float>(px + pw - 18), static_cast<float>(py + ph)}, {static_cast<float>(px + pw - 8), static_cast<float>(py + 8)}, 2.5f, GRAY);
+
+            // Estructura/barra inferior de unión
+            DrawLineEx({static_cast<float>(px + 18), static_cast<float>(py + ph - 2)}, {static_cast<float>(px + pw - 18), static_cast<float>(py + ph - 2)}, 2.0f, DARKGRAY);
+
+            // Dibujar resortes elásticos decorativos
+            for (int rx = px + 10; rx < px + pw - 10; rx += 10) {
+                DrawLine(rx, py + 4, rx + 4, py + 8, GOLD);
+                DrawLine(rx + 4, py + 8, rx + 8, py + 4, GOLD);
+            }
+
+            // Dibujar lona elástica superior (rojo brillante con relieve sutil)
+            DrawRectangle(px + 4, py, pw - 8, 6, RED);
+            DrawRectangleLines(px + 4, py, pw - 8, 6, ORANGE);
+            return;
+        }
+
         const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
         if (!p) return;
 
@@ -282,7 +382,7 @@ void dibujar_hud(const MotorFisica& motor) {
     }
 
     // Controles
-    DrawText("[CLICK] Bola   [SPACE] Pausa   [D] Debug   [R] Reset   [+/-] Gravedad",
+    DrawText("[L-CLICK] Bola  [R-CLICK] Trampolin  [SPACE] Pausa  [D] Debug  [R] Reset",
              margin, ALTO - 30, 14, COLOR_CONTROLES);
 }
 
@@ -312,6 +412,12 @@ int main() {
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             Vector2D mouse_pos(GetMouseX(), GetMouseY());
             crear_bola(motor, mouse_pos);
+        }
+
+        // Click derecho: crear trampolín
+        if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+            Vector2D mouse_pos(GetMouseX(), GetMouseY());
+            crear_trampolin(motor, mouse_pos);
         }
 
         // Spacebar: pausar/reanudar
