@@ -21,6 +21,7 @@
 #include "objetos/bola.h"
 #include "objetos/trampolin.h"
 #include "objetos/balancin.h"
+#include "objetos/seguidor_booster.h"
 #include "fisica/colisiones.h"
 #include "fisica/motor_fisica.h"
 
@@ -90,6 +91,16 @@ EntidadFisica* obtener_entidad_bajo_mouse(const MotorFisica& motor, Vector2D mou
                 if (mouse_pos.x >= pos.x - 10 && mouse_pos.x <= pos.x + w + 10 &&
                     mouse_pos.y >= pos.y - 10 && mouse_pos.y <= pos.y + h + 10) {
                     return const_cast<Trampolin*>(t);
+                }
+            }
+            const SeguidorBooster* seg = dynamic_cast<const SeguidorBooster*>(e);
+            if (seg) {
+                Vector2D pos = seg->get_posicion();
+                double w = seg->get_ancho();
+                double h = seg->get_alto();
+                if (mouse_pos.x >= pos.x - w/2 - 10 && mouse_pos.x <= pos.x + w/2 + 10 &&
+                    mouse_pos.y >= pos.y - h/2 - 10 && mouse_pos.y <= pos.y + h/2 + 10) {
+                    return const_cast<SeguidorBooster*>(seg);
                 }
             }
         }
@@ -342,6 +353,16 @@ bool crear_bola(MotorFisica& motor, Vector2D pos) {
 }
 
 // ============================================================================
+// Crear futbolista seguidor en la posición del mouse
+// ============================================================================
+bool crear_seguidor_booster(MotorFisica& motor, Vector2D pos) {
+    double radio = 18.0;
+    SeguidorBooster* s = new SeguidorBooster(motor.generar_id(), pos, radio);
+    motor.agregar_entidad(s);
+    return true;
+}
+
+// ============================================================================
 // Renderizado de entidades
 // ============================================================================
 void dibujar_entidad(const EntidadFisica* e) {
@@ -392,6 +413,80 @@ void dibujar_entidad(const EntidadFisica* e) {
         }
     }
     else if (forma == TipoForma::AABB) {
+        const SeguidorBooster* seg = dynamic_cast<const SeguidorBooster*>(e);
+        if (seg) {
+            Vector2D pos = seg->get_posicion();
+            float w = static_cast<float>(seg->get_ancho());
+            float h = static_cast<float>(seg->get_alto());
+            float r = w * 0.75f; // Radio aproximado para dibujar cabeza y camiseta
+            EstadoSeguidor estado = seg->get_estado();
+            Vector2D pos_init = seg->get_posicion_inicial();
+            double ang_pierna = seg->get_angulo_pierna();
+            double dir_carr = seg->get_direccion_carrera();
+            double kick_f = seg->get_kicker_factor();
+
+            float draw_y = pos.y - 6.0f; // Subir el sprite 6 pixeles para que no se hundan los pies en el suelo
+
+            // 1. Dibujar sombra sutil en el suelo (bajo el jugador en la posición física real)
+            DrawEllipse(static_cast<int>(pos.x), static_cast<int>(pos.y + h / 2.0f - 2.0f), w * 0.8f, 3.0f, Color{0, 0, 0, 80});
+
+            // 2. Línea de anclaje (hilo elástico de retorno)
+            if (estado != EstadoSeguidor::ESPERANDO) {
+                DrawLineEx({(float)pos_init.x, (float)pos_init.y}, {(float)pos.x, (float)draw_y}, 1.5f, Color{100, 150, 255, 100});
+            }
+
+            // 3. Piernas y chut (dibujamos dos piernas sencillas oscilando o pateando)
+            // Pierna 1
+            float leg1_ang = static_cast<float>(ang_pierna);
+            float lx1 = pos.x - dir_carr * w * 0.3f + std::sin(leg1_ang) * r * 0.7f;
+            float ly1 = draw_y + h / 2.0f - r * 0.2f + std::cos(leg1_ang) * r * 0.5f;
+            DrawLineEx({(float)(pos.x - dir_carr * w * 0.2f), (float)(draw_y + h / 2.0f - r * 0.4f)}, {lx1, ly1}, 4.0f, DARKGRAY);
+            DrawCircle(lx1, ly1, 3.0f, RED); // Botín rojo
+
+            // Pierna 2 (Pateadora/delantera)
+            float leg2_ang = static_cast<float>(-ang_pierna + kick_f * dir_carr * 1.5); // Si patea, se extiende
+            float lx2 = pos.x + dir_carr * w * 0.3f + std::sin(leg2_ang) * r * 0.7f;
+            float ly2 = draw_y + h / 2.0f - r * 0.2f + std::cos(leg2_ang) * r * 0.5f;
+            DrawLineEx({(float)(pos.x + dir_carr * w * 0.2f), (float)(draw_y + h / 2.0f - r * 0.4f)}, {lx2, ly2}, 4.0f, DARKGRAY);
+            DrawCircle(lx2, ly2, 3.0f, RED); // Botín rojo
+
+            // 4. Cuerpo / Camiseta rayada de fútbol
+            int cx = static_cast<int>(pos.x);
+            int cy = static_cast<int>(draw_y + h * 0.1f);
+            // Camiseta (cuerpo)
+            DrawCircle(cx, cy, r * 0.7f, SKYBLUE);
+            DrawCircleLines(cx, cy, r * 0.7f, BLUE);
+            // Rayas blancas verticales de la camiseta
+            DrawRectangleRec({(float)(cx - r * 0.3f), (float)(cy - r * 0.6f), (float)(r * 0.15f), (float)(r * 1.2f)}, WHITE);
+            DrawRectangleRec({(float)(cx + r * 0.15f), (float)(cy - r * 0.6f), (float)(r * 0.15f), (float)(r * 1.2f)}, WHITE);
+
+            // 5. Cabeza del futbolista
+            int head_y = static_cast<int>(draw_y - h * 0.2f);
+            DrawCircle(cx, head_y, r * 0.45f, Color{250, 200, 160, 255}); // Piel
+            DrawCircleLines(cx, head_y, r * 0.45f, DARKGRAY);
+            // Pelo marrón
+            DrawCircleSector({(float)cx, (float)head_y}, r * 0.46f, 180.0f, 360.0f, 0, Color{130, 80, 40, 255});
+
+            // Ojo indicando la dirección de mirada
+            int eye_x = cx + static_cast<int>(dir_carr * r * 0.25f);
+            int eye_y = head_y - static_cast<int>(r * 0.05f);
+            DrawCircle(eye_x, eye_y, 2.5f, BLACK);
+
+            // 6. LED indicador de estado en la espalda
+            Color led_color = GREEN;
+            if (estado == EstadoSeguidor::PERSIGUIENDO) led_color = ORANGE;
+            else if (estado == EstadoSeguidor::RETRAYENDO) led_color = PURPLE;
+            DrawCircle(cx - static_cast<int>(dir_carr * r * 0.3f), cy - r * 0.1f, 3.5f, led_color);
+
+            // Rango de debug
+            if (modo_debug) {
+                DrawCircleLines(cx, cy, 180.0f, Color{0, 255, 0, 80});
+                // Dibujar caja de colisión AABB real
+                DrawRectangleLines(static_cast<int>(pos.x - w/2), static_cast<int>(pos.y - h/2), static_cast<int>(w), static_cast<int>(h), GREEN);
+            }
+            return;
+        }
+
         // Primero verificamos si es un Trampolin
         const Trampolin* tramp = dynamic_cast<const Trampolin*>(e);
         if (tramp) {
@@ -609,9 +704,10 @@ void dibujar_hud(const MotorFisica& motor) {
     const char* obj_name = "BOLA";
     if (seleccion_objeto == 1) obj_name = "TRAMPOLIN";
     else if (seleccion_objeto == 2) obj_name = "BALANCIN";
+    else if (seleccion_objeto == 3) obj_name = "FUTBOLISTA";
 
     char sel_text[64];
-    sprintf(sel_text, "SELECCIONADO [1/2/3]: %s", obj_name);
+    sprintf(sel_text, "SELECCIONADO [1/2/3/4]: %s", obj_name);
     DrawText(sel_text, margin, y + 90, 16, Color{100, 200, 255, 255});
 
     // Indicador de pausa
@@ -627,7 +723,7 @@ void dibujar_hud(const MotorFisica& motor) {
     }
 
     // Controles
-    DrawText("[1/2/3] Cambiar Obj  [L-CLICK] Crear Obj  [SPACE] Pausa  [D] Debug  [R] Reset",
+    DrawText("[1/2/3/4] Cambiar Obj  [L-CLICK] Crear Obj  [SPACE] Pausa  [D] Debug  [R] Reset",
              margin, ALTO - 30, 14, COLOR_CONTROLES);
 }
 
@@ -657,6 +753,7 @@ int main() {
         if (IsKeyPressed(KEY_ONE)) seleccion_objeto = 0;
         if (IsKeyPressed(KEY_TWO)) seleccion_objeto = 1;
         if (IsKeyPressed(KEY_THREE)) seleccion_objeto = 2;
+        if (IsKeyPressed(KEY_FOUR)) seleccion_objeto = 3;
 
         // Click izquierdo: arrastrar objeto existente o crear uno nuevo
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
@@ -674,6 +771,9 @@ int main() {
                 }
                 else if (seleccion_objeto == 2) {
                     crear_balancin(motor, mouse_pos);
+                }
+                else if (seleccion_objeto == 3) {
+                    crear_seguidor_booster(motor, mouse_pos);
                 }
             }
         }

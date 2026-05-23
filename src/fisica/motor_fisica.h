@@ -16,6 +16,7 @@
 #include "../objetos/bola.h"
 #include "../objetos/trampolin.h"
 #include "../objetos/balancin.h"
+#include "../objetos/seguidor_booster.h"
 #include "colisiones.h"
 #include <vector>
 #include <algorithm>
@@ -93,13 +94,21 @@ private:
     void paso_fisico(double dt) {
         // 1. Aplicar fuerzas globales
         aplicar_gravedad();
-
-        // 2. Integrar todas las entidades (cada una usa RK4)
+ 
+        // 2. Actualizar comportamiento del futbolista seguidor
+        for (auto* e : entidades) {
+            auto* seg = dynamic_cast<SeguidorBooster*>(e);
+            if (seg) {
+                seg->actualizar_comportamiento(entidades, dt);
+            }
+        }
+ 
+        // 3. Integrar todas las entidades (cada una usa RK4)
         for (auto* e : entidades) {
             e->actualizar_fisica(dt);
         }
-
-        // 3. Detectar y resolver colisiones
+ 
+        // 4. Detectar y resolver colisiones
         detectar_y_resolver_colisiones();
     }
 
@@ -189,6 +198,11 @@ private:
             return colision_poligono_poligono(a, b);
         }
 
+        // --- AABB vs AABB ---
+        if (fa == TipoForma::AABB && fb == TipoForma::AABB) {
+            return colision_aabb_aabb(a, b);
+        }
+
         return InfoColision{};
     }
 
@@ -209,6 +223,13 @@ private:
             return Colisiones::circulo_vs_aabb(
                 bola->get_posicion(), bola->get_radio(),
                 tramp->get_min(), tramp->get_max());
+        }
+
+        auto* seg = dynamic_cast<SeguidorBooster*>(aabb_ent);
+        if (seg) {
+            return Colisiones::circulo_vs_aabb(
+                bola->get_posicion(), bola->get_radio(),
+                seg->get_min(), seg->get_max());
         }
 
         return InfoColision{};
@@ -291,7 +312,13 @@ private:
                 min = tramp->get_min();
                 max = tramp->get_max();
             } else {
-                return InfoColision{};
+                auto* seg = dynamic_cast<SeguidorBooster*>(aabb_ent);
+                if (seg) {
+                    min = seg->get_min();
+                    max = seg->get_max();
+                } else {
+                    return InfoColision{};
+                }
             }
         }
 
@@ -328,5 +355,59 @@ private:
         if (verts_a.size() < 3 || verts_b.size() < 3) return InfoColision{};
 
         return Colisiones::poligono_vs_poligono(verts_a, verts_b);
+    }
+
+    // Helper: AABB (aabb_a) vs AABB (aabb_b)
+    InfoColision colision_aabb_aabb(EntidadFisica* aabb_a, EntidadFisica* aabb_b) {
+        Vector2D minA, maxA;
+        auto* paredA = dynamic_cast<ParedRectangular*>(aabb_a);
+        if (paredA) {
+            minA = paredA->get_min();
+            maxA = paredA->get_max();
+        } else {
+            auto* trampA = dynamic_cast<Trampolin*>(aabb_a);
+            if (trampA) {
+                minA = trampA->get_min();
+                maxA = trampA->get_max();
+            } else {
+                auto* segA = dynamic_cast<SeguidorBooster*>(aabb_a);
+                if (segA) {
+                    minA = segA->get_min();
+                    maxA = segA->get_max();
+                } else {
+                    return InfoColision{};
+                }
+            }
+        }
+
+        Vector2D minB, maxB;
+        auto* paredB = dynamic_cast<ParedRectangular*>(aabb_b);
+        if (paredB) {
+            minB = paredB->get_min();
+            maxB = paredB->get_max();
+        } else {
+            auto* trampB = dynamic_cast<Trampolin*>(aabb_b);
+            if (trampB) {
+                minB = trampB->get_min();
+                maxB = trampB->get_max();
+            } else {
+                auto* segB = dynamic_cast<SeguidorBooster*>(aabb_b);
+                if (segB) {
+                    minB = segB->get_min();
+                    maxB = segB->get_max();
+                } else {
+                    return InfoColision{};
+                }
+            }
+        }
+
+        std::vector<Vector2D> vertsA = {
+            minA, Vector2D(maxA.x, minA.y), maxA, Vector2D(minA.x, maxA.y)
+        };
+        std::vector<Vector2D> vertsB = {
+            minB, Vector2D(maxB.x, minB.y), maxB, Vector2D(minB.x, maxB.y)
+        };
+
+        return Colisiones::poligono_vs_poligono(vertsA, vertsB);
     }
 };
