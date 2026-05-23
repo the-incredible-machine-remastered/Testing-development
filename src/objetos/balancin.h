@@ -5,6 +5,7 @@
 
 #include "../core/entidad_fisica.h"
 #include "../core/math_utils.h"
+#include <vector>
 
 class Balancin : public EntidadFisica {
 protected:
@@ -32,8 +33,28 @@ public:
     double get_espesor() const { return espesor; }
     double get_angulo_limite() const { return angulo_limite; }
 
+    std::vector<Vector2D> get_vertices() const {
+        double cos_a = std::cos(angulo);
+        double sin_a = std::sin(angulo);
+        double hl = largo / 2.0;
+        double ht = espesor / 2.0;
+        Vector2D dir_x(cos_a, sin_a);
+        Vector2D dir_y(-sin_a, cos_a);
+        
+        return {
+            posicion - dir_x * hl - dir_y * ht,
+            posicion + dir_x * hl - dir_y * ht,
+            posicion + dir_x * hl + dir_y * ht,
+            posicion - dir_x * hl + dir_y * ht
+        };
+    }
+
     // El balancín no se desplaza linealmente, solo gira
     void actualizar_fisica(double dt) override {
+        // Limitar velocidad angular máxima para prevenir tunelización
+        if (velocidad_angular > 10.0) velocidad_angular = 10.0;
+        else if (velocidad_angular < -10.0) velocidad_angular = -10.0;
+
         // Integrar velocidad angular a ángulo
         angulo += velocidad_angular * dt;
 

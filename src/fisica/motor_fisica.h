@@ -174,6 +174,21 @@ private:
             return info;
         }
 
+        // --- Polígono vs AABB ---
+        if (fa == TipoForma::POLIGONO && fb == TipoForma::AABB) {
+            return colision_poligono_aabb(a, b);
+        }
+        if (fa == TipoForma::AABB && fb == TipoForma::POLIGONO) {
+            InfoColision info = colision_poligono_aabb(b, a);
+            info.normal = info.normal * (-1.0);
+            return info;
+        }
+
+        // --- Polígono vs Polígono ---
+        if (fa == TipoForma::POLIGONO && fb == TipoForma::POLIGONO) {
+            return colision_poligono_poligono(a, b);
+        }
+
         return InfoColision{};
     }
 
@@ -258,5 +273,60 @@ private:
         }
 
         return InfoColision{};
+    }
+
+    // Helper: Polígono (poly_ent) vs AABB (aabb_ent)
+    InfoColision colision_poligono_aabb(EntidadFisica* poly_ent, EntidadFisica* aabb_ent) {
+        auto* balancin = dynamic_cast<Balancin*>(poly_ent);
+        if (!balancin) return InfoColision{};
+
+        Vector2D min, max;
+        auto* pared = dynamic_cast<ParedRectangular*>(aabb_ent);
+        if (pared) {
+            min = pared->get_min();
+            max = pared->get_max();
+        } else {
+            auto* tramp = dynamic_cast<Trampolin*>(aabb_ent);
+            if (tramp) {
+                min = tramp->get_min();
+                max = tramp->get_max();
+            } else {
+                return InfoColision{};
+            }
+        }
+
+        std::vector<Vector2D> vertices_aabb = {
+            min,
+            Vector2D(max.x, min.y),
+            max,
+            Vector2D(min.x, max.y)
+        };
+
+        return Colisiones::poligono_vs_poligono(balancin->get_vertices(), vertices_aabb);
+    }
+
+    // Helper: Polígono (poly_a) vs Polígono (poly_b)
+    InfoColision colision_poligono_poligono(EntidadFisica* poly_a, EntidadFisica* poly_b) {
+        std::vector<Vector2D> verts_a;
+        auto* bal_a = dynamic_cast<Balancin*>(poly_a);
+        if (bal_a) {
+            verts_a = bal_a->get_vertices();
+        } else {
+            auto* rampa_a = dynamic_cast<PlanoInclinado*>(poly_a);
+            if (rampa_a) verts_a = rampa_a->get_vertices();
+        }
+
+        std::vector<Vector2D> verts_b;
+        auto* bal_b = dynamic_cast<Balancin*>(poly_b);
+        if (bal_b) {
+            verts_b = bal_b->get_vertices();
+        } else {
+            auto* rampa_b = dynamic_cast<PlanoInclinado*>(poly_b);
+            if (rampa_b) verts_b = rampa_b->get_vertices();
+        }
+
+        if (verts_a.size() < 3 || verts_b.size() < 3) return InfoColision{};
+
+        return Colisiones::poligono_vs_poligono(verts_a, verts_b);
     }
 };
