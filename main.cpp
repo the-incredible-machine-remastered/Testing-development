@@ -19,10 +19,12 @@
 #include "objetos/pared_rectangular.h"
 #include "objetos/plano_inclinado.h"
 #include "objetos/bola.h"
+#include "objetos/bola_rebotadora.h"
 #include "objetos/trampolin.h"
 #include "objetos/balancin.h"
 #include "objetos/seguidor_booster.h"
 #include "objetos/barril_chavo.h"
+#include "objetos/ventilador.h"
 #include "fisica/colisiones.h"
 #include "fisica/motor_fisica.h"
 
@@ -63,18 +65,44 @@ int contador_bolas = 0;
 float spawn_error_timer = 0.0f;
 Vector2D spawn_error_pos;
 
-// Objeto seleccionado para spawn (0 = Bola, 1 = Trampolín, 2 = Balancín)
+// Objeto seleccionado para spawn (0 = Bola, 1 = Trampolín, 2 = Balancín, etc.)
 int seleccion_objeto = 0;
 
 // Estado del sistema Drag & Drop
 EntidadFisica* entidad_arrastrada = nullptr;
 Vector2D offset_arrastre;
 
+bool obtener_datos_circulo(const EntidadFisica* e, Vector2D& pos, double& radio) {
+    const Bola* bola = dynamic_cast<const Bola*>(e);
+    if (bola) {
+        pos = bola->get_posicion();
+        radio = bola->get_radio();
+        return true;
+    }
+
+    const BolaRebotadora* rebotadora = dynamic_cast<const BolaRebotadora*>(e);
+    if (rebotadora) {
+        pos = rebotadora->get_posicion();
+        radio = rebotadora->get_radio();
+        return true;
+    }
+
+    return false;
+}
+
 // Obtener qué objeto móvil/colocable está debajo del cursor del mouse
 EntidadFisica* obtener_entidad_bajo_mouse(const MotorFisica& motor, Vector2D mouse_pos) {
     for (auto* e : motor.get_entidades()) {
         TipoForma forma = e->get_tipo_forma();
         if (forma == TipoForma::CIRCULO) {
+            const BolaRebotadora* rebotadora = dynamic_cast<const BolaRebotadora*>(e);
+            if (rebotadora) {
+                double dist = (rebotadora->get_posicion() - mouse_pos).magnitud();
+                if (dist < rebotadora->get_radio() + 15.0) {
+                    return const_cast<BolaRebotadora*>(rebotadora);
+                }
+            }
+
             const Bola* b = dynamic_cast<const Bola*>(e);
             if (b) {
                 double dist = (b->get_posicion() - mouse_pos).magnitud();
@@ -112,6 +140,16 @@ EntidadFisica* obtener_entidad_bajo_mouse(const MotorFisica& motor, Vector2D mou
                 if (mouse_pos.x >= pos.x - 10 && mouse_pos.x <= pos.x + w + 10 &&
                     mouse_pos.y >= pos.y - 10 && mouse_pos.y <= pos.y + h + 10) {
                     return const_cast<BarrilChavo*>(bar);
+                }
+            }
+            const Ventilador* vent = dynamic_cast<const Ventilador*>(e);
+            if (vent) {
+                Vector2D pos = vent->get_posicion();
+                double w = vent->get_ancho();
+                double h = vent->get_alto();
+                if (mouse_pos.x >= pos.x - 10 && mouse_pos.x <= pos.x + w + 10 &&
+                    mouse_pos.y >= pos.y - 10 && mouse_pos.y <= pos.y + h + 10) {
+                    return const_cast<Ventilador*>(vent);
                 }
             }
         }
@@ -166,6 +204,10 @@ void crear_escena(MotorFisica& motor) {
     // ---- Barril Chavo inicial ----
     motor.agregar_entidad(new BarrilChavo(
         motor.generar_id(), Vector2D(420, 470)));
+
+    // ---- Bola Rebotadora inicial ----
+    motor.agregar_entidad(new BolaRebotadora(
+        motor.generar_id(), Vector2D(640, 470), 48.0));
 }
 
 // ============================================================================
@@ -176,10 +218,11 @@ bool posicion_valida_para_bola(const MotorFisica& motor, Vector2D pos, double ra
         TipoForma forma = e->get_tipo_forma();
 
         if (forma == TipoForma::CIRCULO) {
-            const Bola* b = dynamic_cast<const Bola*>(e);
-            if (b) {
+            Vector2D pos_circ;
+            double radio_circ = 0.0;
+            if (obtener_datos_circulo(e, pos_circ, radio_circ)) {
                 InfoColision info = Colisiones::circulo_vs_circulo(
-                    pos, radio, b->get_posicion(), b->get_radio());
+                    pos, radio, pos_circ, radio_circ);
                 if (info.hay_colision) return false;
             }
         }
@@ -228,10 +271,11 @@ bool posicion_valida_para_balancin(const MotorFisica& motor, Vector2D pos, doubl
         TipoForma forma = e->get_tipo_forma();
 
         if (forma == TipoForma::CIRCULO) {
-            const Bola* b = dynamic_cast<const Bola*>(e);
-            if (b) {
+            Vector2D pos_circ;
+            double radio_circ = 0.0;
+            if (obtener_datos_circulo(e, pos_circ, radio_circ)) {
                 InfoColision info = Colisiones::circulo_vs_aabb(
-                    b->get_posicion(), b->get_radio(),
+                    pos_circ, radio_circ,
                     pos, Vector2D(pos.x + w, pos.y + h));
                 if (info.hay_colision) return false;
             }
@@ -296,10 +340,11 @@ bool posicion_valida_para_trampolin(const MotorFisica& motor, Vector2D pos, doub
         TipoForma forma = e->get_tipo_forma();
 
         if (forma == TipoForma::CIRCULO) {
-            const Bola* b = dynamic_cast<const Bola*>(e);
-            if (b) {
+            Vector2D pos_circ;
+            double radio_circ = 0.0;
+            if (obtener_datos_circulo(e, pos_circ, radio_circ)) {
                 InfoColision info = Colisiones::circulo_vs_aabb(
-                    b->get_posicion(), b->get_radio(),
+                    pos_circ, radio_circ,
                     pos, Vector2D(pos.x + w, pos.y + h));
                 if (info.hay_colision) return false;
             }
@@ -376,6 +421,37 @@ bool crear_bola(MotorFisica& motor, Vector2D pos) {
 }
 
 // ============================================================================
+// Crear BolaRebotadora en posicion del mouse (con validacion)
+// ============================================================================
+bool crear_bola_rebotadora(MotorFisica& motor, Vector2D pos) {
+    double radio = 48.0;
+
+    // Verificar que no nace encima de paredes, rampas u otros mecanismos
+    if (!posicion_valida_para_bola(motor, pos, radio)) {
+        spawn_error_timer = 0.5f;
+        spawn_error_pos = pos;
+        return false;
+    }
+
+    BolaRebotadora* b = new BolaRebotadora(motor.generar_id(), pos, radio);
+    motor.agregar_entidad(b);
+    return true;
+}
+
+// ============================================================================
+// Crear ventilador en posicion del mouse
+// ============================================================================
+bool crear_ventilador(MotorFisica& motor, Vector2D pos) {
+    double w = 42.0;
+    double h = 54.0;
+
+    Vector2D spawn_pos(pos.x - w / 2.0, pos.y - h / 2.0);
+    Ventilador* v = new Ventilador(motor.generar_id(), spawn_pos, w, h);
+    motor.agregar_entidad(v);
+    return true;
+}
+
+// ============================================================================
 // Crear futbolista seguidor en la posición del mouse
 // ============================================================================
 bool crear_seguidor_booster(MotorFisica& motor, Vector2D pos) {
@@ -393,10 +469,11 @@ bool posicion_valida_para_barril(const MotorFisica& motor, Vector2D pos, double 
         TipoForma forma = e->get_tipo_forma();
 
         if (forma == TipoForma::CIRCULO) {
-            const Bola* b = dynamic_cast<const Bola*>(e);
-            if (b) {
+            Vector2D pos_circ;
+            double radio_circ = 0.0;
+            if (obtener_datos_circulo(e, pos_circ, radio_circ)) {
                 InfoColision info = Colisiones::circulo_vs_aabb(
-                    b->get_posicion(), b->get_radio(),
+                    pos_circ, radio_circ,
                     pos, Vector2D(pos.x + w, pos.y + h));
                 if (info.hay_colision) return false;
             }
@@ -446,6 +523,35 @@ void dibujar_entidad(const EntidadFisica* e) {
     TipoForma forma = e->get_tipo_forma();
 
     if (forma == TipoForma::CIRCULO) {
+        const BolaRebotadora* rebotadora = dynamic_cast<const BolaRebotadora*>(e);
+        if (rebotadora) {
+            Vector2D pos = rebotadora->get_posicion();
+            float r = static_cast<float>(rebotadora->get_radio());
+            float def = static_cast<float>(rebotadora->get_deformacion());
+            float wobble_x = static_cast<float>(rebotadora->get_offset_vibracion());
+            float escala_x = 1.0f + def / (r * 5.0f);
+            float escala_y = 1.0f - def / (r * 4.0f);
+            float draw_x = static_cast<float>(pos.x) + wobble_x;
+            float draw_y = static_cast<float>(pos.y) + def * 0.25f;
+            float rx = r * escala_x;
+            float ry = r * escala_y;
+            float base_top = static_cast<float>(pos.y + r * 0.72f);
+            float base_w = r * 1.35f;
+            float base_h = r * 0.58f;
+
+            Color col_base = Color{218, 48, 42, 255};
+            DrawRectangleRec({draw_x - base_w / 2.0f, base_top,
+                              base_w, base_h}, col_base);
+            DrawEllipse(static_cast<int>(draw_x), static_cast<int>(draw_y), rx, ry, col_base);
+
+            // 3. PequeÃ±a banda oscura inferior para marcar contacto/curvatura
+
+            if (modo_debug) {
+                DrawCircleLines(static_cast<int>(pos.x), static_cast<int>(pos.y), r, GREEN);
+            }
+            return;
+        }
+
         const Bola* b = dynamic_cast<const Bola*>(e);
         if (!b) return;
 
@@ -490,6 +596,53 @@ void dibujar_entidad(const EntidadFisica* e) {
         }
     }
     else if (forma == TipoForma::AABB) {
+        const Ventilador* vent = dynamic_cast<const Ventilador*>(e);
+        if (vent) {
+            Vector2D pos = vent->get_posicion();
+            float px = static_cast<float>(pos.x);
+            float py = static_cast<float>(pos.y);
+            float w = static_cast<float>(vent->get_ancho());
+            float h = static_cast<float>(vent->get_alto());
+            float cx = px + w / 2.0f;
+            float cy = py + h / 2.0f;
+            float fase = static_cast<float>(vent->get_fase_aspas());
+
+            // 1. Cuerpo del ventilador
+            DrawRectangleRec({px, py, w, h}, Color{70, 84, 96, 255});
+            DrawRectangleLinesEx({px, py, w, h}, 1.5f, Color{170, 190, 205, 255});
+
+            // 2. Rejilla frontal y aspas giratorias
+            DrawCircleLines(static_cast<int>(cx), static_cast<int>(cy), h * 0.32f, Color{190, 210, 220, 255});
+            for (int i = 0; i < 4; ++i) {
+                float ang = fase + i * MathUtils::TIM_PI / 2.0f;
+                Vector2 p1 = {cx, cy};
+                Vector2 p2 = {
+                    cx + std::cos(ang) * h * 0.26f,
+                    cy + std::sin(ang) * h * 0.26f
+                };
+                DrawLineEx(p1, p2, 3.0f, Color{135, 205, 255, 255});
+            }
+            DrawCircle(static_cast<int>(cx), static_cast<int>(cy), 4.0f, Color{210, 230, 240, 255});
+
+            // 3. Corriente de aire hacia la derecha (animada)
+            for (int i = 0; i < 4; ++i) {
+                float y = cy - 24.0f + i * 16.0f;
+                float offset = std::sin(fase + i * 0.5f) * 15.0f;  // Desplazamiento según fase
+                float longitud = 70.0f + std::sin(fase + i * 0.3f) * 25.0f;  // Varía la longitud
+                float opacidad = 90 + std::sin(fase + i * 0.4f) * 50;  // Varía transparencia
+                DrawLineEx({px + w + 8.0f + offset, y}, {px + w + 8.0f + longitud, y}, 1.5f,
+                          Color{120, 200, 255, static_cast<unsigned char>(opacidad)});
+            }
+
+            if (modo_debug) {
+                DrawRectangleLines(static_cast<int>(px), static_cast<int>(py),
+                                   static_cast<int>(w), static_cast<int>(h), GREEN);
+                DrawRectangleLines(static_cast<int>(px + w), static_cast<int>(cy - vent->get_ancho_corriente() / 2.0),
+                                   static_cast<int>(vent->get_rango()), static_cast<int>(vent->get_ancho_corriente()), GREEN);
+            }
+            return;
+        }
+
         const SeguidorBooster* seg = dynamic_cast<const SeguidorBooster*>(e);
         if (seg) {
             Vector2D pos = seg->get_posicion();
@@ -881,9 +1034,11 @@ void dibujar_hud(const MotorFisica& motor) {
     else if (seleccion_objeto == 2) obj_name = "BALANCIN";
     else if (seleccion_objeto == 3) obj_name = "FUTBOLISTA";
     else if (seleccion_objeto == 4) obj_name = "BARRIL CHAVO";
+    else if (seleccion_objeto == 5) obj_name = "BOLA REBOTADORA";
+    else if (seleccion_objeto == 6) obj_name = "VENTILADOR";
 
     char sel_text[64];
-    sprintf(sel_text, "SELECCIONADO [1/2/3/4/5]: %s", obj_name);
+    sprintf(sel_text, "SELECCIONADO [1/2/3/4/5/6/7]: %s", obj_name);
     DrawText(sel_text, margin, y + 90, 16, Color{100, 200, 255, 255});
 
     // Indicador de pausa
@@ -899,7 +1054,7 @@ void dibujar_hud(const MotorFisica& motor) {
     }
 
     // Controles
-    DrawText("[1/2/3/4/5] Cambiar Obj  [L-CLICK] Crear Obj  [SPACE] Pausa  [D] Debug  [R] Reset",
+    DrawText("[1/2/3/4/5/6/7] Cambiar Obj  [L-CLICK] Crear Obj  [SPACE] Pausa  [D] Debug  [R] Reset",
              margin, ALTO - 30, 14, COLOR_CONTROLES);
 }
 
@@ -931,6 +1086,8 @@ int main() {
         if (IsKeyPressed(KEY_THREE)) seleccion_objeto = 2;
         if (IsKeyPressed(KEY_FOUR)) seleccion_objeto = 3;
         if (IsKeyPressed(KEY_FIVE)) seleccion_objeto = 4;
+        if (IsKeyPressed(KEY_SIX)) seleccion_objeto = 5;
+        if (IsKeyPressed(KEY_SEVEN)) seleccion_objeto = 6;
 
         // Click izquierdo: arrastrar objeto existente o crear uno nuevo
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
@@ -954,6 +1111,12 @@ int main() {
                 }
                 else if (seleccion_objeto == 4) {
                     crear_barril_chavo(motor, mouse_pos);
+                }
+                else if (seleccion_objeto == 5) {
+                    crear_bola_rebotadora(motor, mouse_pos);
+                }
+                else if (seleccion_objeto == 6) {
+                    crear_ventilador(motor, mouse_pos);
                 }
             }
         }

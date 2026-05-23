@@ -14,11 +14,14 @@
 #include "../objetos/pared_rectangular.h"
 #include "../objetos/plano_inclinado.h"
 #include "../objetos/bola.h"
+#include "../objetos/bola_rebotadora.h"
 #include "../objetos/trampolin.h"
 #include "../objetos/balancin.h"
 #include "../objetos/seguidor_booster.h"
 #include "../objetos/barril_chavo.h"
+#include "../objetos/ventilador.h"
 #include "colisiones.h"
+#include "fisica_ventilador.h"
 #include <vector>
 #include <algorithm>
 
@@ -91,10 +94,70 @@ public:
     }
 
 private:
+    bool obtener_datos_circulo(EntidadFisica* e, Vector2D& pos, double& radio) {
+        auto* bola = dynamic_cast<Bola*>(e);
+        if (bola) {
+            pos = bola->get_posicion();
+            radio = bola->get_radio();
+            return true;
+        }
+
+        auto* rebotadora = dynamic_cast<BolaRebotadora*>(e);
+        if (rebotadora) {
+            pos = rebotadora->get_posicion();
+            radio = rebotadora->get_radio();
+            return true;
+        }
+
+        return false;
+    }
+
     // Un paso completo de simulación
+    bool obtener_datos_aabb(EntidadFisica* e, Vector2D& min, Vector2D& max) {
+        auto* pared = dynamic_cast<ParedRectangular*>(e);
+        if (pared) {
+            min = pared->get_min();
+            max = pared->get_max();
+            return true;
+        }
+
+        auto* tramp = dynamic_cast<Trampolin*>(e);
+        if (tramp) {
+            min = tramp->get_min();
+            max = tramp->get_max();
+            return true;
+        }
+
+        auto* seg = dynamic_cast<SeguidorBooster*>(e);
+        if (seg) {
+            min = seg->get_min();
+            max = seg->get_max();
+            return true;
+        }
+
+        auto* barril = dynamic_cast<BarrilChavo*>(e);
+        if (barril) {
+            min = barril->get_min();
+            max = barril->get_max();
+            return true;
+        }
+
+        auto* ventilador = dynamic_cast<Ventilador*>(e);
+        if (ventilador) {
+            min = ventilador->get_min();
+            max = ventilador->get_max();
+            return true;
+        }
+
+        return false;
+    }
+
     void paso_fisico(double dt) {
         // 1. Aplicar fuerzas globales
         aplicar_gravedad();
+
+        // 1.5 Aplicar corrientes de aire de ventiladores
+        FisicaVentilador::aplicar(entidades);
  
         // 2. Actualizar comportamiento del futbolista seguidor
         for (auto* e : entidades) {
@@ -142,6 +205,7 @@ private:
                     Colisiones::resolver_colision(a, b, info);
                     aplicar_efecto_trampolin(a, b, info);
                     aplicar_efecto_barril(a, b, info);
+                    aplicar_efecto_bola_rebotadora(a, b, info);
                 }
             }
         }
@@ -154,12 +218,13 @@ private:
 
         // --- Círculo vs Círculo ---
         if (fa == TipoForma::CIRCULO && fb == TipoForma::CIRCULO) {
-            auto* ba = dynamic_cast<Bola*>(a);
-            auto* bb = dynamic_cast<Bola*>(b);
-            if (ba && bb) {
+            Vector2D pos_a, pos_b;
+            double radio_a = 0.0, radio_b = 0.0;
+            if (obtener_datos_circulo(a, pos_a, radio_a) &&
+                obtener_datos_circulo(b, pos_b, radio_b)) {
                 return Colisiones::circulo_vs_circulo(
-                    ba->get_posicion(), ba->get_radio(),
-                    bb->get_posicion(), bb->get_radio());
+                    pos_a, radio_a,
+                    pos_b, radio_b);
             }
         }
 
@@ -210,35 +275,15 @@ private:
 
     // Helper: Círculo (circ_ent) vs AABB (aabb_ent)
     InfoColision colision_circulo_aabb(EntidadFisica* circ_ent, EntidadFisica* aabb_ent) {
-        auto* bola = dynamic_cast<Bola*>(circ_ent);
-        if (!bola) return InfoColision{};
+        Vector2D pos_circ;
+        double radio = 0.0;
+        if (!obtener_datos_circulo(circ_ent, pos_circ, radio)) return InfoColision{};
 
-        auto* pared = dynamic_cast<ParedRectangular*>(aabb_ent);
-        if (pared) {
+        Vector2D min, max;
+        if (obtener_datos_aabb(aabb_ent, min, max)) {
             return Colisiones::circulo_vs_aabb(
-                bola->get_posicion(), bola->get_radio(),
-                pared->get_min(), pared->get_max());
-        }
-
-        auto* tramp = dynamic_cast<Trampolin*>(aabb_ent);
-        if (tramp) {
-            return Colisiones::circulo_vs_aabb(
-                bola->get_posicion(), bola->get_radio(),
-                tramp->get_min(), tramp->get_max());
-        }
-
-        auto* seg = dynamic_cast<SeguidorBooster*>(aabb_ent);
-        if (seg) {
-            return Colisiones::circulo_vs_aabb(
-                bola->get_posicion(), bola->get_radio(),
-                seg->get_min(), seg->get_max());
-        }
-
-        auto* barril = dynamic_cast<BarrilChavo*>(aabb_ent);
-        if (barril) {
-            return Colisiones::circulo_vs_aabb(
-                bola->get_posicion(), bola->get_radio(),
-                barril->get_min(), barril->get_max());
+                pos_circ, radio,
+                min, max);
         }
 
         return InfoColision{};
@@ -319,22 +364,47 @@ private:
         }
     }
 
+    // Helper para activar la vibracion elastica de la BolaRebotadora al recibir impactos
+    void aplicar_efecto_bola_rebotadora(EntidadFisica* a, EntidadFisica* b, const InfoColision& info) {
+        Bola* bola = dynamic_cast<Bola*>(a);
+        BolaRebotadora* rebotadora = dynamic_cast<BolaRebotadora*>(b);
+
+        if (!bola || !rebotadora) {
+            bola = dynamic_cast<Bola*>(b);
+            rebotadora = dynamic_cast<BolaRebotadora*>(a);
+        }
+
+        if (bola && rebotadora) {
+            Vector2D normal_bola = (bola == a) ? info.normal : info.normal * -1.0;
+            double velocidad_normal = Vector2D::dot(bola->get_velocidad(), normal_bola);
+            double velocidad_impacto = std::abs(velocidad_normal);
+            rebotadora->registrar_impacto(velocidad_impacto);
+
+            if (velocidad_normal > 0.0 && rebotadora->get_multiplicador_rebote() > 1.0) {
+                Vector2D vel = bola->get_velocidad();
+                double impulso_extra = velocidad_normal * (rebotadora->get_multiplicador_rebote() - 1.0);
+                bola->set_velocidad(vel + normal_bola * impulso_extra);
+            }
+        }
+    }
+
     // Helper: Círculo (circ_ent) vs Polígono (poly_ent)
     InfoColision colision_circulo_poligono(EntidadFisica* circ_ent, EntidadFisica* poly_ent) {
-        auto* bola = dynamic_cast<Bola*>(circ_ent);
-        if (!bola) return InfoColision{};
+        Vector2D pos_circ;
+        double radio = 0.0;
+        if (!obtener_datos_circulo(circ_ent, pos_circ, radio)) return InfoColision{};
 
         auto* rampa = dynamic_cast<PlanoInclinado*>(poly_ent);
         if (rampa) {
             return Colisiones::circulo_vs_poligono(
-                bola->get_posicion(), bola->get_radio(),
+                pos_circ, radio,
                 rampa->get_vertices());
         }
 
         auto* balancin = dynamic_cast<Balancin*>(poly_ent);
         if (balancin) {
             return Colisiones::circulo_vs_balancin(
-                bola->get_posicion(), bola->get_radio(),
+                pos_circ, radio,
                 balancin->get_posicion(), balancin->get_angulo(),
                 balancin->get_largo(), balancin->get_espesor());
         }
@@ -348,31 +418,7 @@ private:
         if (!balancin) return InfoColision{};
 
         Vector2D min, max;
-        auto* pared = dynamic_cast<ParedRectangular*>(aabb_ent);
-        if (pared) {
-            min = pared->get_min();
-            max = pared->get_max();
-        } else {
-            auto* tramp = dynamic_cast<Trampolin*>(aabb_ent);
-            if (tramp) {
-                min = tramp->get_min();
-                max = tramp->get_max();
-            } else {
-                auto* seg = dynamic_cast<SeguidorBooster*>(aabb_ent);
-                if (seg) {
-                    min = seg->get_min();
-                    max = seg->get_max();
-                } else {
-                    auto* barril = dynamic_cast<BarrilChavo*>(aabb_ent);
-                    if (barril) {
-                        min = barril->get_min();
-                        max = barril->get_max();
-                    } else {
-                        return InfoColision{};
-                    }
-                }
-            }
-        }
+        if (!obtener_datos_aabb(aabb_ent, min, max)) return InfoColision{};
 
         std::vector<Vector2D> vertices_aabb = {
             min,
@@ -412,58 +458,10 @@ private:
     // Helper: AABB (aabb_a) vs AABB (aabb_b)
     InfoColision colision_aabb_aabb(EntidadFisica* aabb_a, EntidadFisica* aabb_b) {
         Vector2D minA, maxA;
-        auto* paredA = dynamic_cast<ParedRectangular*>(aabb_a);
-        if (paredA) {
-            minA = paredA->get_min();
-            maxA = paredA->get_max();
-        } else {
-            auto* trampA = dynamic_cast<Trampolin*>(aabb_a);
-            if (trampA) {
-                minA = trampA->get_min();
-                maxA = trampA->get_max();
-            } else {
-                auto* segA = dynamic_cast<SeguidorBooster*>(aabb_a);
-                if (segA) {
-                    minA = segA->get_min();
-                    maxA = segA->get_max();
-                } else {
-                    auto* barrilA = dynamic_cast<BarrilChavo*>(aabb_a);
-                    if (barrilA) {
-                        minA = barrilA->get_min();
-                        maxA = barrilA->get_max();
-                    } else {
-                        return InfoColision{};
-                    }
-                }
-            }
-        }
+        if (!obtener_datos_aabb(aabb_a, minA, maxA)) return InfoColision{};
 
         Vector2D minB, maxB;
-        auto* paredB = dynamic_cast<ParedRectangular*>(aabb_b);
-        if (paredB) {
-            minB = paredB->get_min();
-            maxB = paredB->get_max();
-        } else {
-            auto* trampB = dynamic_cast<Trampolin*>(aabb_b);
-            if (trampB) {
-                minB = trampB->get_min();
-                maxB = trampB->get_max();
-            } else {
-                auto* segB = dynamic_cast<SeguidorBooster*>(aabb_b);
-                if (segB) {
-                    minB = segB->get_min();
-                    maxB = segB->get_max();
-                } else {
-                    auto* barrilB = dynamic_cast<BarrilChavo*>(aabb_b);
-                    if (barrilB) {
-                        minB = barrilB->get_min();
-                        maxB = barrilB->get_max();
-                    } else {
-                        return InfoColision{};
-                    }
-                }
-            }
-        }
+        if (!obtener_datos_aabb(aabb_b, minB, maxB)) return InfoColision{};
 
         std::vector<Vector2D> vertsA = {
             minA, Vector2D(maxA.x, minA.y), maxA, Vector2D(minA.x, maxA.y)
