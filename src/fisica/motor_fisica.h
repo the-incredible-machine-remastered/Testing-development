@@ -17,6 +17,7 @@
 #include "../objetos/trampolin.h"
 #include "../objetos/balancin.h"
 #include "../objetos/seguidor_booster.h"
+#include "../objetos/barril_chavo.h"
 #include "colisiones.h"
 #include <vector>
 #include <algorithm>
@@ -140,6 +141,7 @@ private:
                 if (info.hay_colision) {
                     Colisiones::resolver_colision(a, b, info);
                     aplicar_efecto_trampolin(a, b, info);
+                    aplicar_efecto_barril(a, b, info);
                 }
             }
         }
@@ -232,6 +234,13 @@ private:
                 seg->get_min(), seg->get_max());
         }
 
+        auto* barril = dynamic_cast<BarrilChavo*>(aabb_ent);
+        if (barril) {
+            return Colisiones::circulo_vs_aabb(
+                bola->get_posicion(), bola->get_radio(),
+                barril->get_min(), barril->get_max());
+        }
+
         return InfoColision{};
     }
 
@@ -269,6 +278,43 @@ private:
                 // Agregamos rotación proporcional al descentrado
                 double kick_rotacional = offset * 0.4;
                 bola->set_velocidad_angular(bola->get_velocidad_angular() + kick_rotacional);
+            }
+        }
+    }
+
+    // Helper para aplicar el impulso de lanzamiento de 75 grados del Barril Chavo
+    void aplicar_efecto_barril(EntidadFisica* a, EntidadFisica* b, const InfoColision& info) {
+        Bola* bola = dynamic_cast<Bola*>(a);
+        BarrilChavo* barril = dynamic_cast<BarrilChavo*>(b);
+        Vector2D normal_para_bola = info.normal; // Normal de separación para A
+
+        if (!bola || !barril) {
+            bola = dynamic_cast<Bola*>(b);
+            barril = dynamic_cast<BarrilChavo*>(a);
+            normal_para_bola = info.normal * -1.0;
+        }
+
+        if (bola && barril) {
+            // Si la colisión es en la parte superior del barril (normal hacia arriba en pantalla Y-)
+            // Y el centro de la bola está por encima (su Y está cerca o por encima de la parte superior del barril)
+            if (normal_para_bola.y < -0.4 && bola->get_posicion().y < barril->get_posicion().y + 10.0) {
+                // Solo disparamos si estaba esperando
+                if (barril->get_estado() == EstadoBarril::ESPERANDO) {
+                    barril->disparar_chavo();
+                    
+                    // Lanzar la bola a 75 grados hacia arriba
+                    // En coordenadas de pantalla Y es hacia abajo, por lo que "arriba" es -Y
+                    // Así que el ángulo de 75 grados hacia arriba-derecha es:
+                    // cos(75°) * X_dir + sin(-75°) * Y_dir = (0.258819, -0.965926)
+                    double angulo_rad = MathUtils::grados_a_radianes(-75.0);
+                    Vector2D dir_impulso(std::cos(angulo_rad), std::sin(angulo_rad));
+                    
+                    double fuerza_lanzamiento = 750.0;
+                    bola->set_velocidad(dir_impulso * fuerza_lanzamiento);
+
+                    // Pequeño giro a la bola para dinamismo
+                    bola->set_velocidad_angular(3.0);
+                }
             }
         }
     }
@@ -317,7 +363,13 @@ private:
                     min = seg->get_min();
                     max = seg->get_max();
                 } else {
-                    return InfoColision{};
+                    auto* barril = dynamic_cast<BarrilChavo*>(aabb_ent);
+                    if (barril) {
+                        min = barril->get_min();
+                        max = barril->get_max();
+                    } else {
+                        return InfoColision{};
+                    }
                 }
             }
         }
@@ -375,7 +427,13 @@ private:
                     minA = segA->get_min();
                     maxA = segA->get_max();
                 } else {
-                    return InfoColision{};
+                    auto* barrilA = dynamic_cast<BarrilChavo*>(aabb_a);
+                    if (barrilA) {
+                        minA = barrilA->get_min();
+                        maxA = barrilA->get_max();
+                    } else {
+                        return InfoColision{};
+                    }
                 }
             }
         }
@@ -396,7 +454,13 @@ private:
                     minB = segB->get_min();
                     maxB = segB->get_max();
                 } else {
-                    return InfoColision{};
+                    auto* barrilB = dynamic_cast<BarrilChavo*>(aabb_b);
+                    if (barrilB) {
+                        minB = barrilB->get_min();
+                        maxB = barrilB->get_max();
+                    } else {
+                        return InfoColision{};
+                    }
                 }
             }
         }
