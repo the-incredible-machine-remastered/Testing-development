@@ -227,6 +227,131 @@ namespace Colisiones {
     }
 
     // ========================================================================
+    // 5. Polígono Convexo vs Polígono Convexo (SAT - Separating Axis Theorem)
+    //    Calcula colisión precisa entre dos formas poligonales convexas
+    // ========================================================================
+    inline InfoColision poligono_vs_poligono(
+        const std::vector<Vector2D>& verticesA,
+        const std::vector<Vector2D>& verticesB)
+    {
+        InfoColision info;
+        if (verticesA.size() < 3 || verticesB.size() < 3) return info;
+
+        double overlap_min = 1e18;
+        Vector2D normal_min;
+
+        // Ejes candidatos: normales a las aristas de ambos polígonos
+        std::vector<Vector2D> ejes;
+
+        // Ejes de A
+        for (size_t i = 0; i < verticesA.size(); i++) {
+            size_t j = (i + 1) % verticesA.size();
+            Vector2D arista = verticesA[j] - verticesA[i];
+            ejes.push_back(arista.perpendicular().normalizar());
+        }
+
+        // Ejes de B
+        for (size_t i = 0; i < verticesB.size(); i++) {
+            size_t j = (i + 1) % verticesB.size();
+            Vector2D arista = verticesB[j] - verticesB[i];
+            ejes.push_back(arista.perpendicular().normalizar());
+        }
+
+        // Proyectar ambos polígonos en cada eje
+        for (const auto& eje : ejes) {
+            // Proyectar A
+            double minA = 1e18, maxA = -1e18;
+            for (const auto& v : verticesA) {
+                double proj = Vector2D::dot(v, eje);
+                minA = std::min(minA, proj);
+                maxA = std::max(maxA, proj);
+            }
+
+            // Proyectar B
+            double minB = 1e18, maxB = -1e18;
+            for (const auto& v : verticesB) {
+                double proj = Vector2D::dot(v, eje);
+                minB = std::min(minB, proj);
+                maxB = std::max(maxB, proj);
+            }
+
+            // Si hay alguna separación en cualquier eje, no hay colisión
+            if (maxA <= minB || maxB <= minA) {
+                return info;
+            }
+
+            // Calcular solapamiento
+            double overlap = std::min(maxA, maxB) - std::max(minA, minB);
+            if (overlap < overlap_min) {
+                overlap_min = overlap;
+                normal_min = eje;
+            }
+        }
+
+        info.hay_colision = true;
+        info.profundidad = overlap_min;
+
+        // Centroides geométricos para orientar la normal
+        Vector2D centroA(0.0, 0.0);
+        for (const auto& v : verticesA) centroA += v;
+        centroA = centroA / static_cast<double>(verticesA.size());
+
+        Vector2D centroB(0.0, 0.0);
+        for (const auto& v : verticesB) centroB += v;
+        centroB = centroB / static_cast<double>(verticesB.size());
+
+        // Asegurar que la normal apunte de B hacia A (dirección de separación de A)
+        Vector2D dir_B_hacia_A = centroA - centroB;
+        if (Vector2D::dot(normal_min, dir_B_hacia_A) < 0.0) {
+            normal_min = -normal_min;
+        }
+        info.normal = normal_min;
+
+        // Encontrar punto de contacto comprobando qué vértices penetran
+        auto punto_dentro_poligono = [](const Vector2D& p, const std::vector<Vector2D>& vertices) -> bool {
+            if (vertices.size() < 3) return false;
+            int n = static_cast<int>(vertices.size());
+            bool positivo = false;
+            bool negativo = false;
+            for (int i = 0; i < n; i++) {
+                int j = (i + 1) % n;
+                Vector2D arista = vertices[j] - vertices[i];
+                Vector2D a_punto = p - vertices[i];
+                double cross = Vector2D::cross(arista, a_punto);
+                if (cross > MathUtils::EPSILON) positivo = true;
+                if (cross < -MathUtils::EPSILON) negativo = true;
+                if (positivo && negativo) return false;
+            }
+            return true;
+        };
+
+        Vector2D contacto(0.0, 0.0);
+        int contador = 0;
+
+        for (const auto& v : verticesA) {
+            if (punto_dentro_poligono(v, verticesB)) {
+                contacto += v;
+                contador++;
+            }
+        }
+
+        for (const auto& v : verticesB) {
+            if (punto_dentro_poligono(v, verticesA)) {
+                contacto += v;
+                contador++;
+            }
+        }
+
+        if (contador > 0) {
+            info.punto_contacto = contacto / static_cast<double>(contador);
+        } else {
+            info.punto_contacto = (centroA + centroB) * 0.5;
+        }
+
+        return info;
+    }
+
+    // ========================================================================
     // Resolución de Colisión — Método de impulsos con rotación
     //
     // 1. Corrección posicional (evita que los objetos se hundan)
@@ -271,12 +396,31 @@ namespace Colisiones {
         
         double correccion = std::max(info.profundidad - slop, 0.0)
                             * correccion_pct / inv_m_total_corr;
+        double correccion_pura = std::max(info.profundidad - slop, 0.0) * correccion_pct;
 
-        if (!a->get_es_estatico() && !dynamic_cast<Balancin*>(a)) {
-            a->set_posicion(a->get_posicion() + info.normal * (correccion * inv_masa_a));
+        if (!a->get_es_estatico()) {
+            if (dynamic_cast<Balancin*>(a)) {
+                double r_cross_n = Vector2D::cross(r_a, info.normal);
+                if (std::abs(r_cross_n) > MathUtils::EPSILON) {
+                    double delta_theta = correccion_pura / r_cross_n;
+                    delta_theta = MathUtils::clamp(delta_theta, -0.08, 0.08);
+                    a->set_angulo(a->get_angulo() + delta_theta);
+                }
+            } else {
+                a->set_posicion(a->get_posicion() + info.normal * (correccion * inv_masa_a));
+            }
         }
-        if (!b->get_es_estatico() && !dynamic_cast<Balancin*>(b)) {
-            b->set_posicion(b->get_posicion() - info.normal * (correccion * inv_masa_b));
+        if (!b->get_es_estatico()) {
+            if (dynamic_cast<Balancin*>(b)) {
+                double r_cross_n = Vector2D::cross(r_b, info.normal);
+                if (std::abs(r_cross_n) > MathUtils::EPSILON) {
+                    double delta_theta = -correccion_pura / r_cross_n;
+                    delta_theta = MathUtils::clamp(delta_theta, -0.08, 0.08);
+                    b->set_angulo(b->get_angulo() + delta_theta);
+                }
+            } else {
+                b->set_posicion(b->get_posicion() - info.normal * (correccion * inv_masa_b));
+            }
         }
 
         // ---- Helper: velocidad en el punto de contacto (incluye rotación) ----
