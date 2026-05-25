@@ -48,3 +48,5 @@ public:
         fase_aspas += dt * 18.0;
     }
 };
+
+// TIM_MENU_SPAWN etiqueta="Ventilador" tab=0 categoria=1

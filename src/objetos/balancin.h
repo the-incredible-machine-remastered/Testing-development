@@ -82,3 +82,5 @@ public:
         fuerza_neta = Vector2D(0.0, 0.0);
     }
 };
+
+// TIM_MENU_SPAWN etiqueta="Balancin" tab=0 categoria=0

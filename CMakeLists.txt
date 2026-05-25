@@ -16,9 +16,35 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(raylib)
 
 # =============================================================
+# Catálogo del menú lateral (auto desde TIM_MENU_SPAWN en src/objetos/)
+# =============================================================
+set(CATALOGO_MENU_GEN "${CMAKE_CURRENT_SOURCE_DIR}/src/objetos/catalogo_menu.gen.h")
+find_package(Python3 COMPONENTS Interpreter QUIET)
+file(GLOB OBJETO_HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/objetos/*.h")
+# El .gen.h es OUTPUT del comando; no puede ser DEPEND de sí mismo
+list(FILTER OBJETO_HEADERS EXCLUDE REGEX ".*catalogo_menu\\.gen\\.h$")
+
+if(Python3_FOUND)
+    add_custom_command(
+        OUTPUT "${CATALOGO_MENU_GEN}"
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/generar_catalogo_menu.py"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/generar_catalogo_menu.py"
+            ${OBJETO_HEADERS}
+        COMMENT "Generando catalogo_menu.gen.h"
+    )
+    add_custom_target(catalogo_menu_gen DEPENDS "${CATALOGO_MENU_GEN}")
+endif()
+
+# =============================================================
 # Ejecutable principal
 # =============================================================
 add_executable(${PROJECT_NAME} main.cpp)
+
+if(Python3_FOUND)
+    add_dependencies(${PROJECT_NAME} catalogo_menu_gen)
+endif()
 
 target_link_libraries(${PROJECT_NAME} PRIVATE raylib)
 

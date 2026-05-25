@@ -27,3 +27,7 @@ public:
     Vector2D get_min() const { return posicion; }
     Vector2D get_max() const { return Vector2D(posicion.x + ancho, posicion.y + alto); }
 };
+
+// TIM_MENU_SPAWN id=PLATAFORMA etiqueta="Plataforma" tab=0 categoria=0 variante=plataforma
+// TIM_MENU_SPAWN id=PARED_LARGA etiqueta="Pared" tab=0 categoria=0 variante=pared
+// TIM_MENU_SPAWN id=PLATAFORMA_DECOR etiqueta="Ladrillo" tab=1 categoria=0 variante=decor_plataforma

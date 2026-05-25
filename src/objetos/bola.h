@@ -30,3 +30,5 @@ public:
     // --- Setters ---
     void set_color_idx(int idx) { color_idx = idx; }
 };
+
+// TIM_MENU_SPAWN etiqueta="Bola" tab=0 categoria=0

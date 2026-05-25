@@ -57,3 +57,6 @@ public:
     double get_base() const { return base_ancho; }
     double get_altura() const { return altura_alto; }
 };
+
+// TIM_MENU_SPAWN id=RAMPA_IZQUIERDA etiqueta="Rampa izq" tab=0 categoria=0 variante=izquierda
+// TIM_MENU_SPAWN id=RAMPA_DERECHA etiqueta="Rampa /" tab=0 categoria=0 variante=derecha

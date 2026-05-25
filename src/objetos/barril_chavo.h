@@ -79,3 +79,5 @@ public:
         }
     }
 };
+
+// TIM_MENU_SPAWN etiqueta="Barril" tab=0 categoria=1

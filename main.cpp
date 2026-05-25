@@ -28,9 +28,9 @@
 #include "objetos/ventilador.h"
 #include "fisica/colisiones.h"
 #include "fisica/motor_fisica.h"
+#include "objetos/catalogo_menu.gen.h"
 
 #include <cmath>
-#include <cstring>
 #include <vector>
 
 // ============================================================================
@@ -76,11 +76,7 @@ int contador_bolas = 0;
 float spawn_error_timer = 0.0f;
 Vector2D spawn_error_pos;
 
-<<<<<<< Updated upstream
-// Objeto seleccionado para spawn (0 = Bola, 1 = Trampolín, 2 = Balancín, etc.)
-int seleccion_objeto = 0;
-
-// Estado del sistema Drag & Drop
+// Estado del sistema Drag & Drop (entidades ya en escena)
 EntidadFisica* entidad_arrastrada = nullptr;
 Vector2D offset_arrastre;
 
@@ -100,10 +96,7 @@ bool obtener_datos_circulo(const EntidadFisica* e, Vector2D& pos, double& radio)
     }
 
     return false;
-=======
-// Estado del sistema Drag & Drop (entidades ya en escena)
-EntidadFisica* entidad_arrastrada = nullptr;
-Vector2D offset_arrastre;
+}
 
 // ============================================================================
 // Menú lateral derecho — UI y drag-and-drop desde paleta
@@ -125,45 +118,6 @@ const Color MENU_AZUL_CLARO   = {90,  165, 235, 255};
 const Color MENU_CELDA_FONDO  = {195, 200, 210, 255};
 const Color MENU_INACTIVO     = {130, 135, 145, 180};
 
-enum class TipoObjetoMenu {
-    NINGUNO = -1,
-    BOLA,
-    TRAMPOLIN,
-    BALANCIN,
-    RAMPA_IZQUIERDA,
-    RAMPA_DERECHA,
-    PLATAFORMA,
-    PARED_LARGA,
-    COUNT
-};
-
-struct ItemCatalogo {
-    TipoObjetoMenu tipo;
-    const char* etiqueta;
-    int pagina;       // 0 o 1 dentro de la pestaña
-    int tab;          // 0 = OBJETOS, 1 = DECORACIÓN
-    int categoria;    // 0 = MECÁNICAS, 1 = ELEMENTOS INTERACTIVOS / DECORACIÓN
-    bool disponible;
-};
-
-static const ItemCatalogo CATALOGO[] = {
-    { TipoObjetoMenu::BOLA,           "Bola",      0, 0, 0, true  },
-    { TipoObjetoMenu::TRAMPOLIN,      "Tramp.",    0, 0, 0, true  },
-    { TipoObjetoMenu::BALANCIN,       "Balancin",  0, 0, 0, true  },
-    { TipoObjetoMenu::RAMPA_IZQUIERDA,"Rampa \\",  0, 0, 0, true  },
-    { TipoObjetoMenu::RAMPA_DERECHA,  "Rampa /",   0, 0, 0, true  },
-    { TipoObjetoMenu::PLATAFORMA,     "Plataf.",   1, 0, 0, true  },
-    { TipoObjetoMenu::PARED_LARGA,    "Pared",     1, 0, 0, true  },
-    { TipoObjetoMenu::NINGUNO,        "Portal A",  0, 0, 1, false },
-    { TipoObjetoMenu::NINGUNO,        "Portal N",  0, 0, 1, false },
-    { TipoObjetoMenu::NINGUNO,        "Salida",    1, 0, 1, false },
-    { TipoObjetoMenu::NINGUNO,        "Flecha",    1, 0, 1, false },
-    { TipoObjetoMenu::PLATAFORMA,     "Ladrillo",  0, 1, 0, true  },
-    { TipoObjetoMenu::PARED_LARGA,    "Muro",      0, 1, 0, true  },
-    { TipoObjetoMenu::RAMPA_IZQUIERDA,"Rampa dec.",1, 1, 0, true  },
-};
-static const int CATALOGO_COUNT = static_cast<int>(sizeof(CATALOGO) / sizeof(CATALOGO[0]));
-
 bool menu_visible = true;
 int menu_tab = 0;
 int menu_pagina = 0;
@@ -183,7 +137,6 @@ bool punto_en_menu(int mx, int my) {
 
 bool punto_en_area_juego(int mx, int my) {
     return mx >= 0 && mx < ancho_area_juego() && my >= 0 && my < ALTO;
->>>>>>> Stashed changes
 }
 
 // Obtener qué objeto móvil/colocable está debajo del cursor del mouse
@@ -561,15 +514,25 @@ bool crear_plataforma(MotorFisica& motor, Vector2D pos, double w, double h) {
     return true;
 }
 
+bool crear_bola_rebotadora(MotorFisica& motor, Vector2D pos);
+bool crear_ventilador(MotorFisica& motor, Vector2D pos);
+bool crear_seguidor_booster(MotorFisica& motor, Vector2D pos);
+bool crear_barril_chavo(MotorFisica& motor, Vector2D pos);
+
 bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
     switch (tipo) {
-        case TipoObjetoMenu::BOLA:            return crear_bola(motor, pos);
-        case TipoObjetoMenu::TRAMPOLIN:       return crear_trampolin(motor, pos);
-        case TipoObjetoMenu::BALANCIN:        return crear_balancin(motor, pos);
-        case TipoObjetoMenu::RAMPA_IZQUIERDA: return crear_rampa(motor, pos, false);
-        case TipoObjetoMenu::RAMPA_DERECHA:   return crear_rampa(motor, pos, true);
-        case TipoObjetoMenu::PLATAFORMA:      return crear_plataforma(motor, pos, 150.0, 15.0);
-        case TipoObjetoMenu::PARED_LARGA:     return crear_plataforma(motor, pos, 80.0, 120.0);
+        case TipoObjetoMenu::BOLA:              return crear_bola(motor, pos);
+        case TipoObjetoMenu::BOLA_REBOTADORA:   return crear_bola_rebotadora(motor, pos);
+        case TipoObjetoMenu::TRAMPOLIN:         return crear_trampolin(motor, pos);
+        case TipoObjetoMenu::BALANCIN:          return crear_balancin(motor, pos);
+        case TipoObjetoMenu::RAMPA_IZQUIERDA:   return crear_rampa(motor, pos, false);
+        case TipoObjetoMenu::RAMPA_DERECHA:     return crear_rampa(motor, pos, true);
+        case TipoObjetoMenu::PLATAFORMA:        return crear_plataforma(motor, pos, 150.0, 15.0);
+        case TipoObjetoMenu::PARED_LARGA:       return crear_plataforma(motor, pos, 80.0, 120.0);
+        case TipoObjetoMenu::PLATAFORMA_DECOR:   return crear_plataforma(motor, pos, 120.0, 20.0);
+        case TipoObjetoMenu::SEGUIDOR_BOOSTER:  return crear_seguidor_booster(motor, pos);
+        case TipoObjetoMenu::BARRIL_CHAVO:      return crear_barril_chavo(motor, pos);
+        case TipoObjetoMenu::VENTILADOR:        return crear_ventilador(motor, pos);
         default: return false;
     }
 }
@@ -637,11 +600,44 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
             break;
         }
         case TipoObjetoMenu::PLATAFORMA:
+        case TipoObjetoMenu::PLATAFORMA_DECOR:
         case TipoObjetoMenu::PARED_LARGA: {
-            float w = (tipo == TipoObjetoMenu::PARED_LARGA) ? 18.0f * escala : 44.0f * escala;
-            float h = (tipo == TipoObjetoMenu::PARED_LARGA) ? 40.0f * escala : 8.0f * escala;
+            float w = 44.0f * escala;
+            float h = 8.0f * escala;
+            if (tipo == TipoObjetoMenu::PARED_LARGA) { w = 18.0f * escala; h = 40.0f * escala; }
+            if (tipo == TipoObjetoMenu::PLATAFORMA_DECOR) { w = 36.0f * escala; h = 10.0f * escala; }
             DrawRectangleRec({cx - w / 2, cy - h / 2, w, h}, tint(COLOR_PARED));
             DrawRectangleLinesEx({cx - w / 2, cy - h / 2, w, h}, 1.0f, tint(COLOR_PARED_BORDE));
+            break;
+        }
+        case TipoObjetoMenu::BOLA_REBOTADORA: {
+            float r = 18.0f * escala;
+            DrawCircle(static_cast<int>(cx), static_cast<int>(cy), r, tint(Color{218, 48, 42, 255}));
+            DrawCircleLines(static_cast<int>(cx), static_cast<int>(cy), r, tint(MAROON));
+            break;
+        }
+        case TipoObjetoMenu::SEGUIDOR_BOOSTER: {
+            DrawRectangleRec({cx - 8 * escala, cy - 16 * escala, 16 * escala, 28 * escala},
+                             tint(SKYBLUE));
+            DrawCircle(static_cast<int>(cx), static_cast<int>(cy - 14 * escala), 6 * escala,
+                       tint(Color{255, 220, 180, 255}));
+            break;
+        }
+        case TipoObjetoMenu::BARRIL_CHAVO: {
+            float w = 28.0f * escala;
+            float h = 36.0f * escala;
+            DrawRectangleRec({cx - w / 2, cy - h / 2 + 6 * escala, w, h},
+                             tint(Color{139, 90, 43, 255}));
+            DrawCircle(static_cast<int>(cx), static_cast<int>(cy - h / 2 + 2 * escala),
+                       8 * escala, tint(Color{255, 220, 180, 255}));
+            break;
+        }
+        case TipoObjetoMenu::VENTILADOR: {
+            float w = 28.0f * escala;
+            float h = 22.0f * escala;
+            DrawRectangleRec({cx - w / 2, cy - h / 2, w, h}, tint(Color{70, 84, 96, 255}));
+            DrawCircleLines(static_cast<int>(cx + w / 2), static_cast<int>(cy), 8 * escala,
+                            tint(Color{190, 210, 220, 255}));
             break;
         }
         default:
@@ -662,18 +658,18 @@ static std::vector<RectCeldaMenu> celdas_menu_cache;
 void recolectar_items_visibles(int tab, int pagina, int categoria,
                                std::vector<const ItemCatalogo*>& out) {
     out.clear();
-    for (int i = 0; i < CATALOGO_COUNT; ++i) {
-        const ItemCatalogo& it = CATALOGO[i];
+    for (int i = 0; i < CATALOGO_MENU_COUNT; ++i) {
+        const ItemCatalogo& it = CATALOGO_MENU[i];
         if (it.tab == tab && it.pagina == pagina && it.categoria == categoria)
             out.push_back(&it);
     }
 }
 
-int contar_paginas_tab(int tab, int categoria) {
+int contar_paginas_tab(int tab) {
     int max_pag = 0;
-    for (int i = 0; i < CATALOGO_COUNT; ++i) {
-        if (CATALOGO[i].tab == tab && CATALOGO[i].categoria == categoria)
-            max_pag = std::max(max_pag, CATALOGO[i].pagina);
+    for (int i = 0; i < CATALOGO_MENU_COUNT; ++i) {
+        if (CATALOGO_MENU[i].tab == tab)
+            max_pag = std::max(max_pag, CATALOGO_MENU[i].pagina);
     }
     return max_pag + 1;
 }
@@ -847,7 +843,7 @@ void dibujar_menu_lateral() {
     }
 
     // Paginación
-    int paginas = contar_paginas_tab(menu_tab, 0);
+    int paginas = contar_paginas_tab(menu_tab);
     int py = ALTO - MENU_PAGINACION_ALTO;
     DrawRectangle(px, py, MENU_ANCHO, MENU_PAGINACION_ALTO, MENU_FONDO_OSCURO);
     DrawText("<", px + MENU_MARGEN + 4, py + 10, 18, MENU_AZUL);
@@ -904,7 +900,7 @@ bool manejar_click_menu(int mx, int my) {
     int py = ALTO - MENU_PAGINACION_ALTO;
     Rectangle btn_prev = { static_cast<float>(px + MENU_MARGEN), static_cast<float>(py), 24, 28 };
     Rectangle btn_next = { static_cast<float>(px + MENU_ANCHO - MENU_MARGEN - 24), static_cast<float>(py), 24, 28 };
-    int paginas = contar_paginas_tab(menu_tab, 0);
+    int paginas = contar_paginas_tab(menu_tab);
     if (click_en_rect(mx, my, btn_prev) && menu_pagina > 0) { menu_pagina--; return true; }
     if (click_en_rect(mx, my, btn_next) && menu_pagina < paginas - 1) { menu_pagina++; return true; }
 
@@ -955,8 +951,7 @@ bool crear_ventilador(MotorFisica& motor, Vector2D pos) {
 // Crear futbolista seguidor en la posición del mouse
 // ============================================================================
 bool crear_seguidor_booster(MotorFisica& motor, Vector2D pos) {
-    double radio = 18.0;
-    SeguidorBooster* s = new SeguidorBooster(motor.generar_id(), pos, radio);
+    SeguidorBooster* s = new SeguidorBooster(motor.generar_id(), pos, 24.0, 48.0);
     motor.agregar_entidad(s);
     return true;
 }
@@ -1528,25 +1523,10 @@ void dibujar_hud(const MotorFisica& motor) {
     DrawText(TextFormat("Gravedad: %.0f px/s2", motor.get_gravedad().y),
              margin, y + 66, 16, COLOR_HUD);
 
-<<<<<<< Updated upstream
-    // Objeto seleccionado
-    const char* obj_name = "BOLA";
-    if (seleccion_objeto == 1) obj_name = "TRAMPOLIN";
-    else if (seleccion_objeto == 2) obj_name = "BALANCIN";
-    else if (seleccion_objeto == 3) obj_name = "FUTBOLISTA";
-    else if (seleccion_objeto == 4) obj_name = "BARRIL CHAVO";
-    else if (seleccion_objeto == 5) obj_name = "BOLA REBOTADORA";
-    else if (seleccion_objeto == 6) obj_name = "VENTILADOR";
-
-    char sel_text[64];
-    sprintf(sel_text, "SELECCIONADO [1/2/3/4/5/6/7]: %s", obj_name);
-    DrawText(sel_text, margin, y + 90, 16, Color{100, 200, 255, 255});
-=======
     if (arrastrando_spawn != TipoObjetoMenu::NINGUNO) {
         DrawText("Arrastrando objeto... suelta en el area de juego",
                  margin, y + 88, 14, Color{100, 200, 255, 255});
     }
->>>>>>> Stashed changes
 
     // Indicador de pausa
     if (motor.get_pausado()) {
@@ -1561,11 +1541,7 @@ void dibujar_hud(const MotorFisica& motor) {
     }
 
     // Controles
-<<<<<<< Updated upstream
-    DrawText("[1/2/3/4/5/6/7] Cambiar Obj  [L-CLICK] Crear Obj  [SPACE] Pausa  [D] Debug  [R] Reset",
-=======
     DrawText("[TAB] Menu  [Arrastrar icono] Crear  [L-CLICK] Mover  [SPACE] Pausa  [D] Debug  [R] Reset",
->>>>>>> Stashed changes
              margin, ALTO - 30, 14, COLOR_CONTROLES);
 }
 
@@ -1595,20 +1571,9 @@ int main() {
         // ======== INPUT ========
         reconstruir_celdas_menu();
 
-<<<<<<< Updated upstream
-        // Cambiar selección de objeto
-        if (IsKeyPressed(KEY_ONE)) seleccion_objeto = 0;
-        if (IsKeyPressed(KEY_TWO)) seleccion_objeto = 1;
-        if (IsKeyPressed(KEY_THREE)) seleccion_objeto = 2;
-        if (IsKeyPressed(KEY_FOUR)) seleccion_objeto = 3;
-        if (IsKeyPressed(KEY_FIVE)) seleccion_objeto = 4;
-        if (IsKeyPressed(KEY_SIX)) seleccion_objeto = 5;
-        if (IsKeyPressed(KEY_SEVEN)) seleccion_objeto = 6;
-=======
         if (IsKeyPressed(KEY_TAB)) {
             menu_visible = !menu_visible;
         }
->>>>>>> Stashed changes
 
         int mx = GetMouseX();
         int my = GetMouseY();
@@ -1629,18 +1594,6 @@ int main() {
                 if (clicked) {
                     entidad_arrastrada = clicked;
                     offset_arrastre = clicked->get_posicion() - mouse_pos;
-                }
-                else if (seleccion_objeto == 3) {
-                    crear_seguidor_booster(motor, mouse_pos);
-                }
-                else if (seleccion_objeto == 4) {
-                    crear_barril_chavo(motor, mouse_pos);
-                }
-                else if (seleccion_objeto == 5) {
-                    crear_bola_rebotadora(motor, mouse_pos);
-                }
-                else if (seleccion_objeto == 6) {
-                    crear_ventilador(motor, mouse_pos);
                 }
             }
         }

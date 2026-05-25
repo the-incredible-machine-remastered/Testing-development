@@ -232,3 +232,5 @@ public:
         angulo = 0.0;
     }
 };
+
+// TIM_MENU_SPAWN etiqueta="Futbolista" tab=0 categoria=1
