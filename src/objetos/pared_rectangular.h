@@ -19,6 +19,9 @@ public:
     double get_ancho() const { return ancho; }
     double get_alto() const { return alto; }
 
+    // --- Setters (útil al redimensionar la ventana) ---
+    void set_dimensiones(double w, double h) { ancho = w; alto = h; }
+
     // Esquina superior-izquierda (min) y esquina inferior-derecha (max)
     // En coordenadas de pantalla: Y+ apunta hacia abajo.
     Vector2D get_min() const { return posicion; }
