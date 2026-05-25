@@ -2,14 +2,15 @@
 // TIM: Motor de Física — Prototipo Interactivo con Raylib
 //
 // Controles:
-//   [Click Izq]  Crear bola en la posición del mouse
+//   [Arrastrar]  Desde el menú lateral: soltar en el canvas para crear objetos
+//   [Click Izq]  En el canvas: arrastrar objetos existentes
+//   [TAB]        Mostrar / Ocultar menú lateral
 //   [SPACE]      Pausar / Reanudar simulación
 //   [D]          Activar / Desactivar modo debug (wireframes, vectores)
 //   [R]          Reiniciar escena
 //   [+/-]        Aumentar / Disminuir gravedad
 //   [ESC]        Salir
 // ============================================================================
-
 #include "raylib.h"
 
 #include "core/vector2d.h"
@@ -29,12 +30,22 @@
 #include "fisica/motor_fisica.h"
 
 #include <cmath>
+#include <cstring>
+#include <vector>
 
 // ============================================================================
 // Configuración global
 // ============================================================================
-const int ANCHO = 1024;
-const int ALTO  = 768;
+int ANCHO = 1024;
+int ALTO  = 768;
+const int ANCHO_MIN = 640;
+const int ALTO_MIN  = 480;
+
+// Paredes del borde del nivel (se ajustan al redimensionar la ventana)
+ParedRectangular* borde_suelo = nullptr;
+ParedRectangular* borde_izquierda = nullptr;
+ParedRectangular* borde_derecha = nullptr;
+ParedRectangular* borde_techo = nullptr;
 
 // Paleta de colores para bolas (inspirada en TIM, colores vivos)
 Color PALETA_BOLAS[] = {
@@ -65,6 +76,7 @@ int contador_bolas = 0;
 float spawn_error_timer = 0.0f;
 Vector2D spawn_error_pos;
 
+<<<<<<< Updated upstream
 // Objeto seleccionado para spawn (0 = Bola, 1 = Trampolín, 2 = Balancín, etc.)
 int seleccion_objeto = 0;
 
@@ -88,6 +100,90 @@ bool obtener_datos_circulo(const EntidadFisica* e, Vector2D& pos, double& radio)
     }
 
     return false;
+=======
+// Estado del sistema Drag & Drop (entidades ya en escena)
+EntidadFisica* entidad_arrastrada = nullptr;
+Vector2D offset_arrastre;
+
+// ============================================================================
+// Menú lateral derecho — UI y drag-and-drop desde paleta
+// ============================================================================
+const int MENU_ANCHO = 240;
+const int MENU_PESTANA_ALTO = 36;
+const int MENU_CATEGORIA_ALTO = 32;
+const int MENU_CELDA = 72;
+const int MENU_COLS = 2;
+const int MENU_MARGEN = 10;
+const int MENU_PAGINACION_ALTO = 36;
+
+const Color MENU_FONDO        = {175, 180, 190, 255};
+const Color MENU_FONDO_OSCURO = {145, 150, 162, 255};
+const Color MENU_BORDE        = {110, 115, 128, 255};
+const Color MENU_TEXTO        = {45,  50,  60,  255};
+const Color MENU_AZUL         = {55,  130, 210, 255};
+const Color MENU_AZUL_CLARO   = {90,  165, 235, 255};
+const Color MENU_CELDA_FONDO  = {195, 200, 210, 255};
+const Color MENU_INACTIVO     = {130, 135, 145, 180};
+
+enum class TipoObjetoMenu {
+    NINGUNO = -1,
+    BOLA,
+    TRAMPOLIN,
+    BALANCIN,
+    RAMPA_IZQUIERDA,
+    RAMPA_DERECHA,
+    PLATAFORMA,
+    PARED_LARGA,
+    COUNT
+};
+
+struct ItemCatalogo {
+    TipoObjetoMenu tipo;
+    const char* etiqueta;
+    int pagina;       // 0 o 1 dentro de la pestaña
+    int tab;          // 0 = OBJETOS, 1 = DECORACIÓN
+    int categoria;    // 0 = MECÁNICAS, 1 = ELEMENTOS INTERACTIVOS / DECORACIÓN
+    bool disponible;
+};
+
+static const ItemCatalogo CATALOGO[] = {
+    { TipoObjetoMenu::BOLA,           "Bola",      0, 0, 0, true  },
+    { TipoObjetoMenu::TRAMPOLIN,      "Tramp.",    0, 0, 0, true  },
+    { TipoObjetoMenu::BALANCIN,       "Balancin",  0, 0, 0, true  },
+    { TipoObjetoMenu::RAMPA_IZQUIERDA,"Rampa \\",  0, 0, 0, true  },
+    { TipoObjetoMenu::RAMPA_DERECHA,  "Rampa /",   0, 0, 0, true  },
+    { TipoObjetoMenu::PLATAFORMA,     "Plataf.",   1, 0, 0, true  },
+    { TipoObjetoMenu::PARED_LARGA,    "Pared",     1, 0, 0, true  },
+    { TipoObjetoMenu::NINGUNO,        "Portal A",  0, 0, 1, false },
+    { TipoObjetoMenu::NINGUNO,        "Portal N",  0, 0, 1, false },
+    { TipoObjetoMenu::NINGUNO,        "Salida",    1, 0, 1, false },
+    { TipoObjetoMenu::NINGUNO,        "Flecha",    1, 0, 1, false },
+    { TipoObjetoMenu::PLATAFORMA,     "Ladrillo",  0, 1, 0, true  },
+    { TipoObjetoMenu::PARED_LARGA,    "Muro",      0, 1, 0, true  },
+    { TipoObjetoMenu::RAMPA_IZQUIERDA,"Rampa dec.",1, 1, 0, true  },
+};
+static const int CATALOGO_COUNT = static_cast<int>(sizeof(CATALOGO) / sizeof(CATALOGO[0]));
+
+bool menu_visible = true;
+int menu_tab = 0;
+int menu_pagina = 0;
+bool cat_mecanicas_abierta = true;
+bool cat_interactivos_abierta = false;
+bool cat_decor_abierta = true;
+TipoObjetoMenu arrastrando_spawn = TipoObjetoMenu::NINGUNO;
+
+int ancho_area_juego() {
+    return menu_visible ? (ANCHO - MENU_ANCHO) : ANCHO;
+}
+
+bool punto_en_menu(int mx, int my) {
+    if (!menu_visible) return false;
+    return mx >= ANCHO - MENU_ANCHO && mx < ANCHO && my >= 0 && my < ALTO;
+}
+
+bool punto_en_area_juego(int mx, int my) {
+    return mx >= 0 && mx < ancho_area_juego() && my >= 0 && my < ALTO;
+>>>>>>> Stashed changes
 }
 
 // Obtener qué objeto móvil/colocable está debajo del cursor del mouse
@@ -170,18 +266,49 @@ EntidadFisica* obtener_entidad_bajo_mouse(const MotorFisica& motor, Vector2D mou
 // ============================================================================
 // Crear escena inicial
 // ============================================================================
+void actualizar_bordes_nivel() {
+    const int g = 20;
+    if (!borde_suelo) return;
+
+    borde_suelo->set_posicion(Vector2D(0, ALTO - g));
+    borde_suelo->set_dimensiones(ANCHO, g);
+
+    borde_izquierda->set_posicion(Vector2D(0, 0));
+    borde_izquierda->set_dimensiones(g, ALTO);
+
+    borde_derecha->set_posicion(Vector2D(ANCHO - g, 0));
+    borde_derecha->set_dimensiones(g, ALTO);
+
+    borde_techo->set_posicion(Vector2D(0, 0));
+    borde_techo->set_dimensiones(ANCHO, g);
+}
+
+void sincronizar_tamano_ventana() {
+    if (!IsWindowResized()) return;
+    ANCHO = GetScreenWidth();
+    ALTO = GetScreenHeight();
+    actualizar_bordes_nivel();
+}
+
 void crear_escena(MotorFisica& motor) {
     int g = 20; // Grosor de paredes límite
 
     // ---- Paredes del nivel (4 bordes) ----
-    motor.agregar_entidad(new ParedRectangular(
-        motor.generar_id(), Vector2D(0, ALTO - g), ANCHO, g));          // Suelo
-    motor.agregar_entidad(new ParedRectangular(
-        motor.generar_id(), Vector2D(0, 0), g, ALTO));                  // Izquierda
-    motor.agregar_entidad(new ParedRectangular(
-        motor.generar_id(), Vector2D(ANCHO - g, 0), g, ALTO));         // Derecha
-    motor.agregar_entidad(new ParedRectangular(
-        motor.generar_id(), Vector2D(0, 0), ANCHO, g));                 // Techo
+    borde_suelo = new ParedRectangular(
+        motor.generar_id(), Vector2D(0, ALTO - g), ANCHO, g);
+    motor.agregar_entidad(borde_suelo);
+
+    borde_izquierda = new ParedRectangular(
+        motor.generar_id(), Vector2D(0, 0), g, ALTO);
+    motor.agregar_entidad(borde_izquierda);
+
+    borde_derecha = new ParedRectangular(
+        motor.generar_id(), Vector2D(ANCHO - g, 0), g, ALTO);
+    motor.agregar_entidad(borde_derecha);
+
+    borde_techo = new ParedRectangular(
+        motor.generar_id(), Vector2D(0, 0), ANCHO, g);
+    motor.agregar_entidad(borde_techo);
 
     // ---- Plataformas ----
     motor.agregar_entidad(new ParedRectangular(
@@ -418,6 +545,379 @@ bool crear_bola(MotorFisica& motor, Vector2D pos) {
     contador_bolas++;
     motor.agregar_entidad(b);
     return true;
+}
+
+bool crear_rampa(MotorFisica& motor, Vector2D pos, bool invertido) {
+    double b = 160.0;
+    double h = 120.0;
+    Vector2D spawn(pos.x - b / 2.0, pos.y - h / 2.0);
+    motor.agregar_entidad(new PlanoInclinado(motor.generar_id(), spawn, b, h, invertido));
+    return true;
+}
+
+bool crear_plataforma(MotorFisica& motor, Vector2D pos, double w, double h) {
+    Vector2D spawn(pos.x - w / 2.0, pos.y - h / 2.0);
+    motor.agregar_entidad(new ParedRectangular(motor.generar_id(), spawn, w, h));
+    return true;
+}
+
+bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
+    switch (tipo) {
+        case TipoObjetoMenu::BOLA:            return crear_bola(motor, pos);
+        case TipoObjetoMenu::TRAMPOLIN:       return crear_trampolin(motor, pos);
+        case TipoObjetoMenu::BALANCIN:        return crear_balancin(motor, pos);
+        case TipoObjetoMenu::RAMPA_IZQUIERDA: return crear_rampa(motor, pos, false);
+        case TipoObjetoMenu::RAMPA_DERECHA:   return crear_rampa(motor, pos, true);
+        case TipoObjetoMenu::PLATAFORMA:      return crear_plataforma(motor, pos, 150.0, 15.0);
+        case TipoObjetoMenu::PARED_LARGA:     return crear_plataforma(motor, pos, 80.0, 120.0);
+        default: return false;
+    }
+}
+
+// ============================================================================
+// Íconos del menú (miniaturas para grid y ghost)
+// ============================================================================
+void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala, unsigned char alpha) {
+    auto tint = [alpha](Color c) {
+        return Color{ c.r, c.g, c.b, static_cast<unsigned char>(
+            static_cast<int>(c.a) * alpha / 255) };
+    };
+
+    switch (tipo) {
+        case TipoObjetoMenu::BOLA: {
+            float r = 14.0f * escala;
+            Color col = tint(PALETA_BOLAS[contador_bolas % NUM_COLORES]);
+            DrawCircle(static_cast<int>(cx), static_cast<int>(cy), r, col);
+            DrawCircleLines(static_cast<int>(cx), static_cast<int>(cy), r, tint(DARKGRAY));
+            break;
+        }
+        case TipoObjetoMenu::TRAMPOLIN: {
+            float w = 44.0f * escala;
+            float h = 12.0f * escala;
+            float px = cx - w / 2.0f;
+            float py = cy - h / 2.0f;
+            DrawLineEx({px + 4, py + h}, {px + 10, py + 4}, 2.0f, tint(DARKGRAY));
+            DrawLineEx({px + w - 4, py + h}, {px + w - 10, py + 4}, 2.0f, tint(DARKGRAY));
+            DrawLineEx({px + 8, py + 2}, {px + w / 2, py + 5}, 4.0f, tint(RED));
+            DrawLineEx({px + w / 2, py + 5}, {px + w - 8, py + 2}, 4.0f, tint(RED));
+            break;
+        }
+        case TipoObjetoMenu::BALANCIN: {
+            float largo = 50.0f * escala;
+            float esp = 5.0f * escala;
+            DrawTriangle(
+                {cx, cy - 8 * escala},
+                {cx - 10 * escala, cy + 14 * escala},
+                {cx + 10 * escala, cy + 14 * escala},
+                tint(DARKGRAY));
+            DrawRectangleRec(
+                {cx - largo / 2, cy - esp / 2, largo, esp},
+                tint(Color{190, 110, 50, 255}));
+            DrawCircle(static_cast<int>(cx), static_cast<int>(cy), 4 * escala, tint(BLACK));
+            DrawCircle(static_cast<int>(cx - largo / 2 + 6), static_cast<int>(cy), 5 * escala, tint(RED));
+            DrawCircle(static_cast<int>(cx + largo / 2 - 6), static_cast<int>(cy), 5 * escala, tint(RED));
+            break;
+        }
+        case TipoObjetoMenu::RAMPA_IZQUIERDA: {
+            float s = 22.0f * escala;
+            Vector2 v1 = {cx - s, cy - s};
+            Vector2 v2 = {cx - s, cy + s};
+            Vector2 v3 = {cx + s, cy + s};
+            DrawTriangle(v1, v2, v3, tint(COLOR_RAMPA));
+            DrawTriangleLines(v1, v2, v3, tint(COLOR_RAMPA_BORDE));
+            break;
+        }
+        case TipoObjetoMenu::RAMPA_DERECHA: {
+            float s = 22.0f * escala;
+            Vector2 v1 = {cx - s, cy + s};
+            Vector2 v2 = {cx + s, cy + s};
+            Vector2 v3 = {cx + s, cy - s};
+            DrawTriangle(v1, v2, v3, tint(COLOR_RAMPA));
+            DrawTriangleLines(v1, v2, v3, tint(COLOR_RAMPA_BORDE));
+            break;
+        }
+        case TipoObjetoMenu::PLATAFORMA:
+        case TipoObjetoMenu::PARED_LARGA: {
+            float w = (tipo == TipoObjetoMenu::PARED_LARGA) ? 18.0f * escala : 44.0f * escala;
+            float h = (tipo == TipoObjetoMenu::PARED_LARGA) ? 40.0f * escala : 8.0f * escala;
+            DrawRectangleRec({cx - w / 2, cy - h / 2, w, h}, tint(COLOR_PARED));
+            DrawRectangleLinesEx({cx - w / 2, cy - h / 2, w, h}, 1.0f, tint(COLOR_PARED_BORDE));
+            break;
+        }
+        default:
+            DrawRectangleRec({cx - 16, cy - 16, 32, 32}, tint(LIGHTGRAY));
+            DrawText("?", static_cast<int>(cx - 4), static_cast<int>(cy - 8), 16, tint(DARKGRAY));
+            break;
+    }
+}
+
+struct RectCeldaMenu {
+    Rectangle rect;
+    TipoObjetoMenu tipo;
+    bool disponible;
+};
+
+static std::vector<RectCeldaMenu> celdas_menu_cache;
+
+void recolectar_items_visibles(int tab, int pagina, int categoria,
+                               std::vector<const ItemCatalogo*>& out) {
+    out.clear();
+    for (int i = 0; i < CATALOGO_COUNT; ++i) {
+        const ItemCatalogo& it = CATALOGO[i];
+        if (it.tab == tab && it.pagina == pagina && it.categoria == categoria)
+            out.push_back(&it);
+    }
+}
+
+int contar_paginas_tab(int tab, int categoria) {
+    int max_pag = 0;
+    for (int i = 0; i < CATALOGO_COUNT; ++i) {
+        if (CATALOGO[i].tab == tab && CATALOGO[i].categoria == categoria)
+            max_pag = std::max(max_pag, CATALOGO[i].pagina);
+    }
+    return max_pag + 1;
+}
+
+void layout_celdas_categoria(int panel_x, int y_inicio, int categoria,
+                             std::vector<RectCeldaMenu>& celdas) {
+    celdas.clear();
+    std::vector<const ItemCatalogo*> items;
+    int cat_idx = (menu_tab == 0) ? categoria : 0;
+    recolectar_items_visibles(menu_tab, menu_pagina, cat_idx, items);
+
+    int x0 = panel_x + MENU_MARGEN;
+    int y = y_inicio;
+    for (size_t i = 0; i < items.size(); ++i) {
+        int col = static_cast<int>(i) % MENU_COLS;
+        int row = static_cast<int>(i) / MENU_COLS;
+        int cx = x0 + col * (MENU_CELDA + 6);
+        int cy = y + row * (MENU_CELDA + 6);
+        Rectangle r = {
+            static_cast<float>(cx),
+            static_cast<float>(cy),
+            static_cast<float>(MENU_CELDA),
+            static_cast<float>(MENU_CELDA)
+        };
+        celdas.push_back({ r, items[i]->tipo, items[i]->disponible });
+    }
+}
+
+TipoObjetoMenu tipo_en_celda(int mx, int my, const std::vector<RectCeldaMenu>& celdas) {
+    for (const auto& c : celdas) {
+        if (CheckCollisionPointRec({static_cast<float>(mx), static_cast<float>(my)}, c.rect)
+            && c.disponible && c.tipo != TipoObjetoMenu::NINGUNO) {
+            return c.tipo;
+        }
+    }
+    return TipoObjetoMenu::NINGUNO;
+}
+
+void dibujar_celda_menu(const RectCeldaMenu& celda, bool resaltada) {
+    Color fondo = resaltada ? MENU_AZUL_CLARO : MENU_CELDA_FONDO;
+    if (!celda.disponible) fondo = ColorAlpha(MENU_CELDA_FONDO, 0.5f);
+
+    DrawRectangleRounded(celda.rect, 0.08f, 6, fondo);
+    DrawRectangleRoundedLinesEx(celda.rect, 0.08f, 6, 1.0f,
+        celda.disponible ? MENU_BORDE : MENU_INACTIVO);
+
+    float cx = celda.rect.x + celda.rect.width / 2.0f;
+    float cy = celda.rect.y + celda.rect.height / 2.0f - 4.0f;
+    unsigned char alpha = celda.disponible ? 255 : 120;
+
+    if (celda.tipo != TipoObjetoMenu::NINGUNO)
+        dibujar_icono_objeto(celda.tipo, cx, cy, 1.0f, alpha);
+    else
+        dibujar_icono_objeto(TipoObjetoMenu::NINGUNO, cx, cy, 1.0f, alpha);
+
+    DrawText("1",
+        static_cast<int>(celda.rect.x + celda.rect.width / 2 - 4),
+        static_cast<int>(celda.rect.y + celda.rect.height - 18),
+        12, celda.disponible ? MENU_AZUL : MENU_INACTIVO);
+}
+
+void dibujar_encabezado_categoria(int panel_x, int y, const char* titulo, bool abierta, int& out_alto) {
+    Rectangle hdr = {
+        static_cast<float>(panel_x + MENU_MARGEN),
+        static_cast<float>(y),
+        static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN),
+        static_cast<float>(MENU_CATEGORIA_ALTO)
+    };
+    DrawRectangleRounded(hdr, 0.06f, 4, MENU_FONDO_OSCURO);
+    DrawText(titulo, static_cast<int>(hdr.x + 8), static_cast<int>(hdr.y + 8), 14, MENU_TEXTO);
+    const char* chevron = abierta ? "v" : ">";
+    int cw = MeasureText(chevron, 14);
+    DrawText(chevron, static_cast<int>(hdr.x + hdr.width - cw - 10),
+             static_cast<int>(hdr.y + 8), 14, MENU_AZUL);
+    out_alto = MENU_CATEGORIA_ALTO + 4;
+}
+
+bool click_en_rect(int mx, int my, Rectangle r) {
+    return CheckCollisionPointRec({static_cast<float>(mx), static_cast<float>(my)}, r);
+}
+
+void reconstruir_celdas_menu() {
+    celdas_menu_cache.clear();
+    if (!menu_visible) return;
+
+    int px = ANCHO - MENU_ANCHO;
+    int y = MENU_PESTANA_ALTO + 36;
+
+    if (menu_tab == 0) {
+        y += MENU_CATEGORIA_ALTO + 4;
+        if (cat_mecanicas_abierta) {
+            std::vector<RectCeldaMenu> celdas;
+            layout_celdas_categoria(px, y, 0, celdas);
+            for (const auto& c : celdas) celdas_menu_cache.push_back(c);
+            int filas = (static_cast<int>(celdas.size()) + MENU_COLS - 1) / MENU_COLS;
+            y += filas * (MENU_CELDA + 6) + 8;
+        }
+        y += MENU_CATEGORIA_ALTO + 4;
+        if (cat_interactivos_abierta) {
+            std::vector<RectCeldaMenu> celdas;
+            layout_celdas_categoria(px, y, 1, celdas);
+            for (const auto& c : celdas) celdas_menu_cache.push_back(c);
+        }
+    } else {
+        y += MENU_CATEGORIA_ALTO + 4;
+        if (cat_decor_abierta) {
+            std::vector<RectCeldaMenu> celdas;
+            layout_celdas_categoria(px, y, 0, celdas);
+            for (const auto& c : celdas) celdas_menu_cache.push_back(c);
+        }
+    }
+}
+
+void dibujar_menu_lateral() {
+    if (!menu_visible) {
+        int bx = ANCHO - 26;
+        DrawRectangle(bx, ALTO / 2 - 40, 24, 80, MENU_FONDO_OSCURO);
+        DrawRectangleLines(bx, ALTO / 2 - 40, 24, 80, MENU_BORDE);
+        DrawText("<", bx + 7, ALTO / 2 - 8, 18, MENU_AZUL);
+        return;
+    }
+
+    int px = ANCHO - MENU_ANCHO;
+    DrawRectangle(px, 0, MENU_ANCHO, ALTO, MENU_FONDO);
+    DrawLine(px, 0, px, ALTO, MENU_BORDE);
+
+    // Pestañas OBJETOS / DECORACIÓN
+    int tab_w = (MENU_ANCHO - 2 * MENU_MARGEN) / 2;
+    Rectangle tab_obj = { static_cast<float>(px + MENU_MARGEN), 8.0f,
+                          static_cast<float>(tab_w), static_cast<float>(MENU_PESTANA_ALTO - 8) };
+    Rectangle tab_dec = { tab_obj.x + tab_w, tab_obj.y, tab_obj.width, tab_obj.height };
+
+    DrawRectangleRec(tab_obj, menu_tab == 0 ? WHITE : ColorAlpha(WHITE, 0.4f));
+    DrawRectangleRec(tab_dec, menu_tab == 1 ? WHITE : ColorAlpha(WHITE, 0.4f));
+    DrawText("OBJETOS", static_cast<int>(tab_obj.x + 12), static_cast<int>(tab_obj.y + 10), 14, MENU_TEXTO);
+    DrawText("DECORACION", static_cast<int>(tab_dec.x + 4), static_cast<int>(tab_dec.y + 10), 13, MENU_TEXTO);
+    if (menu_tab == 0)
+        DrawRectangle(static_cast<int>(tab_obj.x), static_cast<int>(tab_obj.y + tab_obj.height - 3),
+                      tab_w, 3, MENU_AZUL);
+    else
+        DrawRectangle(static_cast<int>(tab_dec.x), static_cast<int>(tab_dec.y + tab_dec.height - 3),
+                      tab_w, 3, MENU_AZUL);
+
+    // Botón colapsar
+    DrawRectangle(px + 4, MENU_PESTANA_ALTO + 4, 28, 24, MENU_FONDO_OSCURO);
+    DrawText(">>", px + 10, MENU_PESTANA_ALTO + 8, 14, MENU_AZUL);
+
+    int y = MENU_PESTANA_ALTO + 36;
+    int hdr_h = 0;
+
+    if (menu_tab == 0) {
+        dibujar_encabezado_categoria(px, y, "MECANICAS", cat_mecanicas_abierta, hdr_h);
+        y += hdr_h;
+        if (cat_mecanicas_abierta) {
+            std::vector<RectCeldaMenu> celdas;
+            layout_celdas_categoria(px, y, 0, celdas);
+            int filas = (static_cast<int>(celdas.size()) + MENU_COLS - 1) / MENU_COLS;
+            y += filas * (MENU_CELDA + 6) + 8;
+        }
+        dibujar_encabezado_categoria(px, y, "ELEMENTOS INTERACTIVOS", cat_interactivos_abierta, hdr_h);
+    } else {
+        dibujar_encabezado_categoria(px, y, "DECORACION", cat_decor_abierta, hdr_h);
+    }
+
+    reconstruir_celdas_menu();
+    Vector2 mouse = GetMousePosition();
+    for (const auto& c : celdas_menu_cache) {
+        bool hot = (arrastrando_spawn == c.tipo &&
+            CheckCollisionPointRec(mouse, c.rect));
+        dibujar_celda_menu(c, hot);
+    }
+
+    // Paginación
+    int paginas = contar_paginas_tab(menu_tab, 0);
+    int py = ALTO - MENU_PAGINACION_ALTO;
+    DrawRectangle(px, py, MENU_ANCHO, MENU_PAGINACION_ALTO, MENU_FONDO_OSCURO);
+    DrawText("<", px + MENU_MARGEN + 4, py + 10, 18, MENU_AZUL);
+    char pag_txt[32];
+    snprintf(pag_txt, sizeof(pag_txt), "PAGINA %d / %d", menu_pagina + 1, paginas);
+    int tw = MeasureText(pag_txt, 12);
+    DrawText(pag_txt, px + MENU_ANCHO / 2 - tw / 2, py + 12, 12, MENU_TEXTO);
+    DrawText(">", px + MENU_ANCHO - MENU_MARGEN - 16, py + 10, 18, MENU_AZUL);
+}
+
+bool manejar_click_menu(int mx, int my) {
+    if (!menu_visible) {
+        Rectangle btn_abrir = { static_cast<float>(ANCHO - 26), static_cast<float>(ALTO / 2 - 40), 24, 80 };
+        if (click_en_rect(mx, my, btn_abrir)) {
+            menu_visible = true;
+            return true;
+        }
+        return false;
+    }
+
+    int px = ANCHO - MENU_ANCHO;
+    int tab_w = (MENU_ANCHO - 2 * MENU_MARGEN) / 2;
+
+    Rectangle tab_obj = { static_cast<float>(px + MENU_MARGEN), 8.0f,
+                          static_cast<float>(tab_w), static_cast<float>(MENU_PESTANA_ALTO - 8) };
+    Rectangle tab_dec = { tab_obj.x + tab_w, tab_obj.y, tab_obj.width, tab_obj.height };
+    if (click_en_rect(mx, my, tab_obj)) { menu_tab = 0; menu_pagina = 0; return true; }
+    if (click_en_rect(mx, my, tab_dec)) { menu_tab = 1; menu_pagina = 0; return true; }
+
+    Rectangle btn_cerrar = { static_cast<float>(px + 4), static_cast<float>(MENU_PESTANA_ALTO + 4), 28, 24 };
+    if (click_en_rect(mx, my, btn_cerrar)) { menu_visible = false; return true; }
+
+    int y = MENU_PESTANA_ALTO + 36;
+    if (menu_tab == 0) {
+        Rectangle hdr_mec = { static_cast<float>(px + MENU_MARGEN), static_cast<float>(y),
+            static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN), static_cast<float>(MENU_CATEGORIA_ALTO) };
+        if (click_en_rect(mx, my, hdr_mec)) { cat_mecanicas_abierta = !cat_mecanicas_abierta; return true; }
+        y += MENU_CATEGORIA_ALTO + 4;
+        if (cat_mecanicas_abierta) {
+            std::vector<RectCeldaMenu> celdas;
+            layout_celdas_categoria(px, y, 0, celdas);
+            int filas = (static_cast<int>(celdas.size()) + MENU_COLS - 1) / MENU_COLS;
+            y += filas * (MENU_CELDA + 6) + 8;
+        }
+        Rectangle hdr_int = { static_cast<float>(px + MENU_MARGEN), static_cast<float>(y),
+            static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN), static_cast<float>(MENU_CATEGORIA_ALTO) };
+        if (click_en_rect(mx, my, hdr_int)) { cat_interactivos_abierta = !cat_interactivos_abierta; return true; }
+    } else {
+        Rectangle hdr_dec = { static_cast<float>(px + MENU_MARGEN), static_cast<float>(y),
+            static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN), static_cast<float>(MENU_CATEGORIA_ALTO) };
+        if (click_en_rect(mx, my, hdr_dec)) { cat_decor_abierta = !cat_decor_abierta; return true; }
+    }
+
+    int py = ALTO - MENU_PAGINACION_ALTO;
+    Rectangle btn_prev = { static_cast<float>(px + MENU_MARGEN), static_cast<float>(py), 24, 28 };
+    Rectangle btn_next = { static_cast<float>(px + MENU_ANCHO - MENU_MARGEN - 24), static_cast<float>(py), 24, 28 };
+    int paginas = contar_paginas_tab(menu_tab, 0);
+    if (click_en_rect(mx, my, btn_prev) && menu_pagina > 0) { menu_pagina--; return true; }
+    if (click_en_rect(mx, my, btn_next) && menu_pagina < paginas - 1) { menu_pagina++; return true; }
+
+    return false;
+}
+
+void dibujar_ghost_spawn() {
+    if (arrastrando_spawn == TipoObjetoMenu::NINGUNO) return;
+    Vector2 mp = GetMousePosition();
+    if (!punto_en_area_juego(static_cast<int>(mp.x), static_cast<int>(mp.y))) return;
+    dibujar_icono_objeto(arrastrando_spawn, mp.x, mp.y, 1.35f, 140);
+    DrawCircleLines(static_cast<int>(mp.x), static_cast<int>(mp.y), 18,
+                    Color{255, 255, 255, 80});
 }
 
 // ============================================================================
@@ -957,15 +1457,15 @@ void dibujar_entidad(const EntidadFisica* e) {
                 static_cast<float>(px - (largo / 2.0 - 5.0) * cos_a),
                 static_cast<float>(py - (largo / 2.0 - 5.0) * sin_a)
             };
-            DrawCircle(seat_l.x, seat_l.y, 6.0f, RED);
-            DrawCircleLines(seat_l.x, seat_l.y, 6.0f, MAROON);
+            DrawCircle(static_cast<int>(seat_l.x), static_cast<int>(seat_l.y), 6.0f, RED);
+            DrawCircleLines(static_cast<int>(seat_l.x), static_cast<int>(seat_l.y), 6.0f, MAROON);
 
             Vector2 seat_r = {
                 static_cast<float>(px + (largo / 2.0 - 5.0) * cos_a),
                 static_cast<float>(py + (largo / 2.0 - 5.0) * sin_a)
             };
-            DrawCircle(seat_r.x, seat_r.y, 6.0f, RED);
-            DrawCircleLines(seat_r.x, seat_r.y, 6.0f, MAROON);
+            DrawCircle(static_cast<int>(seat_r.x), static_cast<int>(seat_r.y), 6.0f, RED);
+            DrawCircleLines(static_cast<int>(seat_r.x), static_cast<int>(seat_r.y), 6.0f, MAROON);
 
             // 4. Perno central negro/gris
             DrawCircle(px, py, 6, BLACK);
@@ -1028,6 +1528,7 @@ void dibujar_hud(const MotorFisica& motor) {
     DrawText(TextFormat("Gravedad: %.0f px/s2", motor.get_gravedad().y),
              margin, y + 66, 16, COLOR_HUD);
 
+<<<<<<< Updated upstream
     // Objeto seleccionado
     const char* obj_name = "BOLA";
     if (seleccion_objeto == 1) obj_name = "TRAMPOLIN";
@@ -1040,6 +1541,12 @@ void dibujar_hud(const MotorFisica& motor) {
     char sel_text[64];
     sprintf(sel_text, "SELECCIONADO [1/2/3/4/5/6/7]: %s", obj_name);
     DrawText(sel_text, margin, y + 90, 16, Color{100, 200, 255, 255});
+=======
+    if (arrastrando_spawn != TipoObjetoMenu::NINGUNO) {
+        DrawText("Arrastrando objeto... suelta en el area de juego",
+                 margin, y + 88, 14, Color{100, 200, 255, 255});
+    }
+>>>>>>> Stashed changes
 
     // Indicador de pausa
     if (motor.get_pausado()) {
@@ -1054,7 +1561,11 @@ void dibujar_hud(const MotorFisica& motor) {
     }
 
     // Controles
+<<<<<<< Updated upstream
     DrawText("[1/2/3/4/5/6/7] Cambiar Obj  [L-CLICK] Crear Obj  [SPACE] Pausa  [D] Debug  [R] Reset",
+=======
+    DrawText("[TAB] Menu  [Arrastrar icono] Crear  [L-CLICK] Mover  [SPACE] Pausa  [D] Debug  [R] Reset",
+>>>>>>> Stashed changes
              margin, ALTO - 30, 14, COLOR_CONTROLES);
 }
 
@@ -1063,8 +1574,9 @@ void dibujar_hud(const MotorFisica& motor) {
 // ============================================================================
 int main() {
     // ---- Inicializar ventana ----
-    SetConfigFlags(FLAG_MSAA_4X_HINT);  // Anti-aliasing
+    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
     InitWindow(ANCHO, ALTO, "TIM - Motor de Fisica | Prototipo RK4 + Raylib");
+    SetWindowMinSize(ANCHO_MIN, ALTO_MIN);
     SetTargetFPS(60);
 
     // ---- Inicializar motor de física ----
@@ -1078,8 +1590,12 @@ int main() {
 
     // ---- Bucle principal ----
     while (!WindowShouldClose()) {
-        // ======== INPUT ========
+        sincronizar_tamano_ventana();
 
+        // ======== INPUT ========
+        reconstruir_celdas_menu();
+
+<<<<<<< Updated upstream
         // Cambiar selección de objeto
         if (IsKeyPressed(KEY_ONE)) seleccion_objeto = 0;
         if (IsKeyPressed(KEY_TWO)) seleccion_objeto = 1;
@@ -1088,23 +1604,31 @@ int main() {
         if (IsKeyPressed(KEY_FIVE)) seleccion_objeto = 4;
         if (IsKeyPressed(KEY_SIX)) seleccion_objeto = 5;
         if (IsKeyPressed(KEY_SEVEN)) seleccion_objeto = 6;
+=======
+        if (IsKeyPressed(KEY_TAB)) {
+            menu_visible = !menu_visible;
+        }
+>>>>>>> Stashed changes
 
-        // Click izquierdo: arrastrar objeto existente o crear uno nuevo
+        int mx = GetMouseX();
+        int my = GetMouseY();
+
+        // Click izquierdo: menú, spawn drag, o arrastre de entidad en canvas
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            Vector2D mouse_pos(GetMouseX(), GetMouseY());
-            EntidadFisica* clicked = obtener_entidad_bajo_mouse(motor, mouse_pos);
-            if (clicked) {
-                entidad_arrastrada = clicked;
-                offset_arrastre = clicked->get_posicion() - mouse_pos;
-            } else {
-                if (seleccion_objeto == 0) {
-                    crear_bola(motor, mouse_pos);
+            if (punto_en_menu(mx, my)) {
+                if (manejar_click_menu(mx, my)) {
+                    // UI consumió el click (pestaña, acordeón, paginación, colapsar)
+                } else {
+                    TipoObjetoMenu tipo = tipo_en_celda(mx, my, celdas_menu_cache);
+                    if (tipo != TipoObjetoMenu::NINGUNO)
+                        arrastrando_spawn = tipo;
                 }
-                else if (seleccion_objeto == 1) {
-                    crear_trampolin(motor, mouse_pos);
-                }
-                else if (seleccion_objeto == 2) {
-                    crear_balancin(motor, mouse_pos);
+            } else if (punto_en_area_juego(mx, my)) {
+                Vector2D mouse_pos(mx, my);
+                EntidadFisica* clicked = obtener_entidad_bajo_mouse(motor, mouse_pos);
+                if (clicked) {
+                    entidad_arrastrada = clicked;
+                    offset_arrastre = clicked->get_posicion() - mouse_pos;
                 }
                 else if (seleccion_objeto == 3) {
                     crear_seguidor_booster(motor, mouse_pos);
@@ -1121,13 +1645,14 @@ int main() {
             }
         }
 
-        // Mientras se mantiene presionado el click izquierdo: arrastrar objeto
-        if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && entidad_arrastrada != nullptr) {
-            Vector2D mouse_pos(GetMouseX(), GetMouseY());
+        // Arrastre desde paleta: ghost hasta soltar
+        if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && arrastrando_spawn != TipoObjetoMenu::NINGUNO) {
+            // No mover entidades mientras se coloca desde el menú
+        } else if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && entidad_arrastrada != nullptr) {
+            Vector2D mouse_pos(mx, my);
             Vector2D nueva_pos = mouse_pos + offset_arrastre;
-
-            // Clampear la posición dentro de los límites del escenario
-            nueva_pos.x = std::max(30.0, std::min(double(ANCHO - 30.0), nueva_pos.x));
+            double limite_x = static_cast<double>(ancho_area_juego()) - 30.0;
+            nueva_pos.x = std::max(30.0, std::min(limite_x, nueva_pos.x));
             nueva_pos.y = std::max(30.0, std::min(double(ALTO - 30.0), nueva_pos.y));
 
             entidad_arrastrada->set_posicion(nueva_pos);
@@ -1135,15 +1660,21 @@ int main() {
             entidad_arrastrada->set_velocidad_angular(0.0);
         }
 
-        // Al soltar el click izquierdo: liberar el objeto arrastrado
         if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+            if (arrastrando_spawn != TipoObjetoMenu::NINGUNO) {
+                if (punto_en_area_juego(mx, my)) {
+                    spawn_desde_menu(motor, arrastrando_spawn, Vector2D(mx, my));
+                }
+                arrastrando_spawn = TipoObjetoMenu::NINGUNO;
+            }
             entidad_arrastrada = nullptr;
         }
 
-        // Click derecho heredado: crear trampolín directamente por comodidad
-        if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
-            Vector2D mouse_pos(GetMouseX(), GetMouseY());
-            crear_trampolin(motor, mouse_pos);
+        // Abrir menú con click en pestaña colapsada
+        if (!menu_visible && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            Rectangle btn_abrir = { static_cast<float>(ANCHO - 26), static_cast<float>(ALTO / 2 - 40), 24, 80 };
+            if (click_en_rect(mx, my, btn_abrir))
+                menu_visible = true;
         }
 
         // Spacebar: pausar/reanudar
@@ -1160,6 +1691,10 @@ int main() {
         if (IsKeyPressed(KEY_R)) {
             motor.limpiar();
             contador_bolas = 0;
+            borde_suelo = nullptr;
+            borde_izquierda = nullptr;
+            borde_derecha = nullptr;
+            borde_techo = nullptr;
             crear_escena(motor);
         }
 
@@ -1208,8 +1743,18 @@ int main() {
             DrawCircleLines(ex, ey, 14, err_col);
         }
 
+        // Separador visual del área de juego vs menú
+        if (menu_visible) {
+            int sep = ancho_area_juego();
+            DrawLine(sep, 0, sep, ALTO, Color{60, 65, 90, 180});
+        }
+
+        dibujar_ghost_spawn();
+
         // HUD
         dibujar_hud(motor);
+
+        dibujar_menu_lateral();
 
         // Splash de título (desaparece gradualmente)
         if (titulo_alpha > 0.01f) {
