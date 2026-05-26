@@ -82,6 +82,9 @@ Vector2D spawn_error_pos;
 EntidadFisica* entidad_arrastrada = nullptr;
 Vector2D offset_arrastre;
 
+// Estado de selección (para eliminar objetos)
+EntidadFisica* entidad_seleccionada = nullptr;
+
 bool obtener_datos_circulo(const EntidadFisica* e, Vector2D& pos, double& radio) {
     const Bola* bola = dynamic_cast<const Bola*>(e);
     if (bola) {
@@ -154,9 +157,17 @@ bool punto_en_area_juego(int mx, int my) {
     return mx >= 0 && mx < ancho_area_juego() && my >= 0 && my < ALTO;
 }
 
-// Obtener qué objeto móvil/colocable está debajo del cursor del mouse
+// Verificar si una entidad es un borde del nivel (no se debe arrastrar ni eliminar)
+bool es_borde_nivel(const EntidadFisica* e) {
+    return e == borde_suelo || e == borde_izquierda || e == borde_derecha || e == borde_techo;
+}
+
+// Obtener qué objeto está debajo del cursor del mouse (incluye estáticos)
 EntidadFisica* obtener_entidad_bajo_mouse(const MotorFisica& motor, Vector2D mouse_pos) {
     for (auto* e : motor.get_entidades()) {
+        // Excluir bordes del nivel del arrastre/selección
+        if (es_borde_nivel(e)) continue;
+
         TipoForma forma = e->get_tipo_forma();
         if (forma == TipoForma::CIRCULO) {
             const BolaRebotadora* rebotadora = dynamic_cast<const BolaRebotadora*>(e);
@@ -216,6 +227,17 @@ EntidadFisica* obtener_entidad_bajo_mouse(const MotorFisica& motor, Vector2D mou
                     return const_cast<Ventilador*>(vent);
                 }
             }
+            // ParedRectangular (plataformas, paredes colocadas por el usuario)
+            const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
+            if (p) {
+                Vector2D pos = p->get_posicion();
+                double w = p->get_ancho();
+                double h = p->get_alto();
+                if (mouse_pos.x >= pos.x - 10 && mouse_pos.x <= pos.x + w + 10 &&
+                    mouse_pos.y >= pos.y - 10 && mouse_pos.y <= pos.y + h + 10) {
+                    return const_cast<ParedRectangular*>(p);
+                }
+            }
         }
         else if (forma == TipoForma::POLIGONO) {
             const Balancin* bal = dynamic_cast<const Balancin*>(e);
@@ -224,6 +246,26 @@ EntidadFisica* obtener_entidad_bajo_mouse(const MotorFisica& motor, Vector2D mou
                 double dist = (bal->get_posicion() - mouse_pos).magnitud();
                 if (dist < 45.0) {
                     return const_cast<Balancin*>(bal);
+                }
+            }
+            // PlanoInclinado (rampas)
+            const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
+            if (ramp) {
+                const auto& verts = ramp->get_vertices();
+                if (verts.size() >= 3) {
+                    // Bounding box de los vértices con margen
+                    double min_x = verts[0].x, max_x = verts[0].x;
+                    double min_y = verts[0].y, max_y = verts[0].y;
+                    for (const auto& v : verts) {
+                        if (v.x < min_x) min_x = v.x;
+                        if (v.x > max_x) max_x = v.x;
+                        if (v.y < min_y) min_y = v.y;
+                        if (v.y > max_y) max_y = v.y;
+                    }
+                    if (mouse_pos.x >= min_x - 10 && mouse_pos.x <= max_x + 10 &&
+                        mouse_pos.y >= min_y - 10 && mouse_pos.y <= max_y + 10) {
+                        return const_cast<PlanoInclinado*>(ramp);
+                    }
                 }
             }
         }
@@ -1264,8 +1306,6 @@ void dibujar_entidad(const EntidadFisica* e) {
                 Rectangle dest = {pos_draw.x - sprite_w/2, pos_draw.y - sprite_h/2, sprite_w, sprite_h};
                 DrawTexturePro(tex_seguidor_corriendo, source, dest, {0, 0}, 0.0f, WHITE);
             } else {
-                // Fallback: geometría original
-                dibuja_seguidor_geometrico(pos, w, h, draw_y, estado, pos_init, seg);
                 // Fallback: geometría original si no hay texturas/animaciones
                 dibuja_seguidor_geometrico(pos, w, h, draw_y, estado, pos_init, seg);
             }
@@ -1605,8 +1645,14 @@ void dibujar_hud(const MotorFisica& motor) {
         DrawText("[DEBUG]", ANCHO - 100, y, 16, GREEN);
     }
 
+    // Indicador de selección
+    if (entidad_seleccionada) {
+        DrawText(TextFormat("Seleccionado: Entidad #%d  [DEL] Eliminar", entidad_seleccionada->get_id()),
+                 margin, y + 88, 14, Color{255, 200, 80, 255});
+    }
+
     // Controles
-    DrawText("[TAB] Menu  [Arrastrar icono] Crear  [L-CLICK] Mover  [SPACE] Pausa  [D] Debug  [R] Reset",
+    DrawText("[TAB] Menu  [Arrastrar] Crear/Mover  [CLICK] Seleccionar  [DEL] Eliminar  [SPACE] Pausa  [D] Debug  [R] Reset",
              margin, ALTO - 30, 14, COLOR_CONTROLES);
 }
 
@@ -1743,7 +1789,10 @@ int main() {
                 EntidadFisica* clicked = obtener_entidad_bajo_mouse(motor, mouse_pos);
                 if (clicked) {
                     entidad_arrastrada = clicked;
+                    entidad_seleccionada = clicked;  // Seleccionar al hacer click
                     offset_arrastre = clicked->get_posicion() - mouse_pos;
+                } else {
+                    entidad_seleccionada = nullptr;  // Deseleccionar al hacer click en vacío
                 }
             }
         }
@@ -1761,6 +1810,12 @@ int main() {
             entidad_arrastrada->set_posicion(nueva_pos);
             entidad_arrastrada->set_velocidad(Vector2D(0.0, 0.0));
             entidad_arrastrada->set_velocidad_angular(0.0);
+
+            // Recalcular vértices si es una rampa (PlanoInclinado)
+            PlanoInclinado* ramp_drag = dynamic_cast<PlanoInclinado*>(entidad_arrastrada);
+            if (ramp_drag) {
+                ramp_drag->recalcular_vertices();
+            }
         }
 
         if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
@@ -1790,6 +1845,17 @@ int main() {
             modo_debug = !modo_debug;
         }
 
+        // DELETE / X: eliminar entidad seleccionada
+        if ((IsKeyPressed(KEY_DELETE) || IsKeyPressed(KEY_X)) && entidad_seleccionada) {
+            if (!es_borde_nivel(entidad_seleccionada)) {
+                int id_eliminar = entidad_seleccionada->get_id();
+                // Limpiar punteros antes de eliminar
+                if (entidad_arrastrada == entidad_seleccionada) entidad_arrastrada = nullptr;
+                entidad_seleccionada = nullptr;
+                motor.remover_entidad(id_eliminar);
+            }
+        }
+
         // R: reiniciar escena
         if (IsKeyPressed(KEY_R)) {
             motor.limpiar();
@@ -1798,6 +1864,8 @@ int main() {
             borde_izquierda = nullptr;
             borde_derecha = nullptr;
             borde_techo = nullptr;
+            entidad_arrastrada = nullptr;
+            entidad_seleccionada = nullptr;
             crear_escena(motor);
         }
 
@@ -1846,6 +1914,63 @@ int main() {
         for (const auto* e : motor.get_entidades()) {
             dibujar_entidad(e);
             dibujar_debug(e);
+        }
+
+        // Dibujar resaltado de selección
+        if (entidad_seleccionada) {
+            Color sel_color = {255, 200, 50, 180};
+            TipoForma sel_forma = entidad_seleccionada->get_tipo_forma();
+            if (sel_forma == TipoForma::CIRCULO) {
+                Vector2D sel_pos;
+                double sel_radio = 0.0;
+                if (obtener_datos_circulo(entidad_seleccionada, sel_pos, sel_radio)) {
+                    DrawCircleLines(static_cast<int>(sel_pos.x), static_cast<int>(sel_pos.y),
+                                    static_cast<float>(sel_radio + 4.0), sel_color);
+                    DrawCircleLines(static_cast<int>(sel_pos.x), static_cast<int>(sel_pos.y),
+                                    static_cast<float>(sel_radio + 6.0), Color{255, 200, 50, 90});
+                }
+            } else if (sel_forma == TipoForma::AABB) {
+                const ParedRectangular* sp = dynamic_cast<const ParedRectangular*>(entidad_seleccionada);
+                if (sp) {
+                    Vector2D spos = sp->get_posicion();
+                    DrawRectangleLinesEx({(float)spos.x - 3, (float)spos.y - 3,
+                        (float)sp->get_ancho() + 6, (float)sp->get_alto() + 6}, 2.0f, sel_color);
+                } else {
+                    // Genérico AABB: Trampolin, Barril, Ventilador, Seguidor
+                    Vector2D spos = entidad_seleccionada->get_posicion();
+                    const Trampolin* st = dynamic_cast<const Trampolin*>(entidad_seleccionada);
+                    const BarrilChavo* sb = dynamic_cast<const BarrilChavo*>(entidad_seleccionada);
+                    const Ventilador* sv = dynamic_cast<const Ventilador*>(entidad_seleccionada);
+                    const SeguidorBooster* ss = dynamic_cast<const SeguidorBooster*>(entidad_seleccionada);
+                    float sw = 0, sh = 0;
+                    if (st) { sw = st->get_ancho(); sh = st->get_alto(); }
+                    else if (sb) { sw = sb->get_ancho(); sh = sb->get_alto(); }
+                    else if (sv) { sw = sv->get_ancho(); sh = sv->get_alto(); }
+                    else if (ss) { sw = ss->get_ancho(); sh = ss->get_alto(); spos.x -= sw/2; spos.y -= sh/2; }
+                    if (sw > 0) {
+                        DrawRectangleLinesEx({(float)spos.x - 3, (float)spos.y - 3,
+                            sw + 6, sh + 6}, 2.0f, sel_color);
+                    }
+                }
+            } else if (sel_forma == TipoForma::POLIGONO) {
+                const PlanoInclinado* sr = dynamic_cast<const PlanoInclinado*>(entidad_seleccionada);
+                if (sr) {
+                    const auto& sv = sr->get_vertices();
+                    if (sv.size() >= 3) {
+                        for (size_t vi = 0; vi < sv.size(); ++vi) {
+                            size_t vj = (vi + 1) % sv.size();
+                            DrawLineEx({(float)sv[vi].x, (float)sv[vi].y},
+                                       {(float)sv[vj].x, (float)sv[vj].y}, 2.5f, sel_color);
+                        }
+                    }
+                } else {
+                    const Balancin* sbal = dynamic_cast<const Balancin*>(entidad_seleccionada);
+                    if (sbal) {
+                        Vector2D sp = sbal->get_posicion();
+                        DrawCircleLines(static_cast<int>(sp.x), static_cast<int>(sp.y), 50.0f, sel_color);
+                    }
+                }
+            }
         }
                 // Dibujar panel del HUD (abajo)
         if (tex_base_central.id > 0) {
