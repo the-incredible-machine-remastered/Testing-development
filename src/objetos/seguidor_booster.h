@@ -39,7 +39,7 @@ public:
     SeguidorBooster(int id, Vector2D pos, double w = 24.0, double h = 48.0)
         : EntidadFisica(id, pos, 15.0, TipoForma::AABB, false), // AABB dinámico con masa = 15.0 (pesado)
           posicion_inicial(pos), radio(30.0), ancho(w), alto(h),
-          estado(EstadoSeguidor::ESPERANDO), id_bola_objetivo(-1), rango_deteccion(180.0),
+          estado(EstadoSeguidor::ESPERANDO), id_bola_objetivo(-1), rango_deteccion(450.0),
           velocidad_persecucion(260.0), velocidad_retorno(180.0),
           cooldown_timer(0.0), oscilacion_idle(0.0), angulo_pierna(0.0),
           direccion_carrera(1.0), kicker_factor(0.0) {
@@ -113,7 +113,7 @@ public:
                             if (bola) {
                                 // Rango de Y razonable (la bola debe estar en o cerca de su altura)
                                 double diff_y = std::abs(posicion.y - bola->get_posicion().y);
-                                if (diff_y < 80.0) {
+                                if (diff_y < 120.0) {
                                     double dist = Vector2D::distancia(posicion, bola->get_posicion());
                                     if (dist < dist_min) {
                                         dist_min = dist;
