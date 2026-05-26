@@ -10,11 +10,12 @@ class Bola : public EntidadFisica {
 private:
     double radio;
     int color_idx;  // Índice en paleta de colores (para el renderizador)
+    int texture_idx; 
 
 public:
     Bola(int id, Vector2D pos_inicial, double r, double m)
         : EntidadFisica(id, pos_inicial, m, TipoForma::CIRCULO),
-          radio(r), color_idx(0) {
+          radio(r), color_idx(0), texture_idx(0) {
 
         // Momento de inercia de un disco sólido: I = ½ m r²
         set_inercia(0.5 * m * r * r);
@@ -26,9 +27,10 @@ public:
     // --- Getters ---
     double get_radio() const { return radio; }
     int get_color_idx() const { return color_idx; }
-
+    int get_texture_idx() const { return texture_idx; }
     // --- Setters ---
     void set_color_idx(int idx) { color_idx = idx; }
+    void set_texture_idx(int idx) { texture_idx = idx; }
 };
 
 // TIM_MENU_SPAWN etiqueta="Bola" tab=0 categoria=0

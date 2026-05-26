@@ -36,8 +36,8 @@
 // ============================================================================
 // Configuración global
 // ============================================================================
-int ANCHO = 1024;
-int ALTO  = 768;
+int ANCHO = 1920;
+int ALTO  = 1080;
 const int ANCHO_MIN = 640;
 const int ALTO_MIN  = 480;
 
@@ -101,9 +101,9 @@ bool obtener_datos_circulo(const EntidadFisica* e, Vector2D& pos, double& radio)
 // ============================================================================
 // Menú lateral derecho — UI y drag-and-drop desde paleta
 // ============================================================================
-const int MENU_ANCHO = 240;
-const int MENU_PESTANA_ALTO = 36;
-const int MENU_CATEGORIA_ALTO = 32;
+const int MENU_ANCHO = 300;
+const int MENU_PESTANA_ALTO = 70;
+const int MENU_CATEGORIA_ALTO = 50;
 const int MENU_CELDA = 72;
 const int MENU_COLS = 2;
 const int MENU_MARGEN = 10;
@@ -125,6 +125,12 @@ bool cat_mecanicas_abierta = true;
 bool cat_interactivos_abierta = false;
 bool cat_decor_abierta = true;
 TipoObjetoMenu arrastrando_spawn = TipoObjetoMenu::NINGUNO;
+
+// Texturas
+Texture2D tex_bola[3];  // Array de 3 texturas de pelota
+Texture2D tex_fondo;
+Texture2D tex_base_central;
+Texture2D derecho;
 
 int ancho_area_juego() {
     return menu_visible ? (ANCHO - MENU_ANCHO) : ANCHO;
@@ -271,6 +277,8 @@ void crear_escena(MotorFisica& motor) {
     motor.agregar_entidad(new ParedRectangular(
         motor.generar_id(), Vector2D(350, 550), 200, 15));              // Plataforma inferior centro
 
+    motor.agregar_entidad(new ParedRectangular(
+        motor.generar_id(), Vector2D(20, ALTO - 150), 1900, 10));      // Sidebar inferior
     // ---- Rampas ----
     // Rampa \ (pendiente de arriba-izq a abajo-der)
     // Conecta visualmente con la plataforma superior izquierda
@@ -483,7 +491,7 @@ bool crear_trampolin(MotorFisica& motor, Vector2D pos) {
 // Crear bola en posición del mouse (con validación)
 // ============================================================================
 bool crear_bola(MotorFisica& motor, Vector2D pos) {
-    double radio = 8.0 + GetRandomValue(0, 8);   // Radio entre 8-16 px
+    double radio = 35.0 + GetRandomValue(0, 8);   // Radio entre 8-16 px
 
     // Verificar que no colisiona con nada existente
     if (!posicion_valida_para_bola(motor, pos, radio)) {
@@ -495,6 +503,7 @@ bool crear_bola(MotorFisica& motor, Vector2D pos) {
     double masa = radio * radio * 0.01;           // Proporcional al área
     Bola* b = new Bola(motor.generar_id(), pos, radio, masa);
     b->set_color_idx(contador_bolas % NUM_COLORES);
+    b->set_texture_idx(GetRandomValue(0, 2)); 
     contador_bolas++;
     motor.agregar_entidad(b);
     return true;
@@ -793,7 +802,17 @@ void dibujar_menu_lateral() {
     }
 
     int px = ANCHO - MENU_ANCHO;
-    DrawRectangle(px, 0, MENU_ANCHO, ALTO, MENU_FONDO);
+    
+    // Dibujar asset del sidebar derecho si está cargado
+    if (derecho.id > 0) {
+        float escala_x = static_cast<float>(MENU_ANCHO) / derecho.width;
+        float escala_y = static_cast<float>(ALTO) / derecho.height;
+        float escala = (escala_x < escala_y) ? escala_x : escala_y;
+        DrawTextureEx(derecho, {static_cast<float>(px)-5, 0}, 0, escala, WHITE);
+    } else {
+        // Fallback si no se carga la textura
+        DrawRectangle(px, 0, MENU_ANCHO, ALTO, MENU_FONDO);
+    }
     DrawLine(px, 0, px, ALTO, MENU_BORDE);
 
     // Pestañas OBJETOS / DECORACIÓN
@@ -807,11 +826,9 @@ void dibujar_menu_lateral() {
     DrawText("OBJETOS", static_cast<int>(tab_obj.x + 12), static_cast<int>(tab_obj.y + 10), 14, MENU_TEXTO);
     DrawText("DECORACION", static_cast<int>(tab_dec.x + 4), static_cast<int>(tab_dec.y + 10), 13, MENU_TEXTO);
     if (menu_tab == 0)
-        DrawRectangle(static_cast<int>(tab_obj.x), static_cast<int>(tab_obj.y + tab_obj.height - 3),
-                      tab_w, 3, MENU_AZUL);
+        DrawRectangle(static_cast<int>(tab_obj.x), static_cast<int>(tab_obj.y + tab_obj.height - 3), tab_w, 3, MENU_AZUL);
     else
-        DrawRectangle(static_cast<int>(tab_dec.x), static_cast<int>(tab_dec.y + tab_dec.height - 3),
-                      tab_w, 3, MENU_AZUL);
+        DrawRectangle(static_cast<int>(tab_dec.x), static_cast<int>(tab_dec.y + tab_dec.height - 3), tab_w, 3, MENU_AZUL);
 
     // Botón colapsar
     DrawRectangle(px + 4, MENU_PESTANA_ALTO + 4, 28, 24, MENU_FONDO_OSCURO);
@@ -844,7 +861,7 @@ void dibujar_menu_lateral() {
 
     // Paginación
     int paginas = contar_paginas_tab(menu_tab);
-    int py = ALTO - MENU_PAGINACION_ALTO;
+    int py = ALTO - MENU_PAGINACION_ALTO - 180;  // 10px de margen desde el fondo del asset
     DrawRectangle(px, py, MENU_ANCHO, MENU_PAGINACION_ALTO, MENU_FONDO_OSCURO);
     DrawText("<", px + MENU_MARGEN + 4, py + 10, 18, MENU_AZUL);
     char pag_txt[32];
@@ -897,7 +914,7 @@ bool manejar_click_menu(int mx, int my) {
         if (click_en_rect(mx, my, hdr_dec)) { cat_decor_abierta = !cat_decor_abierta; return true; }
     }
 
-    int py = ALTO - MENU_PAGINACION_ALTO;
+    int py = ALTO - MENU_PAGINACION_ALTO - 180; 
     Rectangle btn_prev = { static_cast<float>(px + MENU_MARGEN), static_cast<float>(py), 24, 28 };
     Rectangle btn_next = { static_cast<float>(px + MENU_ANCHO - MENU_MARGEN - 24), static_cast<float>(py), 24, 28 };
     int paginas = contar_paginas_tab(menu_tab);
@@ -938,8 +955,8 @@ bool crear_bola_rebotadora(MotorFisica& motor, Vector2D pos) {
 // Crear ventilador en posicion del mouse
 // ============================================================================
 bool crear_ventilador(MotorFisica& motor, Vector2D pos) {
-    double w = 42.0;
-    double h = 54.0;
+    double w = 42.0*2;
+    double h = 54.0*2;
 
     Vector2D spawn_pos(pos.x - w / 2.0, pos.y - h / 2.0);
     Ventilador* v = new Ventilador(motor.generar_id(), spawn_pos, w, h);
@@ -1052,35 +1069,39 @@ void dibujar_entidad(const EntidadFisica* e) {
 
         Vector2D pos = b->get_posicion();
         float r = static_cast<float>(b->get_radio());
-        Color col = PALETA_BOLAS[b->get_color_idx()];
-
-        // Círculo relleno + borde más oscuro
-        DrawCircle(static_cast<int>(pos.x), static_cast<int>(pos.y), r, col);
-        DrawCircleLines(static_cast<int>(pos.x), static_cast<int>(pos.y), r,
-                        ColorBrightness(col, -0.3f));
-
-        // Indicador de rotación (siempre visible)
-        // Dos puntos en lados opuestos que giran con el ángulo de la bola
         double ang = b->get_angulo();
+
+        // Dibujar sprite de la bola con rotación correcta alrededor del centro
+        int tex_idx = b->get_texture_idx();
+        if (tex_idx >= 0 && tex_idx < 3 && tex_bola[tex_idx].id > 0) {
+            DrawTexturePro(
+                tex_bola[tex_idx],
+                {0, 0, (float)tex_bola[tex_idx].width, (float)tex_bola[tex_idx].height},
+                {static_cast<float>(pos.x), static_cast<float>(pos.y), 2.0f * r, 2.0f * r},
+                {r, r},
+                static_cast<float>(ang * 180.0 / MathUtils::TIM_PI),
+                WHITE
+            );
+        } else {
+            // Fallback a círculo si la textura no se cargó
+            Color col = PALETA_BOLAS[b->get_color_idx()];
+            DrawCircle(static_cast<int>(pos.x), static_cast<int>(pos.y), r, col);
+            DrawCircleLines(static_cast<int>(pos.x), static_cast<int>(pos.y), r,
+                            ColorBrightness(col, -0.3f));
+        }
+
+        // Indicador de rotación (dos puntos en lados opuestos)
         float dot_dist = r * 0.55f;
         float dot_r = std::max(r * 0.2f, 2.0f);
-        Color dot_col = ColorBrightness(col, -0.45f);
+        Color dot_col = {100, 100, 100, 150};
 
-        // Punto 1
         int dx1 = static_cast<int>(pos.x + std::cos(ang) * dot_dist);
         int dy1 = static_cast<int>(pos.y + std::sin(ang) * dot_dist);
         DrawCircle(dx1, dy1, dot_r, dot_col);
 
-        // Punto 2 (opuesto)
         int dx2 = static_cast<int>(pos.x - std::cos(ang) * dot_dist);
         int dy2 = static_cast<int>(pos.y - std::sin(ang) * dot_dist);
         DrawCircle(dx2, dy2, dot_r, dot_col);
-
-        // Brillo especular (efecto de profundidad sutil)
-        DrawCircle(static_cast<int>(pos.x - r * 0.25),
-                   static_cast<int>(pos.y - r * 0.25),
-                   r * 0.3f,
-                   Color{255, 255, 255, 60});
 
         // Debug extra: línea de velocidad angular
         if (modo_debug) {
@@ -1546,6 +1567,54 @@ void dibujar_hud(const MotorFisica& motor) {
 }
 
 // ============================================================================
+// Cargar texturas
+// ============================================================================
+void cargandoTexturas() {
+    // Cargar las 3 texturas de pelota
+    tex_bola[0] = LoadTexture("../Assets/ball/pelota1.png");
+    if (tex_bola[0].id == 0) {
+        TraceLog(LOG_ERROR, "Error cargando textura: ../Assets/ball/pelota1.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura bola 1 cargada: %dx%d", tex_bola[0].width, tex_bola[0].height);
+    }
+
+    tex_bola[1] = LoadTexture("../Assets/ball/pelota2.png");
+    if (tex_bola[1].id == 0) {
+        TraceLog(LOG_ERROR, "Error cargando textura: ../Assets/ball/pelota2.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura bola 2 cargada: %dx%d", tex_bola[1].width, tex_bola[1].height);
+    }
+
+    tex_bola[2] = LoadTexture("../Assets/ball/pelota3.png");
+    if (tex_bola[2].id == 0) {
+        TraceLog(LOG_ERROR, "Error cargando textura: ../Assets/ball/pelota3.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura bola 3 cargada: %dx%d", tex_bola[2].width, tex_bola[2].height);
+    }
+
+    tex_fondo = LoadTexture("../Assets/fondo1.png");
+    if (tex_fondo.id == 0) {
+        TraceLog(LOG_ERROR, "Error cargando textura: ../Assets/fondo1.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura fondo cargada: %dx%d", tex_fondo.width, tex_fondo.height);
+    }
+    
+    tex_base_central = LoadTexture("../Assets/hud/panel.png");
+    if (tex_base_central.id == 0) {
+        TraceLog(LOG_ERROR, "Error cargando textura: ../Assets/hud/panel.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura base central cargada: %dx%d", tex_base_central.width, tex_base_central.height);
+    }
+    
+    derecho = LoadTexture("../Assets/hud/barsidederecho.png");
+    if (derecho.id == 0) {
+        TraceLog(LOG_ERROR, "Error cargando textura: ../Assets/hud/barsidederecho.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura derecho cargada: %dx%d", derecho.width, derecho.height);
+    }
+}
+
+// ============================================================================
 // Punto de entrada
 // ============================================================================
 int main() {
@@ -1554,6 +1623,7 @@ int main() {
     InitWindow(ANCHO, ALTO, "TIM - Motor de Fisica | Prototipo RK4 + Raylib");
     SetWindowMinSize(ANCHO_MIN, ALTO_MIN);
     SetTargetFPS(60);
+    cargandoTexturas();
 
     // ---- Inicializar motor de física ----
     // dt_fijo = 1/120s (120 pasos físicos por segundo)
@@ -1679,10 +1749,26 @@ int main() {
         BeginDrawing();
         ClearBackground(COLOR_FONDO);
 
+        // Dibujar fondo
+        if (tex_fondo.id > 0) {
+            float escala_x = static_cast<float>(ANCHO) / tex_fondo.width;
+            float escala_y = static_cast<float>(ALTO) / tex_fondo.height;
+            float escala = (escala_x > escala_y) ? escala_x : escala_y;  // Mantener aspecto ratio
+            DrawTextureEx(tex_fondo, {0, 0}, 0, escala, WHITE);
+        }
+
         // Dibujar todas las entidades
         for (const auto* e : motor.get_entidades()) {
             dibujar_entidad(e);
             dibujar_debug(e);
+        }
+                // Dibujar panel del HUD (abajo)
+        if (tex_base_central.id > 0) {
+            // Posición: y = ALTO - 150, altura = 130, ancho = 1900
+            float escala_panel_x = 1900.0f / tex_base_central.width;
+            float escala_panel_y = 130.0f / tex_base_central.height;
+            DrawTextureEx(tex_base_central, {20, static_cast<float>(ALTO - 150)}, 0, 
+                         (escala_panel_x > escala_panel_y) ? escala_panel_x : escala_panel_y, WHITE);
         }
 
         // Feedback visual de spawn fallido (X roja parpadeante)
@@ -1724,6 +1810,12 @@ int main() {
     }
 
     // ---- Cleanup ----
+    for (int i = 0; i < 3; ++i) {
+        UnloadTexture(tex_bola[i]);
+    }
+    UnloadTexture(tex_fondo);
+    UnloadTexture(tex_base_central);
+    UnloadTexture(derecho);
     CloseWindow();
     return 0;
 }
