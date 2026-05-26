@@ -33,6 +33,7 @@
 
 #include <cmath>
 #include <vector>
+#include <string>
 
 
 // ============================================================================
@@ -1888,131 +1889,145 @@ void dibujar_hud(const MotorFisica& motor) {
 // Cargar texturas
 // ============================================================================
 void cargandoTexturas() {
+    std::string prefix = "../";
+    if (FileExists("Assets/fondo1.png")) {
+        prefix = "";
+    } else if (FileExists("../Assets/fondo1.png")) {
+        prefix = "../";
+    } else if (FileExists("../../Assets/fondo1.png")) {
+        prefix = "../../";
+    }
+
+    auto load_tex = [&](const std::string& path) -> Texture2D {
+        std::string full_path = prefix + path;
+        Texture2D tex = LoadTexture(full_path.c_str());
+        return tex;
+    };
+
     // Cargar las 3 texturas de pelota
-    tex_bola[0] = LoadTexture("../Assets/ball/pelota1.png");
+    tex_bola[0] = load_tex("Assets/ball/pelota1.png");
     if (tex_bola[0].id == 0) {
-        TraceLog(LOG_ERROR, "Error cargando textura: ../Assets/ball/pelota1.png");
+        TraceLog(LOG_ERROR, "Error cargando textura: pelota1.png");
     } else {
         TraceLog(LOG_INFO, "Textura bola 1 cargada: %dx%d", tex_bola[0].width, tex_bola[0].height);
     }
 
-    tex_bola[1] = LoadTexture("../Assets/ball/pelota2.png");
+    tex_bola[1] = load_tex("Assets/ball/pelota2.png");
     if (tex_bola[1].id == 0) {
-        TraceLog(LOG_ERROR, "Error cargando textura: ../Assets/ball/pelota2.png");
+        TraceLog(LOG_ERROR, "Error cargando textura: pelota2.png");
     } else {
         TraceLog(LOG_INFO, "Textura bola 2 cargada: %dx%d", tex_bola[1].width, tex_bola[1].height);
     }
 
-    tex_bola[2] = LoadTexture("../Assets/ball/pelota3.png");
+    tex_bola[2] = load_tex("Assets/ball/pelota3.png");
     if (tex_bola[2].id == 0) {
-        TraceLog(LOG_ERROR, "Error cargando textura: ../Assets/ball/pelota3.png");
+        TraceLog(LOG_ERROR, "Error cargando textura: pelota3.png");
     } else {
         TraceLog(LOG_INFO, "Textura bola 3 cargada: %dx%d", tex_bola[2].width, tex_bola[2].height);
     }
 
-    tex_fondo = LoadTexture("../Assets/fondo1.png");
+    tex_fondo = load_tex("Assets/fondo1.png");
     if (tex_fondo.id == 0) {
-        TraceLog(LOG_ERROR, "Error cargando textura: ../Assets/fondo1.png");
+        TraceLog(LOG_ERROR, "Error cargando textura: fondo1.png");
     } else {
         TraceLog(LOG_INFO, "Textura fondo cargada: %dx%d", tex_fondo.width, tex_fondo.height);
     }
     
-    tex_base_central = LoadTexture("../Assets/hud/panel.png");
+    tex_base_central = load_tex("Assets/hud/panel.png");
     if (tex_base_central.id == 0) {
-        TraceLog(LOG_ERROR, "Error cargando textura: ../Assets/hud/panel.png");
+        TraceLog(LOG_ERROR, "Error cargando textura: panel.png");
     } else {
         TraceLog(LOG_INFO, "Textura base central cargada: %dx%d", tex_base_central.width, tex_base_central.height);
     }
     
-    derecho = LoadTexture("../Assets/hud/barsidederecho.png");
+    derecho = load_tex("Assets/hud/barsidederecho.png");
     if (derecho.id == 0) {
-        TraceLog(LOG_ERROR, "Error cargando textura: ../Assets/hud/barsidederecho.png");
+        TraceLog(LOG_ERROR, "Error cargando textura: barsidederecho.png");
     } else {
         TraceLog(LOG_INFO, "Textura derecho cargada: %dx%d", derecho.width, derecho.height);
     }
     
     // Cargar texturas del BarrilChavo
-    tex_barril = LoadTexture("../Assets/chavo/barril.png");
+    tex_barril = load_tex("Assets/chavo/barril.png");
     if (tex_barril.id == 0) {
-        TraceLog(LOG_WARNING, "Textura barril no encontrada: ../Assets/chavo/barril.png (usando renderizado geométrico)");
+        TraceLog(LOG_WARNING, "Textura barril no encontrada: barril.png (usando renderizado geométrico)");
     } else {
         TraceLog(LOG_INFO, "Textura barril cargada: %dx%d", tex_barril.width, tex_barril.height);
     }
     
-    tex_chavo = LoadTexture("../Assets/chavo/chavo.png");
+    tex_chavo = load_tex("Assets/chavo/chavo.png");
     if (tex_chavo.id == 0) {
-        TraceLog(LOG_WARNING, "Textura El Chavo no encontrada: ../Assets/characters/chavo.png (usando renderizado geométrico)");
+        TraceLog(LOG_WARNING, "Textura El Chavo no encontrada: chavo.png (usando renderizado geométrico)");
     } else {
         TraceLog(LOG_INFO, "Textura El Chavo cargada: %dx%d", tex_chavo.width, tex_chavo.height);
     }
     
     // Cargar texturas del SeguidorBooster
-    tex_seguidor_quieto = LoadTexture("../Assets/messi/messi-normal.png");
+    tex_seguidor_quieto = load_tex("Assets/messi/messi-normal.png");
     if (tex_seguidor_quieto.id == 0) {
-        TraceLog(LOG_WARNING, "Textura seguidor quieto no encontrada: ../Assets/messi/messi-normal.png");
+        TraceLog(LOG_WARNING, "Textura seguidor quieto no encontrada: messi-normal.png");
     } else {
         TraceLog(LOG_INFO, "Textura seguidor quieto cargada: %dx%d", tex_seguidor_quieto.width, tex_seguidor_quieto.height);
     }
     
-    tex_seguidor_corriendo = LoadTexture("../Assets/messi/mesirve.png");
+    tex_seguidor_corriendo = load_tex("Assets/messi/mesirve.png");
     if (tex_seguidor_corriendo.id == 0) {
-        TraceLog(LOG_WARNING, "Textura seguidor corriendo no encontrada: ../Assets/messi/mesirve.png");
+        TraceLog(LOG_WARNING, "Textura seguidor corriendo no encontrada: mesirve.png");
     } else {
         TraceLog(LOG_INFO, "Textura seguidor corriendo cargada: %dx%d", tex_seguidor_corriendo.width, tex_seguidor_corriendo.height);
     }
     
     // Inicializar animaciones del SeguidorBooster
-    //Animacion(textura, total_frames, fps, frames_por_fila)
     if (tex_seguidor_corriendo.id > 0) {
         anim_seguidor_corriendo = new Animacion(tex_seguidor_corriendo, 8, 12, 8);
     }
 
     // Cargar texturas de los nuevos assets
-    tex_trampolin = LoadTexture("../Assets/trampolin/trampolin.png");
+    tex_trampolin = load_tex("Assets/trampolin/trampolin.png");
     if (tex_trampolin.id == 0) {
-        TraceLog(LOG_WARNING, "Textura trampolin no encontrada: ../Assets/trampolin/trampolin.png");
+        TraceLog(LOG_WARNING, "Textura trampolin no encontrada: trampolin.png");
     } else {
         TraceLog(LOG_INFO, "Textura trampolin cargada: %dx%d", tex_trampolin.width, tex_trampolin.height);
     }
 
-    tex_balancin_base = LoadTexture("../Assets/balancin/detalle1.png");
+    tex_balancin_base = load_tex("Assets/balancin/detalle1.png");
     if (tex_balancin_base.id == 0) {
-        TraceLog(LOG_WARNING, "Textura balancin base no encontrada: ../Assets/balancin/detalle1.png");
+        TraceLog(LOG_WARNING, "Textura balancin base no encontrada: detalle1.png");
     } else {
         TraceLog(LOG_INFO, "Textura balancin base cargada: %dx%d", tex_balancin_base.width, tex_balancin_base.height);
     }
 
-    tex_balancin_tabla = LoadTexture("../Assets/balancin/balancin2.png");
+    tex_balancin_tabla = load_tex("Assets/balancin/balancin2.png");
     if (tex_balancin_tabla.id == 0) {
-        TraceLog(LOG_WARNING, "Textura balancin tabla no encontrada: ../Assets/balancin/balancin2.png");
+        TraceLog(LOG_WARNING, "Textura balancin tabla no encontrada: balancin2.png");
     } else {
         TraceLog(LOG_INFO, "Textura balancin tabla cargada: %dx%d", tex_balancin_tabla.width, tex_balancin_tabla.height);
     }
 
-    tex_plata_larga = LoadTexture("../Assets/plataform/plata_larga.png");
+    tex_plata_larga = load_tex("Assets/plataform/plata_larga.png");
     if (tex_plata_larga.id == 0) {
-        TraceLog(LOG_WARNING, "Textura plataforma larga no encontrada: ../Assets/plataform/plata_larga.png");
+        TraceLog(LOG_WARNING, "Textura plataforma larga no encontrada: plata_larga.png");
     } else {
         TraceLog(LOG_INFO, "Textura plataforma larga cargada: %dx%d", tex_plata_larga.width, tex_plata_larga.height);
     }
 
-    tex_plata_peque = LoadTexture("../Assets/plataform/plata_peque.png");
+    tex_plata_peque = load_tex("Assets/plataform/plata_peque.png");
     if (tex_plata_peque.id == 0) {
-        TraceLog(LOG_WARNING, "Textura plataforma peque no encontrada: ../Assets/plataform/plata_peque.png");
+        TraceLog(LOG_WARNING, "Textura plataforma peque no encontrada: plata_peque.png");
     } else {
         TraceLog(LOG_INFO, "Textura plataforma peque cargada: %dx%d", tex_plata_peque.width, tex_plata_peque.height);
     }
 
-    tex_plata_rampa_izq = LoadTexture("../Assets/plataform/plataforma1.png");
+    tex_plata_rampa_izq = load_tex("Assets/plataform/plataforma1.png");
     if (tex_plata_rampa_izq.id == 0) {
-        TraceLog(LOG_WARNING, "Textura rampa izq no encontrada: ../Assets/plataform/plataforma1.png");
+        TraceLog(LOG_WARNING, "Textura rampa izq no encontrada: plataforma1.png");
     } else {
         TraceLog(LOG_INFO, "Textura rampa izq cargada: %dx%d", tex_plata_rampa_izq.width, tex_plata_rampa_izq.height);
     }
 
-    tex_plata_rampa_der = LoadTexture("../Assets/plataform/plataforma2.png");
+    tex_plata_rampa_der = load_tex("Assets/plataform/plataforma2.png");
     if (tex_plata_rampa_der.id == 0) {
-        TraceLog(LOG_WARNING, "Textura rampa der no encontrada: ../Assets/plataform/plataforma2.png");
+        TraceLog(LOG_WARNING, "Textura rampa der no encontrada: plataforma2.png");
     } else {
         TraceLog(LOG_INFO, "Textura rampa der cargada: %dx%d", tex_plata_rampa_der.width, tex_plata_rampa_der.height);
     }
