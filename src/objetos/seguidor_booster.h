@@ -38,7 +38,7 @@ protected:
 public:
     SeguidorBooster(int id, Vector2D pos, double w = 24.0, double h = 48.0)
         : EntidadFisica(id, pos, 15.0, TipoForma::AABB, false), // AABB dinámico con masa = 15.0 (pesado)
-          posicion_inicial(pos), radio(18.0), ancho(w), alto(h),
+          posicion_inicial(pos), radio(30.0), ancho(w), alto(h),
           estado(EstadoSeguidor::ESPERANDO), id_bola_objetivo(-1), rango_deteccion(180.0),
           velocidad_persecucion(260.0), velocidad_retorno(180.0),
           cooldown_timer(0.0), oscilacion_idle(0.0), angulo_pierna(0.0),

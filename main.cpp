@@ -16,6 +16,7 @@
 #include "core/vector2d.h"
 #include "core/math_utils.h"
 #include "core/entidad_fisica.h"
+#include "core/animacion.h"
 #include "objetos/obstaculo_estatico.h"
 #include "objetos/pared_rectangular.h"
 #include "objetos/plano_inclinado.h"
@@ -32,6 +33,7 @@
 
 #include <cmath>
 #include <vector>
+
 
 // ============================================================================
 // Configuración global
@@ -131,6 +133,13 @@ Texture2D tex_bola[3];  // Array de 3 texturas de pelota
 Texture2D tex_fondo;
 Texture2D tex_base_central;
 Texture2D derecho;
+Texture2D tex_barril;   // Textura del barril (parte del BarrilChavo)
+Texture2D tex_chavo;    // Textura de El Chavo (personaje que sale)
+Texture2D tex_seguidor_quieto;     // Sprite del personaje parado
+Texture2D tex_seguidor_corriendo;  // Sprite del personaje corriendo
+
+// Animaciones del SeguidorBooster
+Animacion* anim_seguidor_corriendo = nullptr;
 
 int ancho_area_juego() {
     return menu_visible ? (ANCHO - MENU_ANCHO) : ANCHO;
@@ -291,7 +300,7 @@ void crear_escena(MotorFisica& motor) {
 
     // ---- Barril Chavo inicial ----
     motor.agregar_entidad(new BarrilChavo(
-        motor.generar_id(), Vector2D(420, 470)));
+        motor.generar_id(), Vector2D(420, 470), 90.0, 120.0));
 
     // ---- Bola Rebotadora inicial ----
     motor.agregar_entidad(new BolaRebotadora(
@@ -626,10 +635,8 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
             break;
         }
         case TipoObjetoMenu::SEGUIDOR_BOOSTER: {
-            DrawRectangleRec({cx - 8 * escala, cy - 16 * escala, 16 * escala, 28 * escala},
-                             tint(SKYBLUE));
-            DrawCircle(static_cast<int>(cx), static_cast<int>(cy - 14 * escala), 6 * escala,
-                       tint(Color{255, 220, 180, 255}));
+            DrawRectangleRec({cx - 8 * escala, cy - 16 * escala, 16 * escala,28 * escala}, tint(SKYBLUE));
+            DrawCircle(static_cast<int>(cx), static_cast<int>(cy - 14 * escala), 6 * escala, tint(Color{255, 220, 180, 255}));
             break;
         }
         case TipoObjetoMenu::BARRIL_CHAVO: {
@@ -968,7 +975,7 @@ bool crear_ventilador(MotorFisica& motor, Vector2D pos) {
 // Crear futbolista seguidor en la posición del mouse
 // ============================================================================
 bool crear_seguidor_booster(MotorFisica& motor, Vector2D pos) {
-    SeguidorBooster* s = new SeguidorBooster(motor.generar_id(), pos, 24.0, 48.0);
+    SeguidorBooster* s = new SeguidorBooster(motor.generar_id(), pos, 60.0, 120.0);
     motor.agregar_entidad(s);
     return true;
 }
@@ -1011,8 +1018,8 @@ bool posicion_valida_para_barril(const MotorFisica& motor, Vector2D pos, double 
 // Crear Barril Chavo en posición del mouse (con validación)
 // ============================================================================
 bool crear_barril_chavo(MotorFisica& motor, Vector2D pos) {
-    double w = 60.0;
-    double h = 80.0;
+    double w = 90.0;
+    double h = 120.0;
     
     // Centrar en el mouse
     Vector2D spawn_pos(pos.x - w / 2.0, pos.y - h / 2.0);
@@ -1026,6 +1033,58 @@ bool crear_barril_chavo(MotorFisica& motor, Vector2D pos) {
     BarrilChavo* b = new BarrilChavo(motor.generar_id(), spawn_pos, w, h);
     motor.agregar_entidad(b);
     return true;
+}
+
+// ============================================================================
+// Renderizado de entidades
+// ============================================================================
+
+// Función helper para dibujar geometría del SeguidorBooster (fallback)
+void dibuja_seguidor_geometrico(Vector2D pos, float w, float h, float draw_y, 
+                                 EstadoSeguidor estado, Vector2D pos_init,
+                                 const SeguidorBooster* seg) {
+    float r = w * 0.75f;
+    double ang_pierna = seg->get_angulo_pierna();
+    double dir_carr = seg->get_direccion_carrera();
+    double kick_f = seg->get_kicker_factor();
+
+    // Pierna 1
+    float leg1_ang = static_cast<float>(ang_pierna);
+    float lx1 = pos.x - dir_carr * w * 0.3f + std::sin(leg1_ang) * r * 0.7f;
+    float ly1 = draw_y + h / 2.0f - r * 0.2f + std::cos(leg1_ang) * r * 0.5f;
+    DrawLineEx({(float)(pos.x - dir_carr * w * 0.2f), (float)(draw_y + h / 2.0f - r * 0.4f)}, {lx1, ly1}, 4.0f, DARKGRAY);
+    DrawCircle(lx1, ly1, 3.0f, RED);
+
+    // Pierna 2
+    float leg2_ang = static_cast<float>(-ang_pierna + kick_f * dir_carr * 1.5);
+    float lx2 = pos.x + dir_carr * w * 0.3f + std::sin(leg2_ang) * r * 0.7f;
+    float ly2 = draw_y + h / 2.0f - r * 0.2f + std::cos(leg2_ang) * r * 0.5f;
+    DrawLineEx({(float)(pos.x + dir_carr * w * 0.2f), (float)(draw_y + h / 2.0f - r * 0.4f)}, {lx2, ly2}, 4.0f, DARKGRAY);
+    DrawCircle(lx2, ly2, 3.0f, RED);
+
+    // Cuerpo
+    int cx = static_cast<int>(pos.x);
+    int cy = static_cast<int>(draw_y + h * 0.1f);
+    DrawCircle(cx, cy, r * 0.7f, SKYBLUE);
+    DrawCircleLines(cx, cy, r * 0.7f, BLUE);
+    DrawRectangleRec({(float)(cx - r * 0.3f), (float)(cy - r * 0.6f), (float)(r * 0.15f), (float)(r * 1.2f)}, WHITE);
+    DrawRectangleRec({(float)(cx + r * 0.15f), (float)(cy - r * 0.6f), (float)(r * 0.15f), (float)(r * 1.2f)}, WHITE);
+
+    // Cabeza
+    int head_y = static_cast<int>(draw_y - h * 0.2f);
+    DrawCircle(cx, head_y, r * 0.45f, Color{250, 200, 160, 255});
+    DrawCircleLines(cx, head_y, r * 0.45f, DARKGRAY);
+    DrawCircleSector({(float)cx, (float)head_y}, r * 0.46f, 180.0f, 360.0f, 0, Color{130, 80, 40, 255});
+
+    int eye_x = cx + static_cast<int>(dir_carr * r * 0.25f);
+    int eye_y = head_y - static_cast<int>(r * 0.05f);
+    DrawCircle(eye_x, eye_y, 2.5f, BLACK);
+
+    // LED
+    Color led_color = GREEN;
+    if (estado == EstadoSeguidor::PERSIGUIENDO) led_color = ORANGE;
+    else if (estado == EstadoSeguidor::RETRAYENDO) led_color = PURPLE;
+    DrawCircle(cx - static_cast<int>(dir_carr * r * 0.3f), cy - r * 0.1f, 3.5f, led_color);
 }
 
 // ============================================================================
@@ -1164,16 +1223,13 @@ void dibujar_entidad(const EntidadFisica* e) {
             Vector2D pos = seg->get_posicion();
             float w = static_cast<float>(seg->get_ancho());
             float h = static_cast<float>(seg->get_alto());
-            float r = w * 0.75f; // Radio aproximado para dibujar cabeza y camiseta
             EstadoSeguidor estado = seg->get_estado();
             Vector2D pos_init = seg->get_posicion_inicial();
-            double ang_pierna = seg->get_angulo_pierna();
             double dir_carr = seg->get_direccion_carrera();
-            double kick_f = seg->get_kicker_factor();
 
-            float draw_y = pos.y - 6.0f; // Subir el sprite 6 pixeles para que no se hundan los pies en el suelo
+            float draw_y = pos.y - 6.0f; // Subir el sprite 6 píxeles para que no se hundan los pies en el suelo
 
-            // 1. Dibujar sombra sutil en el suelo (bajo el jugador en la posición física real)
+            // 1. Dibujar sombra sutil en el suelo
             DrawEllipse(static_cast<int>(pos.x), static_cast<int>(pos.y + h / 2.0f - 2.0f), w * 0.8f, 3.0f, Color{0, 0, 0, 80});
 
             // 2. Línea de anclaje (hilo elástico de retorno)
@@ -1181,53 +1237,41 @@ void dibujar_entidad(const EntidadFisica* e) {
                 DrawLineEx({(float)pos_init.x, (float)pos_init.y}, {(float)pos.x, (float)draw_y}, 1.5f, Color{100, 150, 255, 100});
             }
 
-            // 3. Piernas y chut (dibujamos dos piernas sencillas oscilando o pateando)
-            // Pierna 1
-            float leg1_ang = static_cast<float>(ang_pierna);
-            float lx1 = pos.x - dir_carr * w * 0.3f + std::sin(leg1_ang) * r * 0.7f;
-            float ly1 = draw_y + h / 2.0f - r * 0.2f + std::cos(leg1_ang) * r * 0.5f;
-            DrawLineEx({(float)(pos.x - dir_carr * w * 0.2f), (float)(draw_y + h / 2.0f - r * 0.4f)}, {lx1, ly1}, 4.0f, DARKGRAY);
-            DrawCircle(lx1, ly1, 3.0f, RED); // Botín rojo
+            // 3. Dibujar sprite del personaje
+            float sprite_w = w * 1.5f;
+            float sprite_h = h * 1.2f;
+            Vector2 pos_draw = {static_cast<float>(pos.x), draw_y};
 
-            // Pierna 2 (Pateadora/delantera)
-            float leg2_ang = static_cast<float>(-ang_pierna + kick_f * dir_carr * 1.5); // Si patea, se extiende
-            float lx2 = pos.x + dir_carr * w * 0.3f + std::sin(leg2_ang) * r * 0.7f;
-            float ly2 = draw_y + h / 2.0f - r * 0.2f + std::cos(leg2_ang) * r * 0.5f;
-            DrawLineEx({(float)(pos.x + dir_carr * w * 0.2f), (float)(draw_y + h / 2.0f - r * 0.4f)}, {lx2, ly2}, 4.0f, DARKGRAY);
-            DrawCircle(lx2, ly2, 3.0f, RED); // Botín rojo
+            if (estado == EstadoSeguidor::ESPERANDO) {
+                // Personaje quieto: imagen estática sin animación
+                if (tex_seguidor_quieto.id > 0) {
+                    Rectangle source = {0, 0, (float)tex_seguidor_quieto.width, (float)tex_seguidor_quieto.height};
+                    Rectangle dest = {pos_draw.x - sprite_w/2, pos_draw.y - sprite_h/2, sprite_w, sprite_h};
+                    DrawTexturePro(tex_seguidor_quieto, source, dest, {0, 0}, 0.0f, WHITE);
+                } else {
+                    dibuja_seguidor_geometrico(pos, w, h, draw_y, estado, pos_init, seg);
+                }
+            } else if (anim_seguidor_corriendo) {
+                // Personaje corriendo: animación de sprite sheet
+                if (dir_carr > 0) {
+                    anim_seguidor_corriendo->dibujar(pos_draw, sprite_w, sprite_h);
+                } else {
+                    anim_seguidor_corriendo->dibujar_volteado(pos_draw, sprite_w, sprite_h);
+                }
+            } else if (tex_seguidor_corriendo.id > 0) {
+                // Fallback a sprite estático de correr si no hay animación
+                Rectangle source = {0, 0, (float)tex_seguidor_corriendo.width, (float)tex_seguidor_corriendo.height};
+                Rectangle dest = {pos_draw.x - sprite_w/2, pos_draw.y - sprite_h/2, sprite_w, sprite_h};
+                DrawTexturePro(tex_seguidor_corriendo, source, dest, {0, 0}, 0.0f, WHITE);
+            } else {
+                // Fallback: geometría original
+                dibuja_seguidor_geometrico(pos, w, h, draw_y, estado, pos_init, seg);
+                // Fallback: geometría original si no hay texturas/animaciones
+                dibuja_seguidor_geometrico(pos, w, h, draw_y, estado, pos_init, seg);
+            }
 
-            // 4. Cuerpo / Camiseta rayada de fútbol
-            int cx = static_cast<int>(pos.x);
-            int cy = static_cast<int>(draw_y + h * 0.1f);
-            // Camiseta (cuerpo)
-            DrawCircle(cx, cy, r * 0.7f, SKYBLUE);
-            DrawCircleLines(cx, cy, r * 0.7f, BLUE);
-            // Rayas blancas verticales de la camiseta
-            DrawRectangleRec({(float)(cx - r * 0.3f), (float)(cy - r * 0.6f), (float)(r * 0.15f), (float)(r * 1.2f)}, WHITE);
-            DrawRectangleRec({(float)(cx + r * 0.15f), (float)(cy - r * 0.6f), (float)(r * 0.15f), (float)(r * 1.2f)}, WHITE);
-
-            // 5. Cabeza del futbolista
-            int head_y = static_cast<int>(draw_y - h * 0.2f);
-            DrawCircle(cx, head_y, r * 0.45f, Color{250, 200, 160, 255}); // Piel
-            DrawCircleLines(cx, head_y, r * 0.45f, DARKGRAY);
-            // Pelo marrón
-            DrawCircleSector({(float)cx, (float)head_y}, r * 0.46f, 180.0f, 360.0f, 0, Color{130, 80, 40, 255});
-
-            // Ojo indicando la dirección de mirada
-            int eye_x = cx + static_cast<int>(dir_carr * r * 0.25f);
-            int eye_y = head_y - static_cast<int>(r * 0.05f);
-            DrawCircle(eye_x, eye_y, 2.5f, BLACK);
-
-            // 6. LED indicador de estado en la espalda
-            Color led_color = GREEN;
-            if (estado == EstadoSeguidor::PERSIGUIENDO) led_color = ORANGE;
-            else if (estado == EstadoSeguidor::RETRAYENDO) led_color = PURPLE;
-            DrawCircle(cx - static_cast<int>(dir_carr * r * 0.3f), cy - r * 0.1f, 3.5f, led_color);
-
-            // Rango de debug
             if (modo_debug) {
-                DrawCircleLines(cx, cy, 180.0f, Color{0, 255, 0, 80});
-                // Dibujar caja de colisión AABB real
+                DrawCircleLines(static_cast<int>(pos.x), static_cast<int>(pos.y), 180.0f, Color{0, 255, 0, 80});
                 DrawRectangleLines(static_cast<int>(pos.x - w/2), static_cast<int>(pos.y - h/2), static_cast<int>(w), static_cast<int>(h), GREEN);
             }
             return;
@@ -1320,82 +1364,82 @@ void dibujar_entidad(const EntidadFisica* e) {
 
             // 2. Dibujar al "Chavo" saliendo si pop > 0.0
             if (pop > 0.0f) {
-                // La cabeza sale de la tapa superior del barril (py) hacia arriba.
-                // El rango de movimiento de la cabeza: desde oculta (y = py + 15) hasta afuera (y = py - 20)
-                float chavo_y = py + 15.0f - pop * 35.0f;
-                float chavo_x = px + pw / 2.0f;
-                float head_r = 15.0f;
+                // Si la textura está disponible, usarla; si no, usar geometría
+                if (tex_chavo.id > 0) {
+                    // Usar textura: El Chavo se desplaza verticalmente según pop
+                    float chavo_y = py + 15.0f - pop * 35.0f;
+                    float chavo_x = px + pw / 2.0f;
+                    float chavo_w = 70.0f;
+                    float chavo_h = 70.0f;
+                    
+                    DrawTexturePro(
+                        tex_chavo,
+                        {0, 0, (float)tex_chavo.width, (float)tex_chavo.height},
+                        {chavo_x - chavo_w / 2.0f, chavo_y - chavo_h / 2.0f, chavo_w, chavo_h},
+                        {0, 0},
+                        0.0f,
+                        WHITE
+                    );
+                } else {
+                    // Fallback: Geometría original de El Chavo
+                    float chavo_y = py + 15.0f - pop * 35.0f;
+                    float chavo_x = px + pw / 2.0f;
+                    float head_r = 15.0f;
 
-                // Dibujar cuello/hombros simples
-                DrawRectangleRec({chavo_x - 8.0f, chavo_y + 10.0f, 16.0f, 15.0f}, Color{220, 220, 200, 255}); // Camiseta a rayas beige
+                    DrawRectangleRec({chavo_x - 8.0f, chavo_y + 10.0f, 16.0f, 15.0f}, Color{220, 220, 200, 255});
+                    DrawCircle(static_cast<int>(chavo_x), static_cast<int>(chavo_y), head_r, Color{253, 214, 185, 255});
+                    DrawCircleLines(static_cast<int>(chavo_x), static_cast<int>(chavo_y), head_r, Color{160, 110, 80, 255});
+                    DrawCircleSector({chavo_x, chavo_y}, head_r + 1.0f, 180.0f, 360.0f, 0, Color{84, 137, 101, 255});
+                    DrawCircle(static_cast<int>(chavo_x - 5.0f), static_cast<int>(chavo_y - 1.0f), 2.0f, BLACK);
+                    DrawCircle(static_cast<int>(chavo_x + 5.0f), static_cast<int>(chavo_y - 1.0f), 2.0f, BLACK);
+                    DrawCircleSector({chavo_x, chavo_y + 3.0f}, 4.0f, 0.0f, 180.0f, 0, Color{200, 80, 80, 255});
+                    DrawCircle(static_cast<int>(chavo_x - 5.0f), static_cast<int>(chavo_y + 2.0f), 2.0f, Color{253, 180, 160, 255});
+                    DrawCircle(static_cast<int>(chavo_x + 5.0f), static_cast<int>(chavo_y + 2.0f), 2.0f, Color{253, 180, 160, 255});
+                }
+            }
 
-                // Dibujar cabeza (piel)
-                DrawCircle(static_cast<int>(chavo_x), static_cast<int>(chavo_y), head_r, Color{253, 214, 185, 255});
-                DrawCircleLines(static_cast<int>(chavo_x), static_cast<int>(chavo_y), head_r, Color{160, 110, 80, 255});
-
-                // Dibujar gorro del Chavo (gorra verde a cuadros con orejeras)
-                // Orejera izquierda
-                DrawRectangleRec({chavo_x - head_r - 2.0f, chavo_y - 2.0f, 5.0f, 12.0f}, Color{74, 117, 89, 255}); // Verde oscuro
-                DrawRectangleRec({chavo_x - head_r - 2.0f, chavo_y - 2.0f, 5.0f, 12.0f}, Color{126, 170, 140, 255}); // Verde claro alternado
-                // Orejera derecha
-                DrawRectangleRec({chavo_x + head_r - 3.0f, chavo_y - 2.0f, 5.0f, 12.0f}, Color{74, 117, 89, 255});
-
-                // Cúpula del gorro
-                DrawCircleSector({chavo_x, chavo_y}, head_r + 1.0f, 180.0f, 360.0f, 0, Color{84, 137, 101, 255});
-                // Visera del gorro
-                DrawTriangle(
-                    {chavo_x - 4.0f, chavo_y - head_r + 2.0f},
-                    {chavo_x + 14.0f, chavo_y - 2.0f},
-                    {chavo_x - 2.0f, chavo_y - 2.0f},
-                    Color{114, 167, 131, 255}
+            // 3. Dibujar el Barril
+            if (tex_barril.id > 0) {
+                // Usar textura del barril
+                DrawTexturePro(
+                    tex_barril,
+                    {0, 0, (float)tex_barril.width, (float)tex_barril.height},
+                    {px, py, pw, ph},
+                    {0, 0},
+                    0.0f,
+                    WHITE
                 );
+            } else {
+                // Fallback: Geometría original del barril (duelas de madera + aros metálicos)
+                Color col_madera = Color{139, 90, 43, 255};
+                Color col_borde = Color{90, 50, 20, 255};
 
-                // Cuadros/Líneas de la gorra para darle textura
-                DrawLineEx({chavo_x - head_r, chavo_y - 6.0f}, {chavo_x + head_r, chavo_y - 6.0f}, 1.5f, Color{40, 70, 50, 180});
-                DrawLineEx({chavo_x, chavo_y - head_r}, {chavo_x, chavo_y}, 1.5f, Color{40, 70, 50, 180});
+                int num_duelas = 5;
+                float duela_w = pw / num_duelas;
+                for (int i = 0; i < num_duelas; ++i) {
+                    float dx = px + i * duela_w;
+                    Color col_duela = col_madera;
+                    if (i % 2 == 0) col_duela = ColorBrightness(col_madera, -0.08f);
+                    DrawRectangleRec({dx, py, duela_w, ph}, col_duela);
+                    DrawLineEx({dx, py}, {dx, py + ph}, 1.0f, col_borde);
+                }
+                DrawRectangleLinesEx({px, py, pw, ph}, 1.5f, col_borde);
 
-                // Ojos (puntos negros)
-                DrawCircle(static_cast<int>(chavo_x - 5.0f), static_cast<int>(chavo_y - 1.0f), 2.0f, BLACK);
-                DrawCircle(static_cast<int>(chavo_x + 5.0f), static_cast<int>(chavo_y - 1.0f), 2.0f, BLACK);
+                // Aros metálicos
+                Color col_metal = Color{160, 170, 180, 255};
+                Color col_metal_borde = Color{90, 100, 110, 255};
+                
+                DrawRectangleRec({px - 2.0f, py + 12.0f, pw + 4.0f, 6.0f}, col_metal);
+                DrawRectangleLinesEx({px - 2.0f, py + 12.0f, pw + 4.0f, 6.0f}, 1.0f, col_metal_borde);
 
-                                DrawCircleSector({chavo_x, chavo_y + 3.0f}, 4.0f, 0.0f, 180.0f, 0, Color{200, 80, 80, 255}); // Boca abierta
-                DrawCircle(static_cast<int>(chavo_x - 5.0f), static_cast<int>(chavo_y + 2.0f), 2.0f, Color{253, 180, 160, 255}); // Mejillas
-                DrawCircle(static_cast<int>(chavo_x + 5.0f), static_cast<int>(chavo_y + 2.0f), 2.0f, Color{253, 180, 160, 255});
+                DrawRectangleRec({px - 3.0f, py + ph / 2.0f - 3.0f, pw + 6.0f, 6.0f}, col_metal);
+                DrawRectangleLinesEx({px - 3.0f, py + ph / 2.0f - 3.0f, pw + 6.0f, 6.0f}, 1.0f, col_metal_borde);
+
+                DrawRectangleRec({px - 2.0f, py + ph - 18.0f, pw + 4.0f, 6.0f}, col_metal);
+                DrawRectangleLinesEx({px - 2.0f, py + ph - 18.0f, pw + 4.0f, 6.0f}, 1.0f, col_metal_borde);
+
+                DrawEllipse(static_cast<int>(px + pw / 2.0f), static_cast<int>(py + 2.0f), pw * 0.45f, 4.0f, BLACK);
             }
-
-            // 3. Dibujar el Barril (cuerpo de madera, franjas metálicas)
-            Color col_madera = Color{139, 90, 43, 255};
-            Color col_borde = Color{90, 50, 20, 255};
-
-            int num_duelas = 5;
-            float duela_w = pw / num_duelas;
-            for (int i = 0; i < num_duelas; ++i) {
-                float dx = px + i * duela_w;
-                Color col_duela = col_madera;
-                if (i % 2 == 0) col_duela = ColorBrightness(col_madera, -0.08f);
-                DrawRectangleRec({dx, py, duela_w, ph}, col_duela);
-                DrawLineEx({dx, py}, {dx, py + ph}, 1.0f, col_borde);
-            }
-            DrawRectangleLinesEx({px, py, pw, ph}, 1.5f, col_borde);
-
-            // Aros metálicos
-            Color col_metal = Color{160, 170, 180, 255};
-            Color col_metal_borde = Color{90, 100, 110, 255};
-            
-            // Aro superior
-            DrawRectangleRec({px - 2.0f, py + 12.0f, pw + 4.0f, 6.0f}, col_metal);
-            DrawRectangleLinesEx({px - 2.0f, py + 12.0f, pw + 4.0f, 6.0f}, 1.0f, col_metal_borde);
-
-            // Aro central
-            DrawRectangleRec({px - 3.0f, py + ph / 2.0f - 3.0f, pw + 6.0f, 6.0f}, col_metal);
-            DrawRectangleLinesEx({px - 3.0f, py + ph / 2.0f - 3.0f, pw + 6.0f, 6.0f}, 1.0f, col_metal_borde);
-
-            // Aro inferior
-            DrawRectangleRec({px - 2.0f, py + ph - 18.0f, pw + 4.0f, 6.0f}, col_metal);
-            DrawRectangleLinesEx({px - 2.0f, py + ph - 18.0f, pw + 4.0f, 6.0f}, 1.0f, col_metal_borde);
-
-            // Dibujar agujero negro de la tapa superior
-            DrawEllipse(static_cast<int>(px + pw / 2.0f), static_cast<int>(py + 2.0f), pw * 0.45f, 4.0f, BLACK);
 
             if (modo_debug) {
                 DrawRectangleLines(static_cast<int>(px), static_cast<int>(py), static_cast<int>(pw), static_cast<int>(ph), GREEN);
@@ -1612,6 +1656,42 @@ void cargandoTexturas() {
     } else {
         TraceLog(LOG_INFO, "Textura derecho cargada: %dx%d", derecho.width, derecho.height);
     }
+    
+    // Cargar texturas del BarrilChavo
+    tex_barril = LoadTexture("../Assets/chavo/barril.png");
+    if (tex_barril.id == 0) {
+        TraceLog(LOG_WARNING, "Textura barril no encontrada: ../Assets/chavo/barril.png (usando renderizado geométrico)");
+    } else {
+        TraceLog(LOG_INFO, "Textura barril cargada: %dx%d", tex_barril.width, tex_barril.height);
+    }
+    
+    tex_chavo = LoadTexture("../Assets/chavo/chavo.png");
+    if (tex_chavo.id == 0) {
+        TraceLog(LOG_WARNING, "Textura El Chavo no encontrada: ../Assets/characters/chavo.png (usando renderizado geométrico)");
+    } else {
+        TraceLog(LOG_INFO, "Textura El Chavo cargada: %dx%d", tex_chavo.width, tex_chavo.height);
+    }
+    
+    // Cargar texturas del SeguidorBooster
+    tex_seguidor_quieto = LoadTexture("../Assets/messi/messi-normal.png");
+    if (tex_seguidor_quieto.id == 0) {
+        TraceLog(LOG_WARNING, "Textura seguidor quieto no encontrada: ../Assets/messi/messi-normal.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura seguidor quieto cargada: %dx%d", tex_seguidor_quieto.width, tex_seguidor_quieto.height);
+    }
+    
+    tex_seguidor_corriendo = LoadTexture("../Assets/messi/mesirve.png");
+    if (tex_seguidor_corriendo.id == 0) {
+        TraceLog(LOG_WARNING, "Textura seguidor corriendo no encontrada: ../Assets/messi/mesirve.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura seguidor corriendo cargada: %dx%d", tex_seguidor_corriendo.width, tex_seguidor_corriendo.height);
+    }
+    
+    // Inicializar animaciones del SeguidorBooster
+    //Animacion(textura, total_frames, fps, frames_por_fila)
+    if (tex_seguidor_corriendo.id > 0) {
+        anim_seguidor_corriendo = new Animacion(tex_seguidor_corriendo, 8, 12, 8);
+    }
 }
 
 // ============================================================================
@@ -1734,6 +1814,11 @@ int main() {
         // ======== UPDATE ========
         motor.actualizar(GetFrameTime());
 
+        // Actualizar animaciones del SeguidorBooster
+        if (anim_seguidor_corriendo) {
+            anim_seguidor_corriendo->actualizar(GetFrameTime());
+        }
+
         // Fade-out del título
         if (titulo_alpha > 0.0f) {
             titulo_alpha -= 0.008f;
@@ -1816,6 +1901,14 @@ int main() {
     UnloadTexture(tex_fondo);
     UnloadTexture(tex_base_central);
     UnloadTexture(derecho);
+    if (tex_barril.id > 0) UnloadTexture(tex_barril);
+    if (tex_chavo.id > 0) UnloadTexture(tex_chavo);
+    if (tex_seguidor_quieto.id > 0) UnloadTexture(tex_seguidor_quieto);
+    if (tex_seguidor_corriendo.id > 0) UnloadTexture(tex_seguidor_corriendo);
+    if (anim_seguidor_corriendo) {
+        delete anim_seguidor_corriendo;
+    }
+    
     CloseWindow();
     return 0;
 }
