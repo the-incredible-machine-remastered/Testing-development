@@ -123,6 +123,8 @@ const Color MENU_AZUL_CLARO   = {90,  165, 235, 255};
 const Color MENU_CELDA_FONDO  = {195, 200, 210, 255};
 const Color MENU_INACTIVO     = {130, 135, 145, 180};
 
+bool es_borde_nivel(const EntidadFisica* e);
+
 bool menu_visible = true;
 int menu_tab = 0;
 int menu_pagina = 0;
@@ -140,6 +142,15 @@ Texture2D tex_barril;   // Textura del barril (parte del BarrilChavo)
 Texture2D tex_chavo;    // Textura de El Chavo (personaje que sale)
 Texture2D tex_seguidor_quieto;     // Sprite del personaje parado
 Texture2D tex_seguidor_corriendo;  // Sprite del personaje corriendo
+
+// Texturas adicionales para assets
+Texture2D tex_trampolin;
+Texture2D tex_balancin_base;
+Texture2D tex_balancin_tabla;
+Texture2D tex_plata_larga;
+Texture2D tex_plata_peque;
+Texture2D tex_plata_rampa_izq;
+Texture2D tex_plata_rampa_der;
 
 // Animaciones del SeguidorBooster
 Animacion* anim_seguidor_corriendo = nullptr;
@@ -615,48 +626,112 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
             break;
         }
         case TipoObjetoMenu::TRAMPOLIN: {
-            float w = 44.0f * escala;
-            float h = 12.0f * escala;
-            float px = cx - w / 2.0f;
-            float py = cy - h / 2.0f;
-            DrawLineEx({px + 4, py + h}, {px + 10, py + 4}, 2.0f, tint(DARKGRAY));
-            DrawLineEx({px + w - 4, py + h}, {px + w - 10, py + 4}, 2.0f, tint(DARKGRAY));
-            DrawLineEx({px + 8, py + 2}, {px + w / 2, py + 5}, 4.0f, tint(RED));
-            DrawLineEx({px + w / 2, py + 5}, {px + w - 8, py + 2}, 4.0f, tint(RED));
+            if (tex_trampolin.id > 0) {
+                float w = 50.0f * escala;
+                float h = 16.0f * escala;
+                float frame_w = (float)tex_trampolin.width / 4.0f;
+                DrawTexturePro(
+                    tex_trampolin,
+                    { 0, 0, frame_w, (float)tex_trampolin.height },
+                    { cx - w / 2.0f, cy - h / 2.0f, w, h },
+                    { 0, 0 },
+                    0.0f,
+                    tint(WHITE)
+                );
+            } else {
+                float w = 44.0f * escala;
+                float h = 12.0f * escala;
+                float px = cx - w / 2.0f;
+                float py = cy - h / 2.0f;
+                DrawLineEx({px + 4, py + h}, {px + 10, py + 4}, 2.0f, tint(DARKGRAY));
+                DrawLineEx({px + w - 4, py + h}, {px + w - 10, py + 4}, 2.0f, tint(DARKGRAY));
+                DrawLineEx({px + 8, py + 2}, {px + w / 2, py + 5}, 4.0f, tint(RED));
+                DrawLineEx({px + w / 2, py + 5}, {px + w - 8, py + 2}, 4.0f, tint(RED));
+            }
             break;
         }
         case TipoObjetoMenu::BALANCIN: {
-            float largo = 50.0f * escala;
-            float esp = 5.0f * escala;
-            DrawTriangle(
-                {cx, cy - 8 * escala},
-                {cx - 10 * escala, cy + 14 * escala},
-                {cx + 10 * escala, cy + 14 * escala},
-                tint(DARKGRAY));
-            DrawRectangleRec(
-                {cx - largo / 2, cy - esp / 2, largo, esp},
-                tint(Color{190, 110, 50, 255}));
-            DrawCircle(static_cast<int>(cx), static_cast<int>(cy), 4 * escala, tint(BLACK));
-            DrawCircle(static_cast<int>(cx - largo / 2 + 6), static_cast<int>(cy), 5 * escala, tint(RED));
-            DrawCircle(static_cast<int>(cx + largo / 2 - 6), static_cast<int>(cy), 5 * escala, tint(RED));
+            if (tex_balancin_base.id > 0 && tex_balancin_tabla.id > 0) {
+                float base_w = 16.0f * escala;
+                float base_h = 20.0f * escala;
+                DrawTexturePro(
+                    tex_balancin_base,
+                    { 0, 0, (float)tex_balancin_base.width, (float)tex_balancin_base.height },
+                    { cx - base_w / 2.0f, cy - 2.0f * escala, base_w, base_h },
+                    { 0, 0 },
+                    0.0f,
+                    tint(WHITE)
+                );
+
+                float largo = 55.0f * escala;
+                float esp = 15.0f * escala;
+                DrawTexturePro(
+                    tex_balancin_tabla,
+                    { 0, 0, (float)tex_balancin_tabla.width, (float)tex_balancin_tabla.height },
+                    { cx, cy - esp / 2.0f, largo, esp },
+                    { largo / 2.0f, esp / 2.0f },
+                    0.0f,
+                    tint(WHITE)
+                );
+            } else {
+                float largo = 50.0f * escala;
+                float esp = 5.0f * escala;
+                DrawTriangle(
+                    {cx, cy - 8 * escala},
+                    {cx - 10 * escala, cy + 14 * escala},
+                    {cx + 10 * escala, cy + 14 * escala},
+                    tint(DARKGRAY));
+                DrawRectangleRec(
+                    {cx - largo / 2, cy - esp / 2, largo, esp},
+                    tint(Color{190, 110, 50, 255}));
+                DrawCircle(static_cast<int>(cx), static_cast<int>(cy), 4 * escala, tint(BLACK));
+                DrawCircle(static_cast<int>(cx - largo / 2 + 6), static_cast<int>(cy), 5 * escala, tint(RED));
+                DrawCircle(static_cast<int>(cx + largo / 2 - 6), static_cast<int>(cy), 5 * escala, tint(RED));
+            }
             break;
         }
         case TipoObjetoMenu::RAMPA_IZQUIERDA: {
-            float s = 22.0f * escala;
-            Vector2 v1 = {cx - s, cy - s};
-            Vector2 v2 = {cx - s, cy + s};
-            Vector2 v3 = {cx + s, cy + s};
-            DrawTriangle(v1, v2, v3, tint(COLOR_RAMPA));
-            DrawTriangleLines(v1, v2, v3, tint(COLOR_RAMPA_BORDE));
+            if (tex_plata_rampa_izq.id > 0) {
+                float w = 44.0f * escala;
+                float h = 44.0f * escala;
+                DrawTexturePro(
+                    tex_plata_rampa_izq,
+                    { 0, 0, (float)tex_plata_rampa_izq.width, (float)tex_plata_rampa_izq.height },
+                    { cx - w / 2.0f, cy - h / 2.0f, w, h },
+                    { 0, 0 },
+                    0.0f,
+                    tint(WHITE)
+                );
+            } else {
+                float s = 22.0f * escala;
+                Vector2 v1 = {cx - s, cy - s};
+                Vector2 v2 = {cx - s, cy + s};
+                Vector2 v3 = {cx + s, cy + s};
+                DrawTriangle(v1, v2, v3, tint(COLOR_RAMPA));
+                DrawTriangleLines(v1, v2, v3, tint(COLOR_RAMPA_BORDE));
+            }
             break;
         }
         case TipoObjetoMenu::RAMPA_DERECHA: {
-            float s = 22.0f * escala;
-            Vector2 v1 = {cx - s, cy + s};
-            Vector2 v2 = {cx + s, cy + s};
-            Vector2 v3 = {cx + s, cy - s};
-            DrawTriangle(v1, v2, v3, tint(COLOR_RAMPA));
-            DrawTriangleLines(v1, v2, v3, tint(COLOR_RAMPA_BORDE));
+            if (tex_plata_rampa_der.id > 0) {
+                float w = 44.0f * escala;
+                float h = 44.0f * escala;
+                DrawTexturePro(
+                    tex_plata_rampa_der,
+                    { 0, 0, (float)tex_plata_rampa_der.width, (float)tex_plata_rampa_der.height },
+                    { cx - w / 2.0f, cy - h / 2.0f, w, h },
+                    { 0, 0 },
+                    0.0f,
+                    tint(WHITE)
+                );
+            } else {
+                float s = 22.0f * escala;
+                Vector2 v1 = {cx - s, cy + s};
+                Vector2 v2 = {cx + s, cy + s};
+                Vector2 v3 = {cx + s, cy - s};
+                DrawTriangle(v1, v2, v3, tint(COLOR_RAMPA));
+                DrawTriangleLines(v1, v2, v3, tint(COLOR_RAMPA_BORDE));
+            }
             break;
         }
         case TipoObjetoMenu::PLATAFORMA:
@@ -666,8 +741,38 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
             float h = 8.0f * escala;
             if (tipo == TipoObjetoMenu::PARED_LARGA) { w = 18.0f * escala; h = 40.0f * escala; }
             if (tipo == TipoObjetoMenu::PLATAFORMA_DECOR) { w = 36.0f * escala; h = 10.0f * escala; }
-            DrawRectangleRec({cx - w / 2, cy - h / 2, w, h}, tint(COLOR_PARED));
-            DrawRectangleLinesEx({cx - w / 2, cy - h / 2, w, h}, 1.0f, tint(COLOR_PARED_BORDE));
+
+            bool drawn = false;
+            if (tipo == TipoObjetoMenu::PARED_LARGA) {
+                if (tex_plata_peque.id > 0) {
+                    DrawTexturePro(
+                        tex_plata_peque,
+                        { 0, 0, (float)tex_plata_peque.width, (float)tex_plata_peque.height },
+                        { cx - w / 2.0f, cy - h / 2.0f, w, h },
+                        { 0, 0 },
+                        0.0f,
+                        tint(WHITE)
+                    );
+                    drawn = true;
+                }
+            } else {
+                if (tex_plata_larga.id > 0) {
+                    DrawTexturePro(
+                        tex_plata_larga,
+                        { 0, 0, (float)tex_plata_larga.width, (float)tex_plata_larga.height },
+                        { cx - w / 2.0f, cy - h / 2.0f, w, h },
+                        { 0, 0 },
+                        0.0f,
+                        tint(WHITE)
+                    );
+                    drawn = true;
+                }
+            }
+
+            if (!drawn) {
+                DrawRectangleRec({cx - w / 2.0f, cy - h / 2.0f, w, h}, tint(COLOR_PARED));
+                DrawRectangleLinesEx({cx - w / 2.0f, cy - h / 2.0f, w, h}, 1.0f, tint(COLOR_PARED_BORDE));
+            }
             break;
         }
         case TipoObjetoMenu::BOLA_REBOTADORA: {
@@ -911,13 +1016,26 @@ void dibujar_menu_lateral() {
     // Paginación
     int paginas = contar_paginas_tab(menu_tab);
     int py = ALTO - MENU_PAGINACION_ALTO - 180;  // 10px de margen desde el fondo del asset
-    DrawRectangle(px, py, MENU_ANCHO, MENU_PAGINACION_ALTO, MENU_FONDO_OSCURO);
-    DrawText("<", px + MENU_MARGEN + 4, py + 10, 18, MENU_AZUL);
+    // Flechas de paginación (más grandes para fácil clic)
+    int flecha_w = 80;
+    int flecha_h = 50;
+    bool hover_prev = CheckCollisionPointRec(mouse, Rectangle{static_cast<float>(px + MENU_MARGEN), static_cast<float>(py), static_cast<float>(flecha_w), static_cast<float>(flecha_h)});
+    bool hover_next = CheckCollisionPointRec(mouse, Rectangle{static_cast<float>(px + MENU_ANCHO - MENU_MARGEN - flecha_w), static_cast<float>(py), static_cast<float>(flecha_w), static_cast<float>(flecha_h)});
+
+    DrawRectangleRounded(
+        {static_cast<float>(px + MENU_MARGEN), static_cast<float>(py), static_cast<float>(flecha_w), static_cast<float>(flecha_h)},
+        0.15f, 4, hover_prev ? Color{110, 125, 145, 230} : Color{80, 90, 105, 180});
+    DrawText("<", px + MENU_MARGEN + flecha_w / 2 - 6, py + flecha_h / 2 - 9, 20, hover_prev ? MENU_AZUL_CLARO : MENU_AZUL);
+
     char pag_txt[32];
     snprintf(pag_txt, sizeof(pag_txt), "PAGINA %d / %d", menu_pagina + 1, paginas);
     int tw = MeasureText(pag_txt, 12);
-    DrawText(pag_txt, px + MENU_ANCHO / 2 - tw / 2, py + 12, 12, MENU_TEXTO);
-    DrawText(">", px + MENU_ANCHO - MENU_MARGEN - 16, py + 10, 18, MENU_AZUL);
+    DrawText(pag_txt, px + MENU_ANCHO / 2 - tw / 2, py + flecha_h / 2 - 6, 12, MENU_TEXTO);
+
+    DrawRectangleRounded(
+        {static_cast<float>(px + MENU_ANCHO - MENU_MARGEN - flecha_w), static_cast<float>(py), static_cast<float>(flecha_w), static_cast<float>(flecha_h)},
+        0.15f, 4, hover_next ? Color{110, 125, 145, 230} : Color{80, 90, 105, 180});
+    DrawText(">", px + MENU_ANCHO - MENU_MARGEN - flecha_w / 2 - 6, py + flecha_h / 2 - 9, 20, hover_next ? MENU_AZUL_CLARO : MENU_AZUL);
 }
 
 bool manejar_click_menu(int mx, int my) {
@@ -964,8 +1082,10 @@ bool manejar_click_menu(int mx, int my) {
     }
 
     int py = ALTO - MENU_PAGINACION_ALTO - 180; 
-    Rectangle btn_prev = { static_cast<float>(px + MENU_MARGEN), static_cast<float>(py), 24, 28 };
-    Rectangle btn_next = { static_cast<float>(px + MENU_ANCHO - MENU_MARGEN - 24), static_cast<float>(py), 24, 28 };
+    int flecha_w = 80;
+    int flecha_h = 50;
+    Rectangle btn_prev = { static_cast<float>(px + MENU_MARGEN), static_cast<float>(py), static_cast<float>(flecha_w), static_cast<float>(flecha_h) };
+    Rectangle btn_next = { static_cast<float>(px + MENU_ANCHO - MENU_MARGEN - flecha_w), static_cast<float>(py), static_cast<float>(flecha_w), static_cast<float>(flecha_h) };
     int paginas = contar_paginas_tab(menu_tab);
     if (click_en_rect(mx, my, btn_prev) && menu_pagina > 0) { menu_pagina--; return true; }
     if (click_en_rect(mx, my, btn_next) && menu_pagina < paginas - 1) { menu_pagina++; return true; }
@@ -1327,65 +1447,89 @@ void dibujar_entidad(const EntidadFisica* e) {
             float ph = static_cast<float>(tramp->get_alto());
             float def = static_cast<float>(tramp->get_deformacion());
 
-            // 1. Dibujar patas de soporte de acero cromado (estructura triangular estable)
-            DrawLineEx({px + 6, py + ph}, {px + 12, py + 8}, 3.0f, DARKGRAY);
-            DrawLineEx({px + 18, py + ph}, {px + 12, py + 8}, 3.0f, DARKGRAY);
-            DrawLineEx({px + pw - 6, py + ph}, {px + pw - 12, py + 8}, 3.0f, DARKGRAY);
-            DrawLineEx({px + pw - 18, py + ph}, {px + pw - 12, py + 8}, 3.0f, DARKGRAY);
+            if (tex_trampolin.id > 0) {
+                int num_frames = 4;
+                float frame_w = 0.0f;
+                float frame_h = 0.0f;
+                Rectangle source;
+                int frame_idx = 0;
+                if (def > 12.0f) frame_idx = 3;
+                else if (def > 7.0f) frame_idx = 2;
+                else if (def > 2.0f) frame_idx = 1;
 
-            // Barra inferior metálica horizontal de unión
-            DrawLineEx({px + 18, py + ph - 2}, {px + pw - 18, py + ph - 2}, 2.5f, GRAY);
+                if (tex_trampolin.width > tex_trampolin.height) {
+                    frame_w = (float)tex_trampolin.width / num_frames;
+                    frame_h = (float)tex_trampolin.height;
+                    source = { frame_idx * frame_w, 0, frame_w, frame_h };
+                } else {
+                    frame_w = (float)tex_trampolin.width;
+                    frame_h = (float)tex_trampolin.height / num_frames;
+                    source = { 0, frame_idx * frame_h, frame_w, frame_h };
+                }
 
-            // 2. Dibujar marcos rígidos laterales en los extremos (donde se anclan los resortes)
-            DrawRectangleRec({px, py, 6.0f, 10.0f}, GRAY);
-            DrawRectangleLinesEx({px, py, 6.0f, 10.0f}, 1.0f, DARKGRAY);
-            DrawRectangleRec({px + pw - 6.0f, py, 6.0f, 10.0f}, GRAY);
-            DrawRectangleLinesEx({px + pw - 6.0f, py, 6.0f, 10.0f}, 1.0f, DARKGRAY);
+                Rectangle dest = { px - 4.0f, py - 4.0f, pw + 8.0f, ph + 8.0f };
+                DrawTexturePro(tex_trampolin, source, dest, {0, 0}, 0.0f, WHITE);
+            } else {
+                // 1. Dibujar patas de soporte de acero cromado (estructura triangular estable)
+                DrawLineEx({px + 6, py + ph}, {px + 12, py + 8}, 3.0f, DARKGRAY);
+                DrawLineEx({px + 18, py + ph}, {px + 12, py + 8}, 3.0f, DARKGRAY);
+                DrawLineEx({px + pw - 6, py + ph}, {px + pw - 12, py + 8}, 3.0f, DARKGRAY);
+                DrawLineEx({px + pw - 18, py + ph}, {px + pw - 12, py + 8}, 3.0f, DARKGRAY);
 
-            // 3. Dibujar resortes elásticos dorados estirándose hacia la lona curvada
-            int num_resortes = 6;
-            for (int i = 0; i < num_resortes; ++i) {
-                // Anclaje en marco izquierdo
-                float lx_start = px + 6.0f;
-                float ly_start = py + 3.0f + i * 1.2f;
-                
-                // Fin en lona izquierda (interpolación hasta el centro)
-                float t = static_cast<float>(i) / (num_resortes - 1);
-                float lx_end = px + 6.0f + (pw / 2.0f - 14.0f) * t;
-                float ly_end = py + 4.0f + def * t;
-                
-                // Dibujar resorte como zigzag dorado
-                float mx = (lx_start + lx_end) / 2.0f;
-                float my = (ly_start + ly_end) / 2.0f + 2.5f; // zigzag wave
-                DrawLineEx({lx_start, ly_start}, {mx, my}, 1.5f, GOLD);
-                DrawLineEx({mx, my}, {lx_end, ly_end}, 1.5f, GOLD);
+                // Barra inferior metálica horizontal de unión
+                DrawLineEx({px + 18, py + ph - 2}, {px + pw - 18, py + ph - 2}, 2.5f, GRAY);
 
-                // Anclaje en marco derecho
-                float rx_start = px + pw - 6.0f;
-                float ry_start = py + 3.0f + i * 1.2f;
-                
-                // Fin en lona derecha
-                float rx_end = px + pw - 6.0f - (pw / 2.0f - 14.0f) * t;
-                float ry_end = py + 4.0f + def * t;
+                // 2. Dibujar marcos rígidos laterales en los extremos (donde se anclan los resortes)
+                DrawRectangleRec({px, py, 6.0f, 10.0f}, GRAY);
+                DrawRectangleLinesEx({px, py, 6.0f, 10.0f}, 1.0f, DARKGRAY);
+                DrawRectangleRec({px + pw - 6.0f, py, 6.0f, 10.0f}, GRAY);
+                DrawRectangleLinesEx({px + pw - 6.0f, py, 6.0f, 10.0f}, 1.0f, DARKGRAY);
 
-                float rmx = (rx_start + rx_end) / 2.0f;
-                float rmy = (ry_start + ry_end) / 2.0f + 2.5f;
-                DrawLineEx({rx_start, ry_start}, {rmx, rmy}, 1.5f, GOLD);
-                DrawLineEx({rmx, rmy}, {rx_end, ry_end}, 1.5f, GOLD);
+                // 3. Dibujar resortes elásticos dorados estirándose hacia la lona curvada
+                int num_resortes = 6;
+                for (int i = 0; i < num_resortes; ++i) {
+                    // Anclaje en marco izquierdo
+                    float lx_start = px + 6.0f;
+                    float ly_start = py + 3.0f + i * 1.2f;
+                    
+                    // Fin en lona izquierda (interpolación hasta el centro)
+                    float t = static_cast<float>(i) / (num_resortes - 1);
+                    float lx_end = px + 6.0f + (pw / 2.0f - 14.0f) * t;
+                    float ly_end = py + 4.0f + def * t;
+                    
+                    // Dibujar resorte como zigzag dorado
+                    float mx = (lx_start + lx_end) / 2.0f;
+                    float my = (ly_start + ly_end) / 2.0f + 2.5f; // zigzag wave
+                    DrawLineEx({lx_start, ly_start}, {mx, my}, 1.5f, GOLD);
+                    DrawLineEx({mx, my}, {lx_end, ly_end}, 1.5f, GOLD);
+
+                    // Anclaje en marco derecho
+                    float rx_start = px + pw - 6.0f;
+                    float ry_start = py + 3.0f + i * 1.2f;
+                    
+                    // Fin en lona derecha
+                    float rx_end = px + pw - 6.0f - (pw / 2.0f - 14.0f) * t;
+                    float ry_end = py + 4.0f + def * t;
+
+                    float rmx = (rx_start + rx_end) / 2.0f;
+                    float rmy = (ry_start + ry_end) / 2.0f + 2.5f;
+                    DrawLineEx({rx_start, ry_start}, {rmx, rmy}, 1.5f, GOLD);
+                    DrawLineEx({rmx, rmy}, {rx_end, ry_end}, 1.5f, GOLD);
+                }
+
+                // 4. Dibujar la lona elástica central curvada por la deformación (rojo intenso con contorno naranja)
+                Vector2 p_left = { px + 10.0f, py + 4.0f };
+                Vector2 p_center = { px + pw / 2.0f, py + 4.0f + def };
+                Vector2 p_right = { px + pw - 10.0f, py + 4.0f };
+
+                // Lona elástica gruesa
+                DrawLineEx(p_left, p_center, 6.0f, RED);
+                DrawLineEx(p_center, p_right, 6.0f, RED);
+
+                // Borde brillante superior
+                DrawLineEx({p_left.x, p_left.y - 2.0f}, {p_center.x, p_center.y - 2.0f}, 1.5f, ORANGE);
+                DrawLineEx({p_center.x, p_center.y - 2.0f}, {p_right.x, p_right.y - 2.0f}, 1.5f, ORANGE);
             }
-
-            // 4. Dibujar la lona elástica central curvada por la deformación (rojo intenso con contorno naranja)
-            Vector2 p_left = { px + 10.0f, py + 4.0f };
-            Vector2 p_center = { px + pw / 2.0f, py + 4.0f + def };
-            Vector2 p_right = { px + pw - 10.0f, py + 4.0f };
-
-            // Lona elástica gruesa
-            DrawLineEx(p_left, p_center, 6.0f, RED);
-            DrawLineEx(p_center, p_right, 6.0f, RED);
-
-            // Borde brillante superior
-            DrawLineEx({p_left.x, p_left.y - 2.0f}, {p_center.x, p_center.y - 2.0f}, 1.5f, ORANGE);
-            DrawLineEx({p_center.x, p_center.y - 2.0f}, {p_right.x, p_right.y - 2.0f}, 1.5f, ORANGE);
             return;
         }
 
@@ -1491,13 +1635,44 @@ void dibujar_entidad(const EntidadFisica* e) {
         if (!p) return;
 
         Vector2D pos = p->get_posicion();
-        int px = static_cast<int>(pos.x);
-        int py = static_cast<int>(pos.y);
-        int pw = static_cast<int>(p->get_ancho());
-        int ph = static_cast<int>(p->get_alto());
+        float px = static_cast<float>(pos.x);
+        float py = static_cast<float>(pos.y);
+        float pw = static_cast<float>(p->get_ancho());
+        float ph = static_cast<float>(p->get_alto());
 
-        DrawRectangle(px, py, pw, ph, COLOR_PARED);
-        DrawRectangleLines(px, py, pw, ph, COLOR_PARED_BORDE);
+        bool texturizado = false;
+        if (!es_borde_nivel(p)) {
+            if (pw > ph) {
+                if (tex_plata_larga.id > 0) {
+                    DrawTexturePro(
+                        tex_plata_larga,
+                        { 0, 0, (float)tex_plata_larga.width, (float)tex_plata_larga.height },
+                        { px, py, pw, ph },
+                        { 0, 0 },
+                        0.0f,
+                        WHITE
+                    );
+                    texturizado = true;
+                }
+            } else {
+                if (tex_plata_peque.id > 0) {
+                    DrawTexturePro(
+                        tex_plata_peque,
+                        { 0, 0, (float)tex_plata_peque.width, (float)tex_plata_peque.height },
+                        { px, py, pw, ph },
+                        { 0, 0 },
+                        0.0f,
+                        WHITE
+                    );
+                    texturizado = true;
+                }
+            }
+        }
+
+        if (!texturizado) {
+            DrawRectangle(static_cast<int>(px), static_cast<int>(py), static_cast<int>(pw), static_cast<int>(ph), COLOR_PARED);
+            DrawRectangleLines(static_cast<int>(px), static_cast<int>(py), static_cast<int>(pw), static_cast<int>(ph), COLOR_PARED_BORDE);
+        }
     }
     else if (forma == TipoForma::POLIGONO) {
         const Balancin* bal = dynamic_cast<const Balancin*>(e);
@@ -1507,52 +1682,73 @@ void dibujar_entidad(const EntidadFisica* e) {
             int py = static_cast<int>(pos.y);
             int largo = static_cast<int>(bal->get_largo());
             int espesor = static_cast<int>(bal->get_espesor());
-
-            // 1. Dibujar soporte del pivot (triángulo metálico)
-            DrawTriangle(
-                {static_cast<float>(px), static_cast<float>(py)},
-                {static_cast<float>(px - 16), static_cast<float>(py + 40)},
-                {static_cast<float>(px + 16), static_cast<float>(py + 40)},
-                DARKGRAY
-            );
-            DrawTriangleLines(
-                {static_cast<float>(px), static_cast<float>(py)},
-                {static_cast<float>(px - 16), static_cast<float>(py + 40)},
-                {static_cast<float>(px + 16), static_cast<float>(py + 40)},
-                GRAY
-            );
-
-            // 2. Dibujar la tabla giratoria (plank)
-            Rectangle rec = { static_cast<float>(px), static_cast<float>(py), static_cast<float>(largo), static_cast<float>(espesor) };
-            Vector2 origin = { static_cast<float>(largo / 2.0), static_cast<float>(espesor / 2.0) };
             float rot_deg = static_cast<float>(bal->get_angulo() * 180.0 / MathUtils::TIM_PI);
-
-            // Madera ocre con relieve
-            DrawRectanglePro(rec, origin, rot_deg, Color{190, 110, 50, 255});
-            
-            // Dibujar contorno ocre rotado usando las 4 esquinas del tablón
             double cos_a = std::cos(bal->get_angulo());
             double sin_a = std::sin(bal->get_angulo());
-            double hl = largo / 2.0;
-            double ht = espesor / 2.0;
 
-            // Ejes locales rotados
-            Vector2D dir_x(cos_a, sin_a);
-            Vector2D dir_y(-sin_a, cos_a);
+            // 1. Dibujar soporte del pivot
+            if (tex_balancin_base.id > 0) {
+                float base_w = 34.0f;
+                float base_h = 44.0f;
+                DrawTexturePro(
+                    tex_balancin_base,
+                    { 0, 0, (float)tex_balancin_base.width, (float)tex_balancin_base.height },
+                    { (float)px - base_w / 2.0f, (float)py - 2.0f, base_w, base_h },
+                    { 0, 0 },
+                    0.0f,
+                    WHITE
+                );
+            } else {
+                DrawTriangle(
+                    {static_cast<float>(px), static_cast<float>(py)},
+                    {static_cast<float>(px - 16), static_cast<float>(py + 40)},
+                    {static_cast<float>(px + 16), static_cast<float>(py + 40)},
+                    DARKGRAY
+                );
+                DrawTriangleLines(
+                    {static_cast<float>(px), static_cast<float>(py)},
+                    {static_cast<float>(px - 16), static_cast<float>(py + 40)},
+                    {static_cast<float>(px + 16), static_cast<float>(py + 40)},
+                    GRAY
+                );
+            }
 
-            // Calcular las 4 esquinas rotadas y trasladadas
-            Vector2D c1 = pos - dir_x * hl - dir_y * ht;
-            Vector2D c2 = pos + dir_x * hl - dir_y * ht;
-            Vector2D c3 = pos + dir_x * hl + dir_y * ht;
-            Vector2D c4 = pos - dir_x * hl + dir_y * ht;
+            // 2. Dibujar la tabla giratoria (plank)
+            if (tex_balancin_tabla.id > 0) {
+                float board_h = espesor * 3.5f;
+                Rectangle rec = { static_cast<float>(px), static_cast<float>(py), static_cast<float>(largo), board_h };
+                Vector2 origin = { static_cast<float>(largo / 2.0), board_h / 2.0f };
+                DrawTexturePro(
+                    tex_balancin_tabla,
+                    { 0, 0, (float)tex_balancin_tabla.width, (float)tex_balancin_tabla.height },
+                    rec,
+                    origin,
+                    rot_deg,
+                    WHITE
+                );
+            } else {
+                Rectangle rec = { static_cast<float>(px), static_cast<float>(py), static_cast<float>(largo), static_cast<float>(espesor) };
+                Vector2 origin = { static_cast<float>(largo / 2.0), static_cast<float>(espesor / 2.0) };
+                DrawRectanglePro(rec, origin, rot_deg, Color{190, 110, 50, 255});
+                
+                // Dibujar contorno ocre rotado usando las 4 esquinas del tablón
+                double hl = largo / 2.0;
+                double ht = espesor / 2.0;
+                Vector2D dir_x(cos_a, sin_a);
+                Vector2D dir_y(-sin_a, cos_a);
+                Vector2D c1 = pos - dir_x * hl - dir_y * ht;
+                Vector2D c2 = pos + dir_x * hl - dir_y * ht;
+                Vector2D c3 = pos + dir_x * hl + dir_y * ht;
+                Vector2D c4 = pos - dir_x * hl + dir_y * ht;
 
-            Color color_borde = Color{220, 140, 70, 255};
-            DrawLineEx({(float)c1.x, (float)c1.y}, {(float)c2.x, (float)c2.y}, 1.5f, color_borde);
-            DrawLineEx({(float)c2.x, (float)c2.y}, {(float)c3.x, (float)c3.y}, 1.5f, color_borde);
-            DrawLineEx({(float)c3.x, (float)c3.y}, {(float)c4.x, (float)c4.y}, 1.5f, color_borde);
-            DrawLineEx({(float)c4.x, (float)c4.y}, {(float)c1.x, (float)c1.y}, 1.5f, color_borde);
+                Color color_borde = Color{220, 140, 70, 255};
+                DrawLineEx({(float)c1.x, (float)c1.y}, {(float)c2.x, (float)c2.y}, 1.5f, color_borde);
+                DrawLineEx({(float)c2.x, (float)c2.y}, {(float)c3.x, (float)c3.y}, 1.5f, color_borde);
+                DrawLineEx({(float)c3.x, (float)c3.y}, {(float)c4.x, (float)c4.y}, 1.5f, color_borde);
+                DrawLineEx({(float)c4.x, (float)c4.y}, {(float)c1.x, (float)c1.y}, 1.5f, color_borde);
+            }
 
-            // 3. Asientos rojos en los extremos
+            // 3. Asientos rojos en los extremos (siempre dibujados encima para mayor detalle)
             Vector2 seat_l = {
                 static_cast<float>(px - (largo / 2.0 - 5.0) * cos_a),
                 static_cast<float>(py - (largo / 2.0 - 5.0) * sin_a)
@@ -1576,14 +1772,46 @@ void dibujar_entidad(const EntidadFisica* e) {
         const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
         if (!ramp) return;
 
-        const auto& verts = ramp->get_vertices();
-        if (verts.size() >= 3) {
-            Vector2 v1 = {static_cast<float>(verts[0].x), static_cast<float>(verts[0].y)};
-            Vector2 v2 = {static_cast<float>(verts[1].x), static_cast<float>(verts[1].y)};
-            Vector2 v3 = {static_cast<float>(verts[2].x), static_cast<float>(verts[2].y)};
+        Vector2D pos = ramp->get_posicion();
+        float px = static_cast<float>(pos.x);
+        float py = static_cast<float>(pos.y);
+        float pw = static_cast<float>(ramp->get_base());
+        float ph = static_cast<float>(ramp->get_altura());
+        bool invertido = ramp->get_invertido();
 
-            DrawTriangle(v1, v2, v3, COLOR_RAMPA);
-            DrawTriangleLines(v1, v2, v3, COLOR_RAMPA_BORDE);
+        bool texturizado = false;
+        if (!invertido && tex_plata_rampa_izq.id > 0) {
+            DrawTexturePro(
+                tex_plata_rampa_izq,
+                { 0, 0, (float)tex_plata_rampa_izq.width, (float)tex_plata_rampa_izq.height },
+                { px, py, pw, ph },
+                { 0, 0 },
+                0.0f,
+                WHITE
+            );
+            texturizado = true;
+        } else if (invertido && tex_plata_rampa_der.id > 0) {
+            DrawTexturePro(
+                tex_plata_rampa_der,
+                { 0, 0, (float)tex_plata_rampa_der.width, (float)tex_plata_rampa_der.height },
+                { px, py, pw, ph },
+                { 0, 0 },
+                0.0f,
+                WHITE
+            );
+            texturizado = true;
+        }
+
+        if (!texturizado) {
+            const auto& verts = ramp->get_vertices();
+            if (verts.size() >= 3) {
+                Vector2 v1 = {static_cast<float>(verts[0].x), static_cast<float>(verts[0].y)};
+                Vector2 v2 = {static_cast<float>(verts[1].x), static_cast<float>(verts[1].y)};
+                Vector2 v3 = {static_cast<float>(verts[2].x), static_cast<float>(verts[2].y)};
+
+                DrawTriangle(v1, v2, v3, COLOR_RAMPA);
+                DrawTriangleLines(v1, v2, v3, COLOR_RAMPA_BORDE);
+            }
         }
     }
 }
@@ -1737,6 +1965,56 @@ void cargandoTexturas() {
     //Animacion(textura, total_frames, fps, frames_por_fila)
     if (tex_seguidor_corriendo.id > 0) {
         anim_seguidor_corriendo = new Animacion(tex_seguidor_corriendo, 8, 12, 8);
+    }
+
+    // Cargar texturas de los nuevos assets
+    tex_trampolin = LoadTexture("../Assets/trampolin/trampolin.png");
+    if (tex_trampolin.id == 0) {
+        TraceLog(LOG_WARNING, "Textura trampolin no encontrada: ../Assets/trampolin/trampolin.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura trampolin cargada: %dx%d", tex_trampolin.width, tex_trampolin.height);
+    }
+
+    tex_balancin_base = LoadTexture("../Assets/balancin/detalle1.png");
+    if (tex_balancin_base.id == 0) {
+        TraceLog(LOG_WARNING, "Textura balancin base no encontrada: ../Assets/balancin/detalle1.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura balancin base cargada: %dx%d", tex_balancin_base.width, tex_balancin_base.height);
+    }
+
+    tex_balancin_tabla = LoadTexture("../Assets/balancin/balancin2.png");
+    if (tex_balancin_tabla.id == 0) {
+        TraceLog(LOG_WARNING, "Textura balancin tabla no encontrada: ../Assets/balancin/balancin2.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura balancin tabla cargada: %dx%d", tex_balancin_tabla.width, tex_balancin_tabla.height);
+    }
+
+    tex_plata_larga = LoadTexture("../Assets/plataform/plata_larga.png");
+    if (tex_plata_larga.id == 0) {
+        TraceLog(LOG_WARNING, "Textura plataforma larga no encontrada: ../Assets/plataform/plata_larga.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura plataforma larga cargada: %dx%d", tex_plata_larga.width, tex_plata_larga.height);
+    }
+
+    tex_plata_peque = LoadTexture("../Assets/plataform/plata_peque.png");
+    if (tex_plata_peque.id == 0) {
+        TraceLog(LOG_WARNING, "Textura plataforma peque no encontrada: ../Assets/plataform/plata_peque.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura plataforma peque cargada: %dx%d", tex_plata_peque.width, tex_plata_peque.height);
+    }
+
+    tex_plata_rampa_izq = LoadTexture("../Assets/plataform/plataforma1.png");
+    if (tex_plata_rampa_izq.id == 0) {
+        TraceLog(LOG_WARNING, "Textura rampa izq no encontrada: ../Assets/plataform/plataforma1.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura rampa izq cargada: %dx%d", tex_plata_rampa_izq.width, tex_plata_rampa_izq.height);
+    }
+
+    tex_plata_rampa_der = LoadTexture("../Assets/plataform/plataforma2.png");
+    if (tex_plata_rampa_der.id == 0) {
+        TraceLog(LOG_WARNING, "Textura rampa der no encontrada: ../Assets/plataform/plataforma2.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura rampa der cargada: %dx%d", tex_plata_rampa_der.width, tex_plata_rampa_der.height);
     }
 }
 
@@ -2033,6 +2311,13 @@ int main() {
     if (anim_seguidor_corriendo) {
         delete anim_seguidor_corriendo;
     }
+    if (tex_trampolin.id > 0) UnloadTexture(tex_trampolin);
+    if (tex_balancin_base.id > 0) UnloadTexture(tex_balancin_base);
+    if (tex_balancin_tabla.id > 0) UnloadTexture(tex_balancin_tabla);
+    if (tex_plata_larga.id > 0) UnloadTexture(tex_plata_larga);
+    if (tex_plata_peque.id > 0) UnloadTexture(tex_plata_peque);
+    if (tex_plata_rampa_izq.id > 0) UnloadTexture(tex_plata_rampa_izq);
+    if (tex_plata_rampa_der.id > 0) UnloadTexture(tex_plata_rampa_der);
     
     CloseWindow();
     return 0;
