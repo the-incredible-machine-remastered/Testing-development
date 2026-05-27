@@ -1432,7 +1432,14 @@ void dibujar_entidad(const EntidadFisica* e) {
             }
 
             if (modo_debug) {
-                DrawCircleLines(static_cast<int>(pos.x), static_cast<int>(pos.y), 180.0f, Color{0, 255, 0, 80});
+                float rx = static_cast<float>(seg->get_rango_deteccion());
+                // Círculo de rango de detección dinámico
+                DrawCircleLines(static_cast<int>(pos.x), static_cast<int>(pos.y), rx, Color{0, 255, 0, 80});
+                
+                // Zona de detección en Y (corredor de altura +/- 120px)
+                DrawRectangleRec({(float)(pos.x - rx), (float)(pos.y - 120.0f), rx * 2.0f, 240.0f}, Color{0, 255, 0, 15});
+                DrawRectangleLinesEx({(float)(pos.x - rx), (float)(pos.y - 120.0f), rx * 2.0f, 240.0f}, 1.0f, Color{0, 255, 0, 45});
+
                 DrawRectangleLines(static_cast<int>(pos.x - w/2), static_cast<int>(pos.y - h/2), static_cast<int>(w), static_cast<int>(h), GREEN);
             }
             return;

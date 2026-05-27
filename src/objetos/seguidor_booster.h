@@ -58,6 +58,7 @@ public:
     double get_direccion_carrera() const { return direccion_carrera; }
     double get_kicker_factor() const { return kicker_factor; }
     double get_cooldown() const { return cooldown_timer; }
+    double get_rango_deteccion() const { return rango_deteccion; }
 
     // Límites de la caja en base a su centro
     Vector2D get_min() const {
