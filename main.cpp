@@ -155,6 +155,11 @@ Texture2D tex_plata_larga;
 Texture2D tex_plata_peque;
 Texture2D tex_plata_rampa_izq;
 Texture2D tex_plata_rampa_der;
+Texture2D tex_robote_soporte;  // Soporte de BolaRebotadora
+Texture2D tex_robote_pelota;   // Pelota roja de BolaRebotadora
+// Texturas del ventilador
+Texture2D tex_ventilador_cuerpo;
+Texture2D tex_ventilador_aspa;
 
 // Animaciones del SeguidorBooster
 Animacion* anim_seguidor_corriendo = nullptr;
@@ -1323,18 +1328,35 @@ void dibujar_entidad(const EntidadFisica* e) {
             float escala_y = 1.0f - def / (r * 4.0f);
             float draw_x = static_cast<float>(pos.x) + wobble_x;
             float draw_y = static_cast<float>(pos.y) + def * 0.25f;
-            float rx = r * escala_x;
-            float ry = r * escala_y;
             float base_top = static_cast<float>(pos.y + r * 0.72f);
             float base_w = r * 1.35f;
             float base_h = r * 0.58f;
 
-            Color col_base = Color{218, 48, 42, 255};
-            DrawRectangleRec({draw_x - base_w / 2.0f, base_top,
-                              base_w, base_h}, col_base);
-            DrawEllipse(static_cast<int>(draw_x), static_cast<int>(draw_y), rx, ry, col_base);
+            // Dibujar soporte (proto-2)
+            if (tex_robote_soporte.id > 0) {
+                float scale_support = base_w / tex_robote_soporte.width;
+                DrawTextureEx(tex_robote_soporte, 
+                             {draw_x - base_w / 2.0f, base_top-25}, 
+                             0.0f, scale_support, WHITE);
+            } else {
+                // Fallback geométrico
+                Color col_base = Color{218, 48, 42, 255};
+                DrawRectangleRec({draw_x - base_w / 2.0f, base_top, base_w, base_h}, col_base);
+            }
 
-            // 3. PequeÃ±a banda oscura inferior para marcar contacto/curvatura
+            // Dibujar pelota (proto-1)
+            if (tex_robote_pelota.id > 0) {
+                float scale_ball = (r * 2.0f) / tex_robote_pelota.width;
+                DrawTextureEx(tex_robote_pelota, 
+                             {draw_x - r, draw_y - r}, 
+                             0.0f, scale_ball * escala_x, WHITE);
+            } else {
+                // Fallback geométrico
+                float rx = r * escala_x;
+                float ry = r * escala_y;
+                Color col_base = Color{218, 48, 42, 255};
+                DrawEllipse(static_cast<int>(draw_x), static_cast<int>(draw_y), rx, ry, col_base);
+            }
 
             if (modo_debug) {
                 DrawCircleLines(static_cast<int>(pos.x), static_cast<int>(pos.y), r, GREEN);
@@ -1402,21 +1424,43 @@ void dibujar_entidad(const EntidadFisica* e) {
             float fase = static_cast<float>(vent->get_fase_aspas());
 
             // 1. Cuerpo del ventilador
-            DrawRectangleRec({px, py, w, h}, Color{70, 84, 96, 255});
-            DrawRectangleLinesEx({px, py, w, h}, 1.5f, Color{170, 190, 205, 255});
+            // Cuerpo: usar textura si existe
+            if (tex_ventilador_cuerpo.id > 0) {
+                Rectangle src = {0.0f, 0.0f, (float)tex_ventilador_cuerpo.width, (float)tex_ventilador_cuerpo.height};
+                Rectangle dst = {px, py, w, h};
+                DrawTexturePro(tex_ventilador_cuerpo, src, dst, {0,0}, 0.0f, WHITE);
+            } else {
+                DrawRectangleRec({px, py, w, h}, Color{70, 84, 96, 255});
+                DrawRectangleLinesEx({px, py, w, h}, 1.5f, Color{170, 190, 205, 255});
+            }
 
             // 2. Rejilla frontal y aspas giratorias
-            DrawCircleLines(static_cast<int>(cx), static_cast<int>(cy), h * 0.32f, Color{190, 210, 220, 255});
-            for (int i = 0; i < 4; ++i) {
-                float ang = fase + i * MathUtils::TIM_PI / 2.0f;
-                Vector2 p1 = {cx, cy};
-                Vector2 p2 = {
-                    cx + std::cos(ang) * h * 0.26f,
-                    cy + std::sin(ang) * h * 0.26f
-                };
-                DrawLineEx(p1, p2, 3.0f, Color{135, 205, 255, 255});
+            // Aspas: dibujar texture rotada si existe, sino fallback con lineas
+            if (tex_ventilador_aspa.id > 0) {
+                float aspa_w = h * 0.5f + 20.0f; // longitud visual de la aspa
+                float aspa_h = h * 0.3f - 20.0f; // grosor visual
+                for (int i = 0; i < 4; ++i) {
+                    float ang = fase + i * MathUtils::TIM_PI / 2.0f;
+                    float ang_deg = ang * 180.0f / MathUtils::TIM_PI;
+                    Rectangle src = {0.0f, 0.0f, (float)tex_ventilador_aspa.width, (float)tex_ventilador_aspa.height};
+                    Rectangle dst = {cx - aspa_w/2.0f +37.0f, cy - aspa_h/2.0f+6, aspa_w, aspa_h};
+                    Vector2 origin = {aspa_w/2.0f, aspa_h/2.0f};
+                    DrawTexturePro(tex_ventilador_aspa, src, dst, origin, ang_deg, WHITE);
+                }
+                DrawCircle(static_cast<int>(cx), static_cast<int>(cy), 4.0f, Color{210, 230, 240, 255});
+            } else {
+                DrawCircleLines(static_cast<int>(cx), static_cast<int>(cy), h * 0.32f, Color{190, 210, 220, 255});
+                for (int i = 0; i < 4; ++i) {
+                    float ang = fase + i * MathUtils::TIM_PI / 2.0f;
+                    Vector2 p1 = {cx, cy};
+                    Vector2 p2 = {
+                        cx + std::cos(ang) * h * 0.26f,
+                        cy + std::sin(ang) * h * 0.26f
+                    };
+                    DrawLineEx(p1, p2, 3.0f, Color{135, 205, 255, 255});
+                }
+                DrawCircle(static_cast<int>(cx), static_cast<int>(cy), 4.0f, Color{210, 230, 240, 255});
             }
-            DrawCircle(static_cast<int>(cx), static_cast<int>(cy), 4.0f, Color{210, 230, 240, 255});
 
             // 3. Corriente de aire hacia la derecha (animada)
             for (int i = 0; i < 4; ++i) {
@@ -2094,6 +2138,33 @@ void cargandoTexturas() {
     } else {
         TraceLog(LOG_INFO, "Textura rampa der cargada: %dx%d", tex_plata_rampa_der.width, tex_plata_rampa_der.height);
     }
+    // Texturas del robot rojo (BolaRebotadora)
+    tex_robote_soporte = load_tex("Assets/robote/proto-2.png");
+    if (tex_robote_soporte.id == 0) {
+        TraceLog(LOG_WARNING, "Textura robote soporte no encontrada: Assets/robote/proto-2.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura robote soporte cargada: %dx%d", tex_robote_soporte.width, tex_robote_soporte.height);
+    }
+    tex_robote_pelota = load_tex("Assets/robote/proto-1.png");
+    if (tex_robote_pelota.id == 0) {
+        TraceLog(LOG_WARNING, "Textura robote pelota no encontrada: Assets/robote/proto-1.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura robote pelota cargada: %dx%d", tex_robote_pelota.width, tex_robote_pelota.height);
+    }
+
+    // Texturas del ventilador (opcion A: cuerpo + aspa)
+    tex_ventilador_cuerpo = load_tex("Assets/ventilador/cuerpo.png");
+    if (tex_ventilador_cuerpo.id == 0) {
+        TraceLog(LOG_WARNING, "Textura ventilador cuerpo no encontrada: Assets/ventilador/cuerpo.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura ventilador cuerpo cargada: %dx%d", tex_ventilador_cuerpo.width, tex_ventilador_cuerpo.height);
+    }
+    tex_ventilador_aspa = load_tex("Assets/ventilador/aspa.png");
+    if (tex_ventilador_aspa.id == 0) {
+        TraceLog(LOG_WARNING, "Textura ventilador aspa no encontrada: Assets/ventilador/aspa.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura ventilador aspa cargada: %dx%d", tex_ventilador_aspa.width, tex_ventilador_aspa.height);
+    }
     // Cargar asset de celda de menú
     tex_celda_menu = load_tex("Assets/hud/obj-vacio.png");
     if (tex_celda_menu.id == 0) {
@@ -2116,6 +2187,21 @@ void cargandoTexturas() {
         TraceLog(LOG_WARNING, "Fuente Gamer.ttf no encontrada: usando fuente por defecto");
     } else {
         TraceLog(LOG_INFO, "Fuente Gamer.ttf cargada correctamente");
+    }
+    
+    // Cargar texturas de BolaRebotadora (robot rojo)
+    tex_robote_soporte = load_tex("Assets/rebote/proto-2.png");
+    if (tex_robote_soporte.id == 0) {
+        TraceLog(LOG_WARNING, "Textura robote soporte no encontrada: Assets/rebote/proto-2.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura robote soporte cargada: %dx%d", tex_robote_soporte.width, tex_robote_soporte.height);
+    }
+    
+    tex_robote_pelota = load_tex("Assets/rebote/proto-1.png");
+    if (tex_robote_pelota.id == 0) {
+        TraceLog(LOG_WARNING, "Textura robote pelota no encontrada: Assets/rebote/proto-1.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura robote pelota cargada: %dx%d", tex_robote_pelota.width, tex_robote_pelota.height);
     }
 
 }
@@ -2419,11 +2505,18 @@ int main() {
     if (tex_trampolin.id > 0) UnloadTexture(tex_trampolin);
     if (tex_balancin_base.id > 0) UnloadTexture(tex_balancin_base);
     if (tex_balancin_tabla.id > 0) UnloadTexture(tex_balancin_tabla);
+    if (tex_robote_soporte.id > 0) UnloadTexture(tex_robote_soporte);
+    if (tex_robote_pelota.id > 0) UnloadTexture(tex_robote_pelota);
     if (tex_plata_larga.id > 0) UnloadTexture(tex_plata_larga);
     if (tex_plata_peque.id > 0) UnloadTexture(tex_plata_peque);
     if (tex_plata_rampa_izq.id > 0) UnloadTexture(tex_plata_rampa_izq);
     if (tex_plata_rampa_der.id > 0) UnloadTexture(tex_plata_rampa_der);
     
+    if (tex_robote_soporte.id > 0) UnloadTexture(tex_robote_soporte);
+    if (tex_robote_pelota.id > 0) UnloadTexture(tex_robote_pelota);
+    if (tex_ventilador_cuerpo.id > 0) UnloadTexture(tex_ventilador_cuerpo);
+    if (tex_ventilador_aspa.id > 0) UnloadTexture(tex_ventilador_aspa);
+
     // Descargar fuente personalizada
     if (fuente_menu.baseSize > 0) UnloadFont(fuente_menu);
     
