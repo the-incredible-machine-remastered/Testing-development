@@ -108,12 +108,12 @@ bool obtener_datos_circulo(const EntidadFisica* e, Vector2D& pos, double& radio)
 // Menú lateral derecho — UI y drag-and-drop desde paleta
 // ============================================================================
 const int MENU_ANCHO = 300;
-const int MENU_PESTANA_ALTO = 70;
-const int MENU_CATEGORIA_ALTO = 50;
-const int MENU_CELDA = 72;
-const int MENU_COLS = 2;
+const int MENU_PESTANA_ALTO = 50;
+const int MENU_CATEGORIA_ALTO = 40;
+const int MENU_CELDA = 85;
+const int MENU_COLS = 3;
 const int MENU_MARGEN = 10;
-const int MENU_PAGINACION_ALTO = 36;
+const int MENU_PAGINACION_ALTO = 50;
 
 const Color MENU_FONDO        = {175, 180, 190, 255};
 const Color MENU_FONDO_OSCURO = {145, 150, 162, 255};
@@ -143,6 +143,9 @@ Texture2D tex_barril;   // Textura del barril (parte del BarrilChavo)
 Texture2D tex_chavo;    // Textura de El Chavo (personaje que sale)
 Texture2D tex_seguidor_quieto;     // Sprite del personaje parado
 Texture2D tex_seguidor_corriendo;  // Sprite del personaje corriendo
+Texture2D tex_celda_menu;          // Asset para las celdas del menú
+Texture2D tex_barra_encabezado;    // Asset para los encabezados de categoría
+Font fuente_menu = {0}; 
 
 // Texturas adicionales para assets
 Texture2D tex_trampolin;
@@ -161,8 +164,18 @@ int ancho_area_juego() {
 }
 
 bool punto_en_menu(int mx, int my) {
+    // Siempre incluir el área del botón de abrir/cerrar
+    int px = ANCHO - MENU_ANCHO;
+    int bx = px - 28;
+    
+    // Área del botón de abrir/cerrar
+    if (mx >= bx && mx < bx + 24 && my >= ALTO / 2 - 40 && my < ALTO / 2 + 40) {
+        return true;
+    }
+    
+    // Área del menú Principal (solo si está visible)
     if (!menu_visible) return false;
-    return mx >= ANCHO - MENU_ANCHO && mx < ANCHO && my >= 0 && my < ALTO;
+    return mx >= px && mx < ANCHO && my >= 0 && my < ALTO;
 }
 
 bool punto_en_area_juego(int mx, int my) {
@@ -872,11 +885,21 @@ TipoObjetoMenu tipo_en_celda(int mx, int my, const std::vector<RectCeldaMenu>& c
     return TipoObjetoMenu::NINGUNO;
 }
 
-void dibujar_celda_menu(const RectCeldaMenu& celda, bool resaltada) {
+void dibujar_celda_menu(const RectCeldaMenu& celda, bool resaltada){
+
     Color fondo = resaltada ? MENU_AZUL_CLARO : MENU_CELDA_FONDO;
     if (!celda.disponible) fondo = ColorAlpha(MENU_CELDA_FONDO, 0.5f);
 
-    DrawRectangleRounded(celda.rect, 0.08f, 6, fondo);
+    // Dibujar asset de celda si está cargado
+    if (tex_celda_menu.id > 0) {
+        DrawTexturePro(tex_celda_menu, 
+                      {0, 0, (float)tex_celda_menu.width, (float)tex_celda_menu.height},
+                      celda.rect,
+                      {0, 0}, 0.0f, fondo);
+    } else {
+        // Fallback si no se carga la textura
+        DrawRectangleRounded(celda.rect, 0.08f, 6, fondo);
+    }
     DrawRectangleRoundedLinesEx(celda.rect, 0.08f, 6, 1.0f,
         celda.disponible ? MENU_BORDE : MENU_INACTIVO);
 
@@ -897,17 +920,36 @@ void dibujar_celda_menu(const RectCeldaMenu& celda, bool resaltada) {
 
 void dibujar_encabezado_categoria(int panel_x, int y, const char* titulo, bool abierta, int& out_alto) {
     Rectangle hdr = {
-        static_cast<float>(panel_x + MENU_MARGEN),
+        static_cast<float>(panel_x + MENU_MARGEN)+10,
         static_cast<float>(y),
-        static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN),
+        static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN)-25,
         static_cast<float>(MENU_CATEGORIA_ALTO)
     };
-    DrawRectangleRounded(hdr, 0.06f, 4, MENU_FONDO_OSCURO);
-    DrawText(titulo, static_cast<int>(hdr.x + 8), static_cast<int>(hdr.y + 8), 14, MENU_TEXTO);
+    // Dibujar asset de encabezado si está cargado
+    if (tex_barra_encabezado.id > 0) {
+        DrawTexturePro(tex_barra_encabezado, 
+                      {0, 0, (float)tex_barra_encabezado.width, (float)tex_barra_encabezado.height},
+                      hdr,
+                      {0, 0}, 0.0f, WHITE);
+    } else {
+        // Fallback si no se carga la textura
+        DrawRectangleRounded(hdr, 0.06f, 4, MENU_FONDO_OSCURO);
+    }
+
+
+
+    int tamanio_titulo = 15;
+    Vector2 title_size = MeasureTextEx(fuente_menu, titulo, tamanio_titulo, 1);
+    Vector2 title_pos = {hdr.x + (hdr.width - title_size.x) / 2 - 105, hdr.y + (hdr.height - title_size.y) / 2 -8};
+    DrawTextEx(fuente_menu, titulo, title_pos, tamanio_titulo, 1, MENU_TEXTO);
+    
+
     const char* chevron = abierta ? "v" : ">";
-    int cw = MeasureText(chevron, 14);
-    DrawText(chevron, static_cast<int>(hdr.x + hdr.width - cw - 10),
-             static_cast<int>(hdr.y + 8), 14, MENU_AZUL);
+    
+    int cw = MeasureText(chevron, 16);
+    
+    DrawText(chevron, static_cast<int>(hdr.x + hdr.width - cw - 5)-235, static_cast<int>(hdr.y + 6), 22, MENU_AZUL);
+    
     out_alto = MENU_CATEGORIA_ALTO + 4;
 }
 
@@ -972,22 +1014,32 @@ void dibujar_menu_lateral() {
 
     // Pestañas OBJETOS / DECORACIÓN
     int tab_w = (MENU_ANCHO - 2 * MENU_MARGEN) / 2;
-    Rectangle tab_obj = { static_cast<float>(px + MENU_MARGEN), 8.0f,
-                          static_cast<float>(tab_w), static_cast<float>(MENU_PESTANA_ALTO - 8) };
+    Rectangle tab_obj = { static_cast<float>(px + MENU_MARGEN)+10, 30.0f,
+                          static_cast<float>(tab_w)-15, static_cast<float>(MENU_PESTANA_ALTO - 8) };
     Rectangle tab_dec = { tab_obj.x + tab_w, tab_obj.y, tab_obj.width, tab_obj.height };
 
     DrawRectangleRec(tab_obj, menu_tab == 0 ? WHITE : ColorAlpha(WHITE, 0.4f));
     DrawRectangleRec(tab_dec, menu_tab == 1 ? WHITE : ColorAlpha(WHITE, 0.4f));
-    DrawText("OBJETOS", static_cast<int>(tab_obj.x + 12), static_cast<int>(tab_obj.y + 10), 14, MENU_TEXTO);
-    DrawText("DECORACION", static_cast<int>(tab_dec.x + 4), static_cast<int>(tab_dec.y + 10), 13, MENU_TEXTO);
+    
+    // Centrar texto OBJETOS
+    Vector2 obj_size = MeasureTextEx(fuente_menu, "OBJETOS", 14, 1);
+    Vector2 obj_pos = {tab_obj.x + (tab_obj.width - obj_size.x) / 2 - 45 , tab_obj.y + (tab_obj.height - obj_size.y) / 2};
+    DrawTextEx(fuente_menu, "OBJETOS", obj_pos, 14, 1, MENU_TEXTO);
+    
+    // Centrar texto DECORACION
+    Vector2 dec_size = MeasureTextEx(fuente_menu, "DECORACION", 13, 1);
+    Vector2 dec_pos = {tab_dec.x + (tab_dec.width - dec_size.x) / 2 - 45, tab_dec.y + (tab_dec.height - dec_size.y) / 2};
+    DrawTextEx(fuente_menu, "DECORACION", dec_pos, 13, 1, MENU_TEXTO);
     if (menu_tab == 0)
-        DrawRectangle(static_cast<int>(tab_obj.x), static_cast<int>(tab_obj.y + tab_obj.height - 3), tab_w, 3, MENU_AZUL);
+        DrawRectangle(static_cast<int>(tab_obj.x), static_cast<int>(tab_obj.y + tab_obj.height - 3), tab_w -15, 3, MENU_AZUL);
     else
         DrawRectangle(static_cast<int>(tab_dec.x), static_cast<int>(tab_dec.y + tab_dec.height - 3), tab_w, 3, MENU_AZUL);
 
-    // Botón colapsar
-    DrawRectangle(px + 4, MENU_PESTANA_ALTO + 4, 28, 24, MENU_FONDO_OSCURO);
-    DrawText(">>", px + 10, MENU_PESTANA_ALTO + 8, 14, MENU_AZUL);
+    // Botón cerrar a la izquierda del menú
+    int bx = px - 28;
+    DrawRectangle(bx, ALTO / 2 - 40, 24, 80, MENU_FONDO_OSCURO);
+    DrawRectangleLines(bx, ALTO / 2 - 40, 24, 80, MENU_BORDE);
+    DrawText(">", bx + 7, ALTO / 2 - 8, 18, MENU_AZUL);
 
     int y = MENU_PESTANA_ALTO + 36;
     int hdr_h = 0;
@@ -1041,7 +1093,9 @@ void dibujar_menu_lateral() {
 
 bool manejar_click_menu(int mx, int my) {
     if (!menu_visible) {
-        Rectangle btn_abrir = { static_cast<float>(ANCHO - 26), static_cast<float>(ALTO / 2 - 40), 24, 80 };
+        int px = ANCHO - MENU_ANCHO;
+        int bx = px - 28;
+        Rectangle btn_abrir = { static_cast<float>(bx), static_cast<float>(ALTO / 2 - 40), 24, 80 };
         if (click_en_rect(mx, my, btn_abrir)) {
             menu_visible = true;
             return true;
@@ -1053,12 +1107,14 @@ bool manejar_click_menu(int mx, int my) {
     int tab_w = (MENU_ANCHO - 2 * MENU_MARGEN) / 2;
 
     Rectangle tab_obj = { static_cast<float>(px + MENU_MARGEN), 8.0f,
-                          static_cast<float>(tab_w), static_cast<float>(MENU_PESTANA_ALTO - 8) };
+                          static_cast<float>(tab_w)+10, static_cast<float>(MENU_PESTANA_ALTO - 8)+10 };
     Rectangle tab_dec = { tab_obj.x + tab_w, tab_obj.y, tab_obj.width, tab_obj.height };
     if (click_en_rect(mx, my, tab_obj)) { menu_tab = 0; menu_pagina = 0; return true; }
     if (click_en_rect(mx, my, tab_dec)) { menu_tab = 1; menu_pagina = 0; return true; }
 
-    Rectangle btn_cerrar = { static_cast<float>(px + 4), static_cast<float>(MENU_PESTANA_ALTO + 4), 28, 24 };
+    // Botón cerrar a la izquierda del menú
+    int bx = px - 28;
+    Rectangle btn_cerrar = { static_cast<float>(bx), static_cast<float>(ALTO / 2 - 40), 24, 80 };
     if (click_en_rect(mx, my, btn_cerrar)) { menu_visible = false; return true; }
 
     int y = MENU_PESTANA_ALTO + 36;
@@ -2038,6 +2094,30 @@ void cargandoTexturas() {
     } else {
         TraceLog(LOG_INFO, "Textura rampa der cargada: %dx%d", tex_plata_rampa_der.width, tex_plata_rampa_der.height);
     }
+    // Cargar asset de celda de menú
+    tex_celda_menu = load_tex("Assets/hud/obj-vacio.png");
+    if (tex_celda_menu.id == 0) {
+        TraceLog(LOG_WARNING, "Textura celda menú no encontrada: Assets/hud/obj-vacio.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura celda menú cargada: %dx%d", tex_celda_menu.width, tex_celda_menu.height);
+    }
+
+    // Cargar asset de encabezado de categoría
+    tex_barra_encabezado = load_tex("Assets/hud/barra.png");
+    if (tex_barra_encabezado.id == 0) {
+        TraceLog(LOG_WARNING, "Textura barra encabezado no encontrada: Assets/hud/barra.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura barra encabezado cargada: %dx%d", tex_barra_encabezado.width, tex_barra_encabezado.height);
+    }
+    
+    // Cargar fuente personalizada
+    fuente_menu = LoadFont("fonts/Gamer.ttf");
+    if (fuente_menu.baseSize == 0) {
+        TraceLog(LOG_WARNING, "Fuente Gamer.ttf no encontrada: usando fuente por defecto");
+    } else {
+        TraceLog(LOG_INFO, "Fuente Gamer.ttf cargada correctamente");
+    }
+
 }
 
 // ============================================================================
@@ -2330,6 +2410,9 @@ int main() {
     if (tex_chavo.id > 0) UnloadTexture(tex_chavo);
     if (tex_seguidor_quieto.id > 0) UnloadTexture(tex_seguidor_quieto);
     if (tex_seguidor_corriendo.id > 0) UnloadTexture(tex_seguidor_corriendo);
+    if (tex_celda_menu.id > 0) UnloadTexture(tex_celda_menu);
+    if (tex_barra_encabezado.id > 0) UnloadTexture(tex_barra_encabezado);
+
     if (anim_seguidor_corriendo) {
         delete anim_seguidor_corriendo;
     }
@@ -2340,6 +2423,9 @@ int main() {
     if (tex_plata_peque.id > 0) UnloadTexture(tex_plata_peque);
     if (tex_plata_rampa_izq.id > 0) UnloadTexture(tex_plata_rampa_izq);
     if (tex_plata_rampa_der.id > 0) UnloadTexture(tex_plata_rampa_der);
+    
+    // Descargar fuente personalizada
+    if (fuente_menu.baseSize > 0) UnloadFont(fuente_menu);
     
     CloseWindow();
     return 0;
