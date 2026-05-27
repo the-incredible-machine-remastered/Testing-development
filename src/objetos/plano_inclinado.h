@@ -65,7 +65,11 @@ public:
     double get_base() const { return base_ancho; }
     double get_altura() const { return altura_alto; }
     bool get_invertido() const { return es_invertido; }
+
+    void invertir() {
+        es_invertido = !es_invertido;
+        recalcular_vertices();
+    }
 };
 
-// TIM_MENU_SPAWN id=RAMPA_IZQUIERDA etiqueta="Rampa izq" tab=0 categoria=0 variante=izquierda
-// TIM_MENU_SPAWN id=RAMPA_DERECHA etiqueta="Rampa /" tab=0 categoria=0 variante=derecha
+// TIM_MENU_SPAWN id=RAMPA etiqueta="Rampa" tab=0 categoria=0

@@ -35,6 +35,11 @@ protected:
     double direccion_carrera; // +1.0 = Derecha, -1.0 = Izquierda
     double kicker_factor;     // Animación de chute (1.0 = pierna arriba)
 
+    // Cabezazo de Messi
+    bool cabezazo_activo;
+    double cabezazo_timer;
+    double cooldown_cabezazo;
+
 public:
     SeguidorBooster(int id, Vector2D pos, double w = 24.0, double h = 48.0)
         : EntidadFisica(id, pos, 15.0, TipoForma::AABB, false), // AABB dinámico con masa = 15.0 (pesado)
@@ -42,7 +47,8 @@ public:
           estado(EstadoSeguidor::ESPERANDO), id_bola_objetivo(-1), rango_deteccion(450.0),
           velocidad_persecucion(260.0), velocidad_retorno(180.0),
           cooldown_timer(0.0), oscilacion_idle(0.0), angulo_pierna(0.0),
-          direccion_carrera(1.0), kicker_factor(0.0) {
+          direccion_carrera(1.0), kicker_factor(0.0),
+          cabezazo_activo(false), cabezazo_timer(0.0), cooldown_cabezazo(0.0) {
         
         set_restitucion(0.1); // Poco rebote para mantenerse firme
         set_friccion(0.5);    // Buen agarre en plataformas
@@ -59,6 +65,8 @@ public:
     double get_kicker_factor() const { return kicker_factor; }
     double get_cooldown() const { return cooldown_timer; }
     double get_rango_deteccion() const { return rango_deteccion; }
+    bool get_cabezazo_activo() const { return cabezazo_activo; }
+    double get_cabezazo_timer() const { return cabezazo_timer; }
 
     // Límites de la caja en base a su centro
     Vector2D get_min() const {
@@ -68,6 +76,47 @@ public:
         return Vector2D(posicion.x + ancho / 2.0, posicion.y + alto / 2.0);
     }
 
+    void detectar_cabezazo(const std::vector<EntidadFisica*>& entidades) {
+        if (cooldown_cabezazo > 0.0) return;
+
+        for (auto* e : entidades) {
+            if (e->get_tipo_forma() == TipoForma::CIRCULO) {
+                auto* bola = dynamic_cast<Bola*>(e);
+                if (bola) {
+                    double bx = bola->get_posicion().x;
+                    double by = bola->get_posicion().y;
+                    double br = bola->get_radio();
+
+                    // Condición vertical: bola encima de la cabeza y tocando/cerca del tope de AABB
+                    // El tope físico es posicion.y - alto/2.0
+                    double tope_cabeza = posicion.y - alto / 2.0;
+
+                    // La bola está por encima de la zona media/alta del cuerpo y cerca del tope superior
+                    bool encima_cabeza = (by + br < posicion.y - alto * 0.3);
+                    bool contacto_vertical = (by + br >= tope_cabeza - 10.0) && (by - br <= tope_cabeza + 15.0);
+                    bool horizontal_ok = (std::abs(bx - posicion.x) < ancho * 0.8);
+
+                    if (encima_cabeza && contacto_vertical && horizontal_ok) {
+                        // ¡CABEZAZO! Impulso suave a 45 grados hacia adelante-arriba
+                        Vector2D dir_impulso = Vector2D(direccion_carrera * 0.7071, -0.7071).normalizar();
+                        double fuerza_cabezazo = 350.0;
+                        bola->set_velocidad(dir_impulso * fuerza_cabezazo);
+
+                        cabezazo_activo = true;
+                        cabezazo_timer = 0.6;
+                        cooldown_cabezazo = 1.0; // Cooldown para evitar disparos sucesivos
+
+                        // Retornar a la base tras cabecear
+                        velocidad.x = 0.0;
+                        estado = EstadoSeguidor::RETRAYENDO;
+                        id_bola_objetivo = -1;
+                        break; 
+                    }
+                }
+            }
+        }
+    }
+
     // Actualiza el comportamiento lógico y de estados del futbolista
     void actualizar_comportamiento(const std::vector<EntidadFisica*>& entidades, double dt) {
         // Enfriamiento de patada
@@ -75,6 +124,22 @@ public:
             cooldown_timer -= dt;
             if (cooldown_timer < 0.0) cooldown_timer = 0.0;
         }
+
+        // Enfriamiento de cabezazo y timers de animación
+        if (cabezazo_timer > 0.0) {
+            cabezazo_timer -= dt;
+            if (cabezazo_timer <= 0.0) {
+                cabezazo_timer = 0.0;
+                cabezazo_activo = false;
+            }
+        }
+        if (cooldown_cabezazo > 0.0) {
+            cooldown_cabezazo -= dt;
+            if (cooldown_cabezazo < 0.0) cooldown_cabezazo = 0.0;
+        }
+
+        // Chequear cabezazo
+        detectar_cabezazo(entidades);
 
         // Manejo de animaciones
         switch (estado) {

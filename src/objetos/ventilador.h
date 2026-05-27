@@ -20,8 +20,8 @@ protected:
 public:
     Ventilador(int id, Vector2D pos, double w = 42.0, double h = 54.0)
         : ObstaculoEstatico(id, pos, TipoForma::AABB),
-          ancho(w), alto(h), rango(150.0), ancho_corriente(92.0),
-          potencia(950.0), direccion(1.0, 0.0), fase_aspas(0.0) {
+          ancho(w), alto(h), rango(220.0), ancho_corriente(92.0),
+          potencia(1800.0), direccion(1.0, 0.0), fase_aspas(0.0) {
         set_restitucion(0.2);
         set_friccion(0.5);
     }
@@ -38,7 +38,23 @@ public:
     Vector2D get_min() const { return posicion; }
     Vector2D get_max() const { return Vector2D(posicion.x + ancho, posicion.y + alto); }
     Vector2D get_centro_salida() const {
-        return Vector2D(posicion.x + ancho, posicion.y + alto / 2.0);
+        if (direccion.x < 0.0) {
+            return Vector2D(posicion.x, posicion.y + alto / 2.0);
+        } else {
+            return Vector2D(posicion.x + ancho, posicion.y + alto / 2.0);
+        }
+    }
+
+    void invertir_direccion() {
+        if (direccion.x > 0.0) {
+            direccion = Vector2D(-1.0, 0.0);
+        } else {
+            direccion = Vector2D(1.0, 0.0);
+        }
+    }
+
+    bool mira_derecha() const {
+        return direccion.x > 0.0;
     }
 
     void set_potencia(double p) { potencia = p; }

@@ -35,7 +35,7 @@ namespace FisicaVentilador {
                 if (avance < 0.0 || avance > ventilador->get_rango()) continue;
                 if (distancia_lateral > ventilador->get_ancho_corriente() / 2.0 + bola->get_radio()) continue;
 
-                double factor_distancia = 1.0 - avance / ventilador->get_rango();
+                double factor_distancia = (1.0 - avance / ventilador->get_rango()) * (50.0 / (avance + 15.0));
                 double factor_centro = 1.0 - distancia_lateral / (ventilador->get_ancho_corriente() / 2.0 + bola->get_radio());
                 double fuerza = ventilador->get_potencia() * factor_distancia * factor_centro;
 

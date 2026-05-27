@@ -139,6 +139,49 @@ namespace Colisiones {
         int n = static_cast<int>(vertices.size());
         if (n < 3) return info;
 
+        // 1. Determinar si el centro del círculo está dentro del polígono
+        // y encontrar la distancia de penetración a cada arista.
+        bool centro_dentro = true;
+        double max_dot = -1e18;
+        int arista_cercana_idx = -1;
+        std::vector<Vector2D> normales_out;
+        normales_out.reserve(n);
+
+        for (int i = 0; i < n; i++) {
+            int j = (i + 1) % n;
+            Vector2D edge = vertices[j] - vertices[i];
+            Vector2D normal_out = edge.perpendicular().normalizar();
+            normales_out.push_back(normal_out);
+
+            Vector2D to_circ = pos_circ - vertices[i];
+            double dot_val = Vector2D::dot(to_circ, normal_out);
+
+            if (dot_val >= 0.0) {
+                centro_dentro = false;
+            }
+            if (dot_val > max_dot) {
+                max_dot = dot_val;
+                arista_cercana_idx = i;
+            }
+        }
+
+        if (centro_dentro) {
+            // El centro del círculo está DENTRO del polígono!
+            // Empujar hacia la arista más cercana
+            info.hay_colision = true;
+            info.normal = normales_out[arista_cercana_idx]; // apunta hacia afuera del polígono
+            
+            // La profundidad es el radio más la distancia de penetración (que es negativa de max_dot)
+            info.profundidad = radio - max_dot; 
+
+            // Punto de contacto: proyectar centro del círculo sobre la arista más cercana
+            int i = arista_cercana_idx;
+            int j = (i + 1) % n;
+            info.punto_contacto = punto_mas_cercano_en_segmento(vertices[i], vertices[j], pos_circ);
+            return info;
+        }
+
+        // 2. Caso normal: centro del círculo fuera del polígono
         double min_dist_sq = 1e18;
         Vector2D mejor_punto;
         Vector2D mejor_normal;
@@ -159,8 +202,7 @@ namespace Colisiones {
                     mejor_normal = diff.normalizar();
                 } else {
                     // Caso degenerado: usar la normal de la arista
-                    Vector2D edge = vertices[j] - vertices[i];
-                    mejor_normal = edge.perpendicular().normalizar();
+                    mejor_normal = normales_out[i];
                 }
             }
         }

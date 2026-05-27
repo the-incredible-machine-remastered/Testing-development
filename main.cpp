@@ -146,6 +146,7 @@ Texture2D tex_seguidor_corriendo;  // Sprite del personaje corriendo
 Texture2D tex_celda_menu;          // Asset para las celdas del menú
 Texture2D tex_barra_encabezado;    // Asset para los encabezados de categoría
 Font fuente_menu = {0}; 
+Texture2D tex_seguidor_cabezazo;   // Sprite del personaje cabeceando
 
 // Texturas adicionales para assets
 Texture2D tex_trampolin;
@@ -610,8 +611,7 @@ bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
         case TipoObjetoMenu::BOLA_REBOTADORA:   return crear_bola_rebotadora(motor, pos);
         case TipoObjetoMenu::TRAMPOLIN:         return crear_trampolin(motor, pos);
         case TipoObjetoMenu::BALANCIN:          return crear_balancin(motor, pos);
-        case TipoObjetoMenu::RAMPA_IZQUIERDA:   return crear_rampa(motor, pos, false);
-        case TipoObjetoMenu::RAMPA_DERECHA:     return crear_rampa(motor, pos, true);
+        case TipoObjetoMenu::RAMPA:             return crear_rampa(motor, pos, false);
         case TipoObjetoMenu::PLATAFORMA:        return crear_plataforma(motor, pos, 150.0, 15.0);
         case TipoObjetoMenu::PARED_LARGA:       return crear_plataforma(motor, pos, 80.0, 120.0);
         case TipoObjetoMenu::PLATAFORMA_DECOR:   return crear_plataforma(motor, pos, 120.0, 20.0);
@@ -704,7 +704,7 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
             }
             break;
         }
-        case TipoObjetoMenu::RAMPA_IZQUIERDA: {
+        case TipoObjetoMenu::RAMPA: {
             if (tex_plata_rampa_izq.id > 0) {
                 float w = 44.0f * escala;
                 float h = 44.0f * escala;
@@ -721,28 +721,6 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
                 Vector2 v1 = {cx - s, cy - s};
                 Vector2 v2 = {cx - s, cy + s};
                 Vector2 v3 = {cx + s, cy + s};
-                DrawTriangle(v1, v2, v3, tint(COLOR_RAMPA));
-                DrawTriangleLines(v1, v2, v3, tint(COLOR_RAMPA_BORDE));
-            }
-            break;
-        }
-        case TipoObjetoMenu::RAMPA_DERECHA: {
-            if (tex_plata_rampa_der.id > 0) {
-                float w = 44.0f * escala;
-                float h = 44.0f * escala;
-                DrawTexturePro(
-                    tex_plata_rampa_der,
-                    { 0, 0, (float)tex_plata_rampa_der.width, (float)tex_plata_rampa_der.height },
-                    { cx - w / 2.0f, cy - h / 2.0f, w, h },
-                    { 0, 0 },
-                    0.0f,
-                    tint(WHITE)
-                );
-            } else {
-                float s = 22.0f * escala;
-                Vector2 v1 = {cx - s, cy + s};
-                Vector2 v2 = {cx + s, cy + s};
-                Vector2 v3 = {cx + s, cy - s};
                 DrawTriangle(v1, v2, v3, tint(COLOR_RAMPA));
                 DrawTriangleLines(v1, v2, v3, tint(COLOR_RAMPA_BORDE));
             }
@@ -1418,21 +1396,33 @@ void dibujar_entidad(const EntidadFisica* e) {
             }
             DrawCircle(static_cast<int>(cx), static_cast<int>(cy), 4.0f, Color{210, 230, 240, 255});
 
-            // 3. Corriente de aire hacia la derecha (animada)
+            // 3. Corriente de aire animada en la dirección actual
+            bool der = vent->mira_derecha();
             for (int i = 0; i < 4; ++i) {
                 float y = cy - 24.0f + i * 16.0f;
                 float offset = std::sin(fase + i * 0.5f) * 15.0f;  // Desplazamiento según fase
                 float longitud = 70.0f + std::sin(fase + i * 0.3f) * 25.0f;  // Varía la longitud
                 float opacidad = 90 + std::sin(fase + i * 0.4f) * 50;  // Varía transparencia
-                DrawLineEx({px + w + 8.0f + offset, y}, {px + w + 8.0f + longitud, y}, 1.5f,
-                          Color{120, 200, 255, static_cast<unsigned char>(opacidad)});
+                
+                if (der) {
+                    DrawLineEx({px + w + 8.0f + offset, y}, {px + w + 8.0f + longitud, y}, 1.5f,
+                              Color{120, 200, 255, static_cast<unsigned char>(opacidad)});
+                } else {
+                    DrawLineEx({px - 8.0f - offset, y}, {px - 8.0f - longitud, y}, 1.5f,
+                              Color{120, 200, 255, static_cast<unsigned char>(opacidad)});
+                }
             }
 
             if (modo_debug) {
                 DrawRectangleLines(static_cast<int>(px), static_cast<int>(py),
                                    static_cast<int>(w), static_cast<int>(h), GREEN);
-                DrawRectangleLines(static_cast<int>(px + w), static_cast<int>(cy - vent->get_ancho_corriente() / 2.0),
-                                   static_cast<int>(vent->get_rango()), static_cast<int>(vent->get_ancho_corriente()), GREEN);
+                if (der) {
+                    DrawRectangleLines(static_cast<int>(px + w), static_cast<int>(cy - vent->get_ancho_corriente() / 2.0),
+                                       static_cast<int>(vent->get_rango()), static_cast<int>(vent->get_ancho_corriente()), GREEN);
+                } else {
+                    DrawRectangleLines(static_cast<int>(px - vent->get_rango()), static_cast<int>(cy - vent->get_ancho_corriente() / 2.0),
+                                       static_cast<int>(vent->get_rango()), static_cast<int>(vent->get_ancho_corriente()), GREEN);
+                }
             }
             return;
         }
@@ -1461,7 +1451,17 @@ void dibujar_entidad(const EntidadFisica* e) {
             float sprite_h = h * 1.2f;
             Vector2 pos_draw = {static_cast<float>(pos.x), draw_y};
 
-            if (estado == EstadoSeguidor::ESPERANDO) {
+            if (seg->get_cabezazo_activo()) {
+                // Dibujar cabezazo
+                if (tex_seguidor_cabezazo.id > 0) {
+                    float flip_dir = (dir_carr < 0.0) ? -1.0f : 1.0f;
+                    Rectangle source = {0, 0, (float)tex_seguidor_cabezazo.width * flip_dir, (float)tex_seguidor_cabezazo.height};
+                    Rectangle dest = {pos_draw.x - sprite_w/2, pos_draw.y - sprite_h/2, sprite_w, sprite_h};
+                    DrawTexturePro(tex_seguidor_cabezazo, source, dest, {0, 0}, 0.0f, WHITE);
+                } else {
+                    dibuja_seguidor_geometrico(pos, w, h, draw_y, estado, pos_init, seg);
+                }
+            } else if (estado == EstadoSeguidor::ESPERANDO) {
                 // Personaje quieto: imagen estática sin animación
                 if (tex_seguidor_quieto.id > 0) {
                     Rectangle source = {0, 0, (float)tex_seguidor_quieto.width, (float)tex_seguidor_quieto.height};
@@ -1939,12 +1939,15 @@ void dibujar_hud(const MotorFisica& motor) {
 
     // Indicador de selección
     if (entidad_seleccionada) {
-        DrawText(TextFormat("Seleccionado: Entidad #%d  [DEL] Eliminar", entidad_seleccionada->get_id()),
+        bool rotable = dynamic_cast<Ventilador*>(entidad_seleccionada) != nullptr ||
+                       dynamic_cast<PlanoInclinado*>(entidad_seleccionada) != nullptr;
+        const char* rotar_txt = rotable ? "  [F] Rotar" : "";
+        DrawText(TextFormat("Seleccionado: Entidad #%d  [DEL] Eliminar%s", entidad_seleccionada->get_id(), rotar_txt),
                  margin, y + 88, 14, Color{255, 200, 80, 255});
     }
 
     // Controles
-    DrawText("[TAB] Menu  [Arrastrar] Crear/Mover  [CLICK] Seleccionar  [DEL] Eliminar  [SPACE] Pausa  [D] Debug  [R] Reset",
+    DrawText("[TAB] Menu  [Arrastrar] Crear/Mover  [CLICK] Seleccionar  [DEL] Eliminar  [F] Rotar  [SPACE] Pausa  [D] Debug  [R] Reset",
              margin, ALTO - 30, 14, COLOR_CONTROLES);
 }
 
@@ -2038,6 +2041,13 @@ void cargandoTexturas() {
         TraceLog(LOG_WARNING, "Textura seguidor corriendo no encontrada: mesirve.png");
     } else {
         TraceLog(LOG_INFO, "Textura seguidor corriendo cargada: %dx%d", tex_seguidor_corriendo.width, tex_seguidor_corriendo.height);
+    }
+
+    tex_seguidor_cabezazo = load_tex("Assets/messi/messi-cabezazo.png");
+    if (tex_seguidor_cabezazo.id == 0) {
+        TraceLog(LOG_WARNING, "Textura seguidor cabezazo no encontrada: messi-cabezazo.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura seguidor cabezazo cargada: %dx%d", tex_seguidor_cabezazo.width, tex_seguidor_cabezazo.height);
     }
     
     // Inicializar animaciones del SeguidorBooster
@@ -2236,6 +2246,19 @@ int main() {
             }
         }
 
+        // F: rotar o invertir entidad seleccionada
+        if (IsKeyPressed(KEY_F) && entidad_seleccionada) {
+            auto* vent = dynamic_cast<Ventilador*>(entidad_seleccionada);
+            if (vent) {
+                vent->invertir_direccion();
+            } else {
+                auto* ramp = dynamic_cast<PlanoInclinado*>(entidad_seleccionada);
+                if (ramp) {
+                    ramp->invertir();
+                }
+            }
+        }
+
         // R: reiniciar escena
         if (IsKeyPressed(KEY_R)) {
             motor.limpiar();
@@ -2351,6 +2374,44 @@ int main() {
                     }
                 }
             }
+
+            // Badge de rotación sutil cerca del objeto seleccionado si es rotable
+            const Ventilador* sv_rot = dynamic_cast<const Ventilador*>(entidad_seleccionada);
+            const PlanoInclinado* sr_rot = dynamic_cast<const PlanoInclinado*>(entidad_seleccionada);
+            if (sv_rot || sr_rot) {
+                Vector2 badge_pos;
+                if (sv_rot) {
+                    Vector2D spos = sv_rot->get_posicion();
+                    badge_pos = { (float)spos.x + (float)sv_rot->get_ancho() + 10.0f, (float)spos.y - 10.0f };
+                } else {
+                    Vector2D spos = sr_rot->get_posicion();
+                    badge_pos = { (float)spos.x + (float)sr_rot->get_base() + 10.0f, (float)spos.y - 10.0f };
+                }
+
+                // Dibujar badge circular dorado de fondo
+                DrawCircleV(badge_pos, 14.0f, Color{255, 200, 50, 240});
+                DrawCircleLines(badge_pos.x, badge_pos.y, 14.0f, WHITE);
+
+                // Dibujar flecha de rotación (un arco circular simple de 270 grados + punta de flecha)
+                float radio_arco = 7.0f;
+                for (int d = 0; d < 270; d += 15) {
+                    float rad1 = d * DEG2RAD;
+                    float rad2 = (d + 15) * DEG2RAD;
+                    DrawLineEx(
+                        { badge_pos.x + std::cos(rad1) * radio_arco, badge_pos.y + std::sin(rad1) * radio_arco },
+                        { badge_pos.x + std::cos(rad2) * radio_arco, badge_pos.y + std::sin(rad2) * radio_arco },
+                        2.0f, Color{40, 40, 40, 255}
+                    );
+                }
+                float rad_punta = 270.0f * DEG2RAD;
+                Vector2 p_ext = { badge_pos.x + std::cos(rad_punta) * radio_arco, badge_pos.y + std::sin(rad_punta) * radio_arco };
+                DrawTriangle(
+                    { p_ext.x - 3, p_ext.y - 1 },
+                    { p_ext.x + 3, p_ext.y - 4 },
+                    { p_ext.x + 1, p_ext.y + 4 },
+                    Color{40, 40, 40, 255}
+                );
+            }
         }
                 // Dibujar panel del HUD (abajo)
         if (tex_base_central.id > 0) {
@@ -2412,7 +2473,7 @@ int main() {
     if (tex_seguidor_corriendo.id > 0) UnloadTexture(tex_seguidor_corriendo);
     if (tex_celda_menu.id > 0) UnloadTexture(tex_celda_menu);
     if (tex_barra_encabezado.id > 0) UnloadTexture(tex_barra_encabezado);
-
+    if (tex_seguidor_cabezazo.id > 0) UnloadTexture(tex_seguidor_cabezazo);
     if (anim_seguidor_corriendo) {
         delete anim_seguidor_corriendo;
     }
