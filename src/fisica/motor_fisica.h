@@ -17,6 +17,8 @@
 #include "../objetos/bola_rebotadora.h"
 #include "../objetos/trampolin.h"
 #include "../objetos/balancin.h"
+#include "../objetos/cubeta.h"
+#include "../objetos/cuerda.h"
 #include "../objetos/seguidor_booster.h"
 #include "../objetos/barril_chavo.h"
 #include "../objetos/ventilador.h"
@@ -149,6 +151,13 @@ private:
             return true;
         }
 
+        auto* cubeta = dynamic_cast<Cubeta*>(e);
+        if (cubeta) {
+            min = cubeta->get_min();
+            max = cubeta->get_max();
+            return true;
+        }
+
         return false;
     }
 
@@ -158,6 +167,9 @@ private:
 
         // 1.5 Aplicar corrientes de aire de ventiladores
         FisicaVentilador::aplicar(entidades);
+
+        // 1.6 Aplicar constraints de cuerdas colocadas como herramienta
+        aplicar_tensiones_cuerda();
  
         // 2. Actualizar comportamiento del futbolista seguidor
         for (auto* e : entidades) {
@@ -182,6 +194,15 @@ private:
                 if (dynamic_cast<Balancin*>(e)) continue; // El balancín está pivotado y fijo linealmente
                 // F = m * g
                 e->aplicar_fuerza(gravedad * e->get_masa());
+            }
+        }
+    }
+
+    void aplicar_tensiones_cuerda() {
+        for (auto* e : entidades) {
+            auto* cuerda = dynamic_cast<Cuerda*>(e);
+            if (cuerda) {
+                cuerda->aplicar_tension(entidades, gravedad);
             }
         }
     }

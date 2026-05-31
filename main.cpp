@@ -24,6 +24,9 @@
 #include "objetos/bola_rebotadora.h"
 #include "objetos/trampolin.h"
 #include "objetos/balancin.h"
+#include "objetos/cubeta.h"
+#include "objetos/cuerda.h"
+#include "objetos/soporte_torque.h"
 #include "objetos/seguidor_booster.h"
 #include "objetos/barril_chavo.h"
 #include "objetos/ventilador.h"
@@ -32,6 +35,7 @@
 #include "objetos/catalogo_menu.gen.h"
 
 #include <cmath>
+#include <algorithm>
 #include <vector>
 #include <string>
 
@@ -86,6 +90,21 @@ Vector2D offset_arrastre;
 // Estado de selección (para eliminar objetos)
 EntidadFisica* entidad_seleccionada = nullptr;
 
+bool es_borde_nivel(const EntidadFisica* e);
+
+enum class EstadoColocacionCuerda {
+    INACTIVA,
+    ESPERANDO_EXTREMO_A,
+    ESPERANDO_SOPORTE,
+    ESPERANDO_EXTREMO_B
+};
+
+EstadoColocacionCuerda estado_cuerda = EstadoColocacionCuerda::INACTIVA;
+AnclajeCuerda cuerda_extremo_a = { -1, TipoAnclajeCuerda::Cubeta };
+Vector2D cuerda_punto_a_preview;
+std::vector<int> cuerda_soportes_id;
+std::vector<Vector2D> cuerda_soportes_preview;
+
 bool obtener_datos_circulo(const EntidadFisica* e, Vector2D& pos, double& radio) {
     const Bola* bola = dynamic_cast<const Bola*>(e);
     if (bola) {
@@ -98,6 +117,191 @@ bool obtener_datos_circulo(const EntidadFisica* e, Vector2D& pos, double& radio)
     if (rebotadora) {
         pos = rebotadora->get_posicion();
         radio = rebotadora->get_radio();
+        return true;
+    }
+
+    return false;
+}
+
+Vector2D posicion_anclaje_cuerda(const EntidadFisica* e, TipoAnclajeCuerda tipo) {
+    if (!e) return Vector2D();
+
+    if (tipo == TipoAnclajeCuerda::Cubeta) {
+        const Cubeta* cubeta = dynamic_cast<const Cubeta*>(e);
+        return cubeta ? cubeta->get_punto_cuerda() : e->get_posicion();
+    }
+
+    const Balancin* bal = dynamic_cast<const Balancin*>(e);
+    if (!bal) return e->get_posicion();
+    return tipo == TipoAnclajeCuerda::BalancinIzquierdo
+        ? bal->get_punto_extremo_izquierdo()
+        : bal->get_punto_extremo_derecho();
+}
+
+const EntidadFisica* buscar_entidad_por_id(const MotorFisica& motor, int id) {
+    for (const auto* e : motor.get_entidades()) {
+        if (e && e->get_id() == id) return e;
+    }
+    return nullptr;
+}
+
+bool detectar_anclaje_cuerda(const MotorFisica& motor, Vector2D mouse_pos,
+                             AnclajeCuerda& out, Vector2D& punto_out) {
+    const double radio_hit = 18.0;
+    double mejor_dist2 = radio_hit * radio_hit;
+    bool encontrado = false;
+
+    for (const auto* e : motor.get_entidades()) {
+        if (es_borde_nivel(e)) continue;
+
+        const Cubeta* cubeta = dynamic_cast<const Cubeta*>(e);
+        if (cubeta) {
+            Vector2D p = cubeta->get_punto_cuerda();
+            double d2 = (p - mouse_pos).magnitud_cuadrada();
+            if (d2 <= mejor_dist2) {
+                mejor_dist2 = d2;
+                out = { cubeta->get_id(), TipoAnclajeCuerda::Cubeta };
+                punto_out = p;
+                encontrado = true;
+            }
+        }
+
+        const Balancin* bal = dynamic_cast<const Balancin*>(e);
+        if (bal) {
+            Vector2D puntos[2] = {
+                bal->get_punto_extremo_izquierdo(),
+                bal->get_punto_extremo_derecho()
+            };
+            TipoAnclajeCuerda tipos[2] = {
+                TipoAnclajeCuerda::BalancinIzquierdo,
+                TipoAnclajeCuerda::BalancinDerecho
+            };
+
+            for (int i = 0; i < 2; ++i) {
+                double d2 = (puntos[i] - mouse_pos).magnitud_cuadrada();
+                if (d2 <= mejor_dist2) {
+                    mejor_dist2 = d2;
+                    out = { bal->get_id(), tipos[i] };
+                    punto_out = puntos[i];
+                    encontrado = true;
+                }
+            }
+        }
+    }
+
+    return encontrado;
+}
+
+bool detectar_soporte_torque(const MotorFisica& motor, Vector2D mouse_pos,
+                             int& soporte_id_out, Vector2D& punto_out) {
+    const double radio_extra = 8.0;
+    for (const auto* e : motor.get_entidades()) {
+        const SoporteTorque* soporte = dynamic_cast<const SoporteTorque*>(e);
+        if (!soporte) continue;
+
+        Vector2D p = soporte->get_punto_cuerda();
+        double radio_hit = soporte->get_radio() + radio_extra;
+        if ((p - mouse_pos).magnitud_cuadrada() <= radio_hit * radio_hit) {
+            soporte_id_out = soporte->get_id();
+            punto_out = p;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void cancelar_colocacion_cuerda() {
+    estado_cuerda = EstadoColocacionCuerda::INACTIVA;
+    cuerda_extremo_a = { -1, TipoAnclajeCuerda::Cubeta };
+    cuerda_punto_a_preview = Vector2D();
+    cuerda_soportes_id.clear();
+    cuerda_soportes_preview.clear();
+}
+
+bool soporte_ya_agregado(int soporte_id) {
+    return std::find(cuerda_soportes_id.begin(), cuerda_soportes_id.end(), soporte_id)
+        != cuerda_soportes_id.end();
+}
+
+double calcular_longitud_ruta_cuerda(Vector2D punto_a,
+                                     const std::vector<Vector2D>& soportes,
+                                     Vector2D punto_b) {
+    double longitud = 0.0;
+    Vector2D anterior = punto_a;
+    for (const Vector2D& soporte : soportes) {
+        longitud += Vector2D::distancia(anterior, soporte);
+        anterior = soporte;
+    }
+    longitud += Vector2D::distancia(anterior, punto_b);
+    return longitud;
+}
+
+bool manejar_click_colocacion_cuerda(MotorFisica& motor, Vector2D mouse_pos) {
+    if (estado_cuerda == EstadoColocacionCuerda::INACTIVA) return false;
+
+    if (!motor.get_pausado()) {
+        cancelar_colocacion_cuerda();
+        spawn_error_timer = 0.5f;
+        spawn_error_pos = mouse_pos;
+        return true;
+    }
+
+    if (estado_cuerda == EstadoColocacionCuerda::ESPERANDO_EXTREMO_A) {
+        AnclajeCuerda anclaje;
+        Vector2D punto;
+        if (detectar_anclaje_cuerda(motor, mouse_pos, anclaje, punto)) {
+            cuerda_extremo_a = anclaje;
+            cuerda_punto_a_preview = punto;
+            estado_cuerda = EstadoColocacionCuerda::ESPERANDO_SOPORTE;
+        } else {
+            cancelar_colocacion_cuerda();
+        }
+        return true;
+    }
+
+    if (estado_cuerda == EstadoColocacionCuerda::ESPERANDO_SOPORTE) {
+        int soporte_id = -1;
+        Vector2D punto_soporte;
+        if (detectar_soporte_torque(motor, mouse_pos, soporte_id, punto_soporte)) {
+            cuerda_soportes_id.push_back(soporte_id);
+            cuerda_soportes_preview.push_back(punto_soporte);
+            estado_cuerda = EstadoColocacionCuerda::ESPERANDO_EXTREMO_B;
+        } else {
+            cancelar_colocacion_cuerda();
+        }
+        return true;
+    }
+
+    if (estado_cuerda == EstadoColocacionCuerda::ESPERANDO_EXTREMO_B) {
+        int soporte_id = -1;
+        Vector2D punto_soporte;
+        if (detectar_soporte_torque(motor, mouse_pos, soporte_id, punto_soporte)) {
+            if (!soporte_ya_agregado(soporte_id)) {
+                cuerda_soportes_id.push_back(soporte_id);
+                cuerda_soportes_preview.push_back(punto_soporte);
+            }
+            return true;
+        }
+
+        AnclajeCuerda extremo_b;
+        Vector2D punto_b;
+        if (!detectar_anclaje_cuerda(motor, mouse_pos, extremo_b, punto_b)) {
+            cancelar_colocacion_cuerda();
+            return true;
+        }
+
+        const EntidadFisica* ent_a = buscar_entidad_por_id(motor, cuerda_extremo_a.entidad_id);
+        if (!ent_a) {
+            cancelar_colocacion_cuerda();
+            return true;
+        }
+
+        Vector2D punto_a = posicion_anclaje_cuerda(ent_a, cuerda_extremo_a.tipo);
+        double longitud = calcular_longitud_ruta_cuerda(punto_a, cuerda_soportes_preview, punto_b);
+        motor.agregar_entidad(new Cuerda(
+            motor.generar_id(), cuerda_extremo_a, cuerda_soportes_id, extremo_b, longitud));
+        cancelar_colocacion_cuerda();
         return true;
     }
 
@@ -198,6 +402,14 @@ EntidadFisica* obtener_entidad_bajo_mouse(const MotorFisica& motor, Vector2D mou
         // Excluir bordes del nivel del arrastre/selección
         if (es_borde_nivel(e)) continue;
 
+        const SoporteTorque* soporte = dynamic_cast<const SoporteTorque*>(e);
+        if (soporte) {
+            double dist = (soporte->get_punto_cuerda() - mouse_pos).magnitud();
+            if (dist < soporte->get_radio() + 10.0) {
+                return const_cast<SoporteTorque*>(soporte);
+            }
+        }
+
         TipoForma forma = e->get_tipo_forma();
         if (forma == TipoForma::CIRCULO) {
             const BolaRebotadora* rebotadora = dynamic_cast<const BolaRebotadora*>(e);
@@ -255,6 +467,16 @@ EntidadFisica* obtener_entidad_bajo_mouse(const MotorFisica& motor, Vector2D mou
                 if (mouse_pos.x >= pos.x - 10 && mouse_pos.x <= pos.x + w + 10 &&
                     mouse_pos.y >= pos.y - 10 && mouse_pos.y <= pos.y + h + 10) {
                     return const_cast<Ventilador*>(vent);
+                }
+            }
+            const Cubeta* cubeta = dynamic_cast<const Cubeta*>(e);
+            if (cubeta) {
+                Vector2D pos = cubeta->get_posicion();
+                double w = cubeta->get_ancho();
+                double h = cubeta->get_alto();
+                if (mouse_pos.x >= pos.x - 10 && mouse_pos.x <= pos.x + w + 10 &&
+                    mouse_pos.y >= pos.y - 10 && mouse_pos.y <= pos.y + h + 10) {
+                    return const_cast<Cubeta*>(cubeta);
                 }
             }
             // ParedRectangular (plataformas, paredes colocadas por el usuario)
@@ -608,6 +830,8 @@ bool crear_bola_rebotadora(MotorFisica& motor, Vector2D pos);
 bool crear_ventilador(MotorFisica& motor, Vector2D pos);
 bool crear_seguidor_booster(MotorFisica& motor, Vector2D pos);
 bool crear_barril_chavo(MotorFisica& motor, Vector2D pos);
+bool crear_cubeta(MotorFisica& motor, Vector2D pos);
+bool crear_soporte_torque(MotorFisica& motor, Vector2D pos);
 
 bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
     switch (tipo) {
@@ -622,6 +846,9 @@ bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
         case TipoObjetoMenu::SEGUIDOR_BOOSTER:  return crear_seguidor_booster(motor, pos);
         case TipoObjetoMenu::BARRIL_CHAVO:      return crear_barril_chavo(motor, pos);
         case TipoObjetoMenu::VENTILADOR:        return crear_ventilador(motor, pos);
+        case TipoObjetoMenu::CUBETA:            return crear_cubeta(motor, pos);
+        case TipoObjetoMenu::SOPORTE_TORQUE:    return crear_soporte_torque(motor, pos);
+        case TipoObjetoMenu::CUERDA:            return false;
         default: return false;
     }
 }
@@ -769,6 +996,52 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
                 DrawRectangleRec({cx - w / 2.0f, cy - h / 2.0f, w, h}, tint(COLOR_PARED));
                 DrawRectangleLinesEx({cx - w / 2.0f, cy - h / 2.0f, w, h}, 1.0f, tint(COLOR_PARED_BORDE));
             }
+            break;
+        }
+        case TipoObjetoMenu::CUBETA: {
+            float w = 34.0f * escala;
+            float h = 30.0f * escala;
+            float x = cx - w / 2.0f;
+            float y = cy - h / 2.0f + 4.0f * escala;
+            DrawRectangleRec({x + 4 * escala, y + 6 * escala, w - 8 * escala, h - 6 * escala},
+                             tint(Color{120, 145, 160, 255}));
+            DrawRectangleLinesEx({x + 4 * escala, y + 6 * escala, w - 8 * escala, h - 6 * escala},
+                                 1.5f, tint(Color{50, 60, 70, 255}));
+            DrawLineEx({x + 6 * escala, y + 8 * escala}, {x + w / 2, y - 4 * escala},
+                       2.0f, tint(Color{210, 220, 225, 255}));
+            DrawLineEx({x + w - 6 * escala, y + 8 * escala}, {x + w / 2, y - 4 * escala},
+                       2.0f, tint(Color{210, 220, 225, 255}));
+            DrawCircle(static_cast<int>(cx), static_cast<int>(y - 4 * escala), 3.5f * escala,
+                       tint(Color{40, 45, 50, 255}));
+            break;
+        }
+        case TipoObjetoMenu::CUERDA: {
+            Color cuerda_col = tint(Color{214, 184, 112, 255});
+            Color sombra = tint(Color{116, 86, 42, 255});
+            float amp = 5.0f * escala;
+            float paso = 6.0f * escala;
+            Vector2 prev = {cx - 28.0f * escala, cy};
+            for (int i = 1; i <= 10; ++i) {
+                float x = cx - 28.0f * escala + paso * i;
+                float y = cy + std::sin(i * 0.9f) * amp;
+                DrawLineEx(prev, {x, y}, 5.0f * escala, sombra);
+                DrawLineEx(prev, {x, y}, 3.0f * escala, cuerda_col);
+                prev = {x, y};
+            }
+            DrawCircleLines(static_cast<int>(cx - 15.0f * escala), static_cast<int>(cy + 13.0f * escala),
+                            9.0f * escala, cuerda_col);
+            DrawCircleLines(static_cast<int>(cx), static_cast<int>(cy + 14.0f * escala),
+                            10.0f * escala, cuerda_col);
+            DrawCircleLines(static_cast<int>(cx + 16.0f * escala), static_cast<int>(cy + 13.0f * escala),
+                            9.0f * escala, cuerda_col);
+            break;
+        }
+        case TipoObjetoMenu::SOPORTE_TORQUE: {
+            float r = 15.0f * escala;
+            DrawCircleV({cx, cy}, r, tint(Color{135, 140, 145, 255}));
+            DrawCircleLines(static_cast<int>(cx), static_cast<int>(cy), r,
+                            tint(Color{65, 70, 78, 255}));
+            DrawCircleV({cx, cy}, 5.0f * escala, tint(Color{35, 38, 42, 255}));
             break;
         }
         case TipoObjetoMenu::BOLA_REBOTADORA: {
@@ -1141,6 +1414,99 @@ void dibujar_ghost_spawn() {
                     Color{255, 255, 255, 80});
 }
 
+void dibujar_cuerdas(const MotorFisica& motor) {
+    for (const auto* e : motor.get_entidades()) {
+        const Cuerda* cuerda = dynamic_cast<const Cuerda*>(e);
+        if (!cuerda) continue;
+
+        std::vector<Vector2D> puntos;
+        if (!cuerda->obtener_puntos(motor.get_entidades(), puntos)) continue;
+
+        Color cuerda_col = cuerda->get_ultima_tension() > 0.0
+            ? Color{235, 220, 155, 255}
+            : Color{185, 175, 130, 230};
+        for (size_t i = 1; i < puntos.size(); ++i) {
+            DrawLineEx({(float)puntos[i - 1].x, (float)puntos[i - 1].y},
+                       {(float)puntos[i].x, (float)puntos[i].y}, 3.0f, cuerda_col);
+        }
+        Vector2D a = puntos.front();
+        Vector2D b = puntos.back();
+        DrawCircle(static_cast<int>(a.x), static_cast<int>(a.y), 5.0f, Color{220, 60, 60, 255});
+        DrawCircle(static_cast<int>(b.x), static_cast<int>(b.y), 5.0f, Color{220, 60, 60, 255});
+    }
+}
+
+void dibujar_tramo_cuerda_preview(Vector2D a, Vector2D b) {
+    Vector2 va = {static_cast<float>(a.x), static_cast<float>(a.y)};
+    Vector2 vb = {static_cast<float>(b.x), static_cast<float>(b.y)};
+    DrawLineEx(va, vb, 7.0f, Color{35, 28, 18, 190});
+    DrawLineEx(va, vb, 4.0f, Color{255, 224, 130, 255});
+    DrawLineEx(va, vb, 1.5f, Color{255, 255, 220, 220});
+}
+
+void dibujar_previsualizacion_cuerda(const MotorFisica& motor) {
+    if (estado_cuerda == EstadoColocacionCuerda::INACTIVA) return;
+
+    Vector2D mouse(GetMouseX(), GetMouseY());
+    dibujar_icono_objeto(TipoObjetoMenu::CUERDA,
+                         static_cast<float>(mouse.x + 34.0),
+                         static_cast<float>(mouse.y - 28.0),
+                         0.72f, 190);
+
+    if (estado_cuerda == EstadoColocacionCuerda::ESPERANDO_EXTREMO_A) {
+        AnclajeCuerda anclaje;
+        Vector2D punto;
+        if (detectar_anclaje_cuerda(motor, mouse, anclaje, punto)) {
+            DrawCircleLines(static_cast<int>(punto.x), static_cast<int>(punto.y), 13.0f,
+                            Color{255, 230, 120, 230});
+        }
+        return;
+    }
+
+    if (estado_cuerda == EstadoColocacionCuerda::ESPERANDO_SOPORTE) {
+        int soporte_id = -1;
+        Vector2D punto_soporte;
+        dibujar_tramo_cuerda_preview(cuerda_punto_a_preview, mouse);
+        DrawCircle(static_cast<int>(cuerda_punto_a_preview.x), static_cast<int>(cuerda_punto_a_preview.y),
+                   8.0f, Color{255, 90, 60, 245});
+        DrawCircleLines(static_cast<int>(cuerda_punto_a_preview.x), static_cast<int>(cuerda_punto_a_preview.y),
+                        13.0f, Color{255, 240, 150, 245});
+        if (detectar_soporte_torque(motor, mouse, soporte_id, punto_soporte)) {
+            DrawCircleLines(static_cast<int>(punto_soporte.x), static_cast<int>(punto_soporte.y),
+                            24.0f, Color{255, 240, 120, 255});
+        }
+        return;
+    }
+
+    if (estado_cuerda == EstadoColocacionCuerda::ESPERANDO_EXTREMO_B) {
+        Vector2D anterior = cuerda_punto_a_preview;
+        for (const Vector2D& soporte : cuerda_soportes_preview) {
+            dibujar_tramo_cuerda_preview(anterior, soporte);
+            anterior = soporte;
+        }
+        dibujar_tramo_cuerda_preview(anterior, mouse);
+        DrawCircle(static_cast<int>(cuerda_punto_a_preview.x), static_cast<int>(cuerda_punto_a_preview.y),
+                   7.0f, Color{255, 90, 60, 245});
+        for (const Vector2D& soporte : cuerda_soportes_preview) {
+            DrawCircleLines(static_cast<int>(soporte.x), static_cast<int>(soporte.y),
+                            22.0f, Color{255, 240, 120, 240});
+        }
+    }
+}
+
+bool crear_cubeta(MotorFisica& motor, Vector2D pos) {
+    double w = 58.0;
+    double h = 52.0;
+    Vector2D spawn(pos.x - w / 2.0, pos.y - h / 2.0);
+    motor.agregar_entidad(new Cubeta(motor.generar_id(), spawn, w, h));
+    return true;
+}
+
+bool crear_soporte_torque(MotorFisica& motor, Vector2D pos) {
+    motor.agregar_entidad(new SoporteTorque(motor.generar_id(), pos, 16.0));
+    return true;
+}
+
 // ============================================================================
 // Crear BolaRebotadora en posicion del mouse (con validacion)
 // ============================================================================
@@ -1292,6 +1658,19 @@ void dibuja_seguidor_geometrico(Vector2D pos, float w, float h, float draw_y,
 // Renderizado de entidades
 // ============================================================================
 void dibujar_entidad(const EntidadFisica* e) {
+    const SoporteTorque* soporte = dynamic_cast<const SoporteTorque*>(e);
+    if (soporte) {
+        Vector2D pos = soporte->get_punto_cuerda();
+        float r = static_cast<float>(soporte->get_radio());
+        DrawCircle(static_cast<int>(pos.x), static_cast<int>(pos.y), r,
+                   Color{135, 140, 145, 255});
+        DrawCircleLines(static_cast<int>(pos.x), static_cast<int>(pos.y), r,
+                        Color{65, 70, 78, 255});
+        DrawCircle(static_cast<int>(pos.x), static_cast<int>(pos.y), 5.0f,
+                   Color{35, 38, 42, 255});
+        return;
+    }
+
     TipoForma forma = e->get_tipo_forma();
 
     if (forma == TipoForma::CIRCULO) {
@@ -1739,6 +2118,32 @@ void dibujar_entidad(const EntidadFisica* e) {
         }
 
         const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
+        const Cubeta* cubeta = dynamic_cast<const Cubeta*>(e);
+        if (cubeta) {
+            Vector2D pos = cubeta->get_posicion();
+            float px = static_cast<float>(pos.x);
+            float py = static_cast<float>(pos.y);
+            float pw = static_cast<float>(cubeta->get_ancho());
+            float ph = static_cast<float>(cubeta->get_alto());
+
+            DrawRectangleRec({px + 5.0f, py + 12.0f, pw - 10.0f, ph - 12.0f},
+                             Color{112, 140, 155, 255});
+            DrawRectangleLinesEx({px + 5.0f, py + 12.0f, pw - 10.0f, ph - 12.0f},
+                                 2.0f, Color{45, 55, 65, 255});
+            DrawLineEx({px + 9.0f, py + 14.0f}, {px + pw * 0.5f, py + 4.0f},
+                       2.5f, Color{215, 225, 230, 255});
+            DrawLineEx({px + pw - 9.0f, py + 14.0f}, {px + pw * 0.5f, py + 4.0f},
+                       2.5f, Color{215, 225, 230, 255});
+            DrawCircle(static_cast<int>(px + pw * 0.5f), static_cast<int>(py + 4.0f),
+                       5.0f, Color{35, 40, 45, 255});
+
+            if (modo_debug) {
+                DrawRectangleLines(static_cast<int>(px), static_cast<int>(py),
+                                   static_cast<int>(pw), static_cast<int>(ph), GREEN);
+            }
+            return;
+        }
+
         if (!p) return;
 
         Vector2D pos = p->get_posicion();
@@ -1966,6 +2371,14 @@ void dibujar_hud(const MotorFisica& motor) {
     if (arrastrando_spawn != TipoObjetoMenu::NINGUNO) {
         DrawText("Arrastrando objeto... suelta en el area de juego",
                  margin, y + 88, 14, Color{100, 200, 255, 255});
+    }
+
+    if (estado_cuerda != EstadoColocacionCuerda::INACTIVA) {
+        const char* paso = "Selecciona primer extremo";
+        if (estado_cuerda == EstadoColocacionCuerda::ESPERANDO_SOPORTE) paso = "Selecciona primer Torque";
+        if (estado_cuerda == EstadoColocacionCuerda::ESPERANDO_EXTREMO_B) paso = "Torque extra o extremo final";
+        DrawText(TextFormat("Cuerda: %s", paso), margin, y + 110, 14,
+                 Color{235, 220, 155, 255});
     }
 
     // Indicador de pausa
@@ -2236,6 +2649,11 @@ int main() {
         int mx = GetMouseX();
         int my = GetMouseY();
 
+        if ((IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) || IsKeyPressed(KEY_ESCAPE)) &&
+            estado_cuerda != EstadoColocacionCuerda::INACTIVA) {
+            cancelar_colocacion_cuerda();
+        }
+
         // Click izquierdo: menú, spawn drag, o arrastre de entidad en canvas
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             if (punto_en_menu(mx, my)) {
@@ -2243,11 +2661,24 @@ int main() {
                     // UI consumió el click (pestaña, acordeón, paginación, colapsar)
                 } else {
                     TipoObjetoMenu tipo = tipo_en_celda(mx, my, celdas_menu_cache);
-                    if (tipo != TipoObjetoMenu::NINGUNO)
+                    if (tipo == TipoObjetoMenu::CUERDA) {
+                        if (motor.get_pausado()) {
+                            cancelar_colocacion_cuerda();
+                            estado_cuerda = EstadoColocacionCuerda::ESPERANDO_EXTREMO_A;
+                        } else {
+                            spawn_error_timer = 0.5f;
+                            spawn_error_pos = Vector2D(mx, my);
+                        }
+                    } else if (tipo != TipoObjetoMenu::NINGUNO) {
+                        cancelar_colocacion_cuerda();
                         arrastrando_spawn = tipo;
+                    }
                 }
             } else if (punto_en_area_juego(mx, my)) {
                 Vector2D mouse_pos(mx, my);
+                if (manejar_click_colocacion_cuerda(motor, mouse_pos)) {
+                    entidad_arrastrada = nullptr;
+                } else {
                 EntidadFisica* clicked = obtener_entidad_bajo_mouse(motor, mouse_pos);
                 if (clicked) {
                     entidad_arrastrada = clicked;
@@ -2255,6 +2686,7 @@ int main() {
                     offset_arrastre = clicked->get_posicion() - mouse_pos;
                 } else {
                     entidad_seleccionada = nullptr;  // Deseleccionar al hacer click en vacío
+                }
                 }
             }
         }
@@ -2300,6 +2732,7 @@ int main() {
         // Spacebar: pausar/reanudar
         if (IsKeyPressed(KEY_SPACE)) {
             motor.set_pausado(!motor.get_pausado());
+            if (!motor.get_pausado()) cancelar_colocacion_cuerda();
         }
 
         // D: toggle debug
@@ -2341,6 +2774,7 @@ int main() {
             borde_techo = nullptr;
             entidad_arrastrada = nullptr;
             entidad_seleccionada = nullptr;
+            cancelar_colocacion_cuerda();
             crear_escena(motor);
         }
 
@@ -2385,15 +2819,27 @@ int main() {
             DrawTextureEx(tex_fondo, {0, 0}, 0, escala, WHITE);
         }
 
+        dibujar_cuerdas(motor);
+
         // Dibujar todas las entidades
         for (const auto* e : motor.get_entidades()) {
             dibujar_entidad(e);
             dibujar_debug(e);
         }
+        dibujar_previsualizacion_cuerda(motor);
 
         // Dibujar resaltado de selección
         if (entidad_seleccionada) {
             Color sel_color = {255, 200, 50, 180};
+            const SoporteTorque* soporte_sel = dynamic_cast<const SoporteTorque*>(entidad_seleccionada);
+            if (soporte_sel) {
+                Vector2D sp = soporte_sel->get_punto_cuerda();
+                DrawCircleLines(static_cast<int>(sp.x), static_cast<int>(sp.y),
+                                static_cast<float>(soporte_sel->get_radio() + 5.0), sel_color);
+                DrawCircleLines(static_cast<int>(sp.x), static_cast<int>(sp.y),
+                                static_cast<float>(soporte_sel->get_radio() + 8.0),
+                                Color{255, 200, 50, 90});
+            }
             TipoForma sel_forma = entidad_seleccionada->get_tipo_forma();
             if (sel_forma == TipoForma::CIRCULO) {
                 Vector2D sel_pos;
@@ -2417,11 +2863,13 @@ int main() {
                     const BarrilChavo* sb = dynamic_cast<const BarrilChavo*>(entidad_seleccionada);
                     const Ventilador* sv = dynamic_cast<const Ventilador*>(entidad_seleccionada);
                     const SeguidorBooster* ss = dynamic_cast<const SeguidorBooster*>(entidad_seleccionada);
+                    const Cubeta* sc = dynamic_cast<const Cubeta*>(entidad_seleccionada);
                     float sw = 0, sh = 0;
                     if (st) { sw = st->get_ancho(); sh = st->get_alto(); }
                     else if (sb) { sw = sb->get_ancho(); sh = sb->get_alto(); }
                     else if (sv) { sw = sv->get_ancho(); sh = sv->get_alto(); }
                     else if (ss) { sw = ss->get_ancho(); sh = ss->get_alto(); spos.x -= sw/2; spos.y -= sh/2; }
+                    else if (sc) { sw = sc->get_ancho(); sh = sc->get_alto(); }
                     if (sw > 0) {
                         DrawRectangleLinesEx({(float)spos.x - 3, (float)spos.y - 3,
                             sw + 6, sh + 6}, 2.0f, sel_color);
