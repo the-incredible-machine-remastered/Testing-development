@@ -50,3 +50,14 @@ target_link_libraries(${PROJECT_NAME} PRIVATE raylib)
 
 # Incluir src/ para que los #include "core/vector2d.h" funcionen
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
+# Copiar Assets y fuentes junto al ejecutable (Visual Studio / out/build)
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/Assets"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/Assets"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/fonts"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/fonts"
+    COMMENT "Copiando Assets y fonts al directorio del ejecutable"
+)

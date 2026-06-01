@@ -49,6 +49,12 @@ public:
 
     int generar_id() { return siguiente_id++; }
 
+    void set_siguiente_id(int id) {
+        siguiente_id = std::max(1, id);
+    }
+
+    int get_siguiente_id() const { return siguiente_id; }
+
     void agregar_entidad(EntidadFisica* e) {
         entidades.push_back(e);
     }

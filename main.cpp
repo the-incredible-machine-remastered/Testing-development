@@ -33,11 +33,14 @@
 #include "fisica/colisiones.h"
 #include "fisica/motor_fisica.h"
 #include "objetos/catalogo_menu.gen.h"
+#include "sistema/rutas_datos.h"
+#include "sistema/guardado_partida.h"
 
 #include <cmath>
 #include <algorithm>
 #include <vector>
 #include <string>
+#include <cstdio>
 
 
 // ============================================================================
@@ -552,10 +555,22 @@ void sincronizar_tamano_ventana() {
     actualizar_bordes_nivel();
 }
 
-void crear_escena(MotorFisica& motor) {
-    int g = 20; // Grosor de paredes límite
+void resetear_punteros_borde() {
+    borde_suelo = nullptr;
+    borde_izquierda = nullptr;
+    borde_derecha = nullptr;
+    borde_techo = nullptr;
+}
 
-    // ---- Paredes del nivel (4 bordes) ----
+void limpiar_estado_tras_cargar_partida() {
+    entidad_arrastrada = nullptr;
+    entidad_seleccionada = nullptr;
+    arrastrando_spawn = TipoObjetoMenu::NINGUNO;
+    cancelar_colocacion_cuerda();
+}
+
+void crear_bordes_nivel(MotorFisica& motor) {
+    const int g = 20;
     borde_suelo = new ParedRectangular(
         motor.generar_id(), Vector2D(0, ALTO - g), ANCHO, g);
     motor.agregar_entidad(borde_suelo);
@@ -571,6 +586,10 @@ void crear_escena(MotorFisica& motor) {
     borde_techo = new ParedRectangular(
         motor.generar_id(), Vector2D(0, 0), ANCHO, g);
     motor.agregar_entidad(borde_techo);
+}
+
+void crear_escena(MotorFisica& motor) {
+    crear_bordes_nivel(motor);
 
     // ---- Plataformas ----
     motor.agregar_entidad(new ParedRectangular(
@@ -1321,6 +1340,10 @@ void dibujar_menu_lateral() {
         dibujar_celda_menu(c, hot);
     }
 
+    // Guardado / carga de partidas
+    int py_guardado = ALTO - MENU_PAGINACION_ALTO - 180 - 215;
+    dibujar_panel_guardado(px, py_guardado, MENU_ANCHO, fuente_menu);
+
     // Paginación
     int paginas = contar_paginas_tab(menu_tab);
     int py = ALTO - MENU_PAGINACION_ALTO - 180;  // 10px de margen desde el fondo del asset
@@ -1346,7 +1369,11 @@ void dibujar_menu_lateral() {
     DrawText(">", px + MENU_ANCHO - MENU_MARGEN - flecha_w / 2 - 6, py + flecha_h / 2 - 9, 20, hover_next ? MENU_AZUL_CLARO : MENU_AZUL);
 }
 
-bool manejar_click_menu(int mx, int my) {
+bool manejar_click_menu(int mx, int my, MotorFisica& motor) {
+    if (manejar_click_panel_guardado(mx, my, motor, ANCHO, ALTO, contador_bolas)) {
+        return true;
+    }
+
     if (!menu_visible) {
         int px = ANCHO - MENU_ANCHO;
         int bx = px - 28;
@@ -2411,58 +2438,45 @@ void dibujar_hud(const MotorFisica& motor) {
 // Cargar texturas
 // ============================================================================
 void cargandoTexturas() {
-    std::string prefix = "../";
-    if (FileExists("Assets/fondo1.png")) {
-        prefix = "";
-    } else if (FileExists("../Assets/fondo1.png")) {
-        prefix = "../";
-    } else if (FileExists("../../Assets/fondo1.png")) {
-        prefix = "../../";
-    }
-
-    auto load_tex = [&](const std::string& path) -> Texture2D {
-        std::string full_path = prefix + path;
-        Texture2D tex = LoadTexture(full_path.c_str());
-        return tex;
-    };
+    inicializar_raiz_datos();
 
     // Cargar las 3 texturas de pelota
-    tex_bola[0] = load_tex("Assets/ball/pelota1.png");
+    tex_bola[0] = cargar_textura_datos("Assets/ball/pelota1.png");
     if (tex_bola[0].id == 0) {
         TraceLog(LOG_ERROR, "Error cargando textura: pelota1.png");
     } else {
         TraceLog(LOG_INFO, "Textura bola 1 cargada: %dx%d", tex_bola[0].width, tex_bola[0].height);
     }
 
-    tex_bola[1] = load_tex("Assets/ball/pelota2.png");
+    tex_bola[1] = cargar_textura_datos("Assets/ball/pelota2.png");
     if (tex_bola[1].id == 0) {
         TraceLog(LOG_ERROR, "Error cargando textura: pelota2.png");
     } else {
         TraceLog(LOG_INFO, "Textura bola 2 cargada: %dx%d", tex_bola[1].width, tex_bola[1].height);
     }
 
-    tex_bola[2] = load_tex("Assets/ball/pelota3.png");
+    tex_bola[2] = cargar_textura_datos("Assets/ball/pelota3.png");
     if (tex_bola[2].id == 0) {
         TraceLog(LOG_ERROR, "Error cargando textura: pelota3.png");
     } else {
         TraceLog(LOG_INFO, "Textura bola 3 cargada: %dx%d", tex_bola[2].width, tex_bola[2].height);
     }
 
-    tex_fondo = load_tex("Assets/fondo1.png");
+    tex_fondo = cargar_textura_datos("Assets/fondo1.png");
     if (tex_fondo.id == 0) {
         TraceLog(LOG_ERROR, "Error cargando textura: fondo1.png");
     } else {
         TraceLog(LOG_INFO, "Textura fondo cargada: %dx%d", tex_fondo.width, tex_fondo.height);
     }
     
-    tex_base_central = load_tex("Assets/hud/panel.png");
+    tex_base_central = cargar_textura_datos("Assets/hud/panel.png");
     if (tex_base_central.id == 0) {
         TraceLog(LOG_ERROR, "Error cargando textura: panel.png");
     } else {
         TraceLog(LOG_INFO, "Textura base central cargada: %dx%d", tex_base_central.width, tex_base_central.height);
     }
     
-    derecho = load_tex("Assets/hud/barsidederecho.png");
+    derecho = cargar_textura_datos("Assets/hud/barsidederecho.png");
     if (derecho.id == 0) {
         TraceLog(LOG_ERROR, "Error cargando textura: barsidederecho.png");
     } else {
@@ -2470,14 +2484,14 @@ void cargandoTexturas() {
     }
     
     // Cargar texturas del BarrilChavo
-    tex_barril = load_tex("Assets/chavo/barril.png");
+    tex_barril = cargar_textura_datos("Assets/chavo/barril.png");
     if (tex_barril.id == 0) {
         TraceLog(LOG_WARNING, "Textura barril no encontrada: barril.png (usando renderizado geométrico)");
     } else {
         TraceLog(LOG_INFO, "Textura barril cargada: %dx%d", tex_barril.width, tex_barril.height);
     }
     
-    tex_chavo = load_tex("Assets/chavo/chavo.png");
+    tex_chavo = cargar_textura_datos("Assets/chavo/chavo.png");
     if (tex_chavo.id == 0) {
         TraceLog(LOG_WARNING, "Textura El Chavo no encontrada: chavo.png (usando renderizado geométrico)");
     } else {
@@ -2485,21 +2499,21 @@ void cargandoTexturas() {
     }
     
     // Cargar texturas del SeguidorBooster
-    tex_seguidor_quieto = load_tex("Assets/messi/messi-normal.png");
+    tex_seguidor_quieto = cargar_textura_datos("Assets/messi/messi-normal.png");
     if (tex_seguidor_quieto.id == 0) {
         TraceLog(LOG_WARNING, "Textura seguidor quieto no encontrada: messi-normal.png");
     } else {
         TraceLog(LOG_INFO, "Textura seguidor quieto cargada: %dx%d", tex_seguidor_quieto.width, tex_seguidor_quieto.height);
     }
     
-    tex_seguidor_corriendo = load_tex("Assets/messi/mesirve.png");
+    tex_seguidor_corriendo = cargar_textura_datos("Assets/messi/mesirve.png");
     if (tex_seguidor_corriendo.id == 0) {
         TraceLog(LOG_WARNING, "Textura seguidor corriendo no encontrada: mesirve.png");
     } else {
         TraceLog(LOG_INFO, "Textura seguidor corriendo cargada: %dx%d", tex_seguidor_corriendo.width, tex_seguidor_corriendo.height);
     }
 
-    tex_seguidor_cabezazo = load_tex("Assets/messi/messi-cabezazo.png");
+    tex_seguidor_cabezazo = cargar_textura_datos("Assets/messi/messi-cabezazo.png");
     if (tex_seguidor_cabezazo.id == 0) {
         TraceLog(LOG_WARNING, "Textura seguidor cabezazo no encontrada: messi-cabezazo.png");
     } else {
@@ -2512,49 +2526,49 @@ void cargandoTexturas() {
     }
 
     // Cargar texturas de los nuevos assets
-    tex_trampolin = load_tex("Assets/trampolin/trampolin.png");
+    tex_trampolin = cargar_textura_datos("Assets/trampolin/trampolin.png");
     if (tex_trampolin.id == 0) {
         TraceLog(LOG_WARNING, "Textura trampolin no encontrada: trampolin.png");
     } else {
         TraceLog(LOG_INFO, "Textura trampolin cargada: %dx%d", tex_trampolin.width, tex_trampolin.height);
     }
 
-    tex_balancin_base = load_tex("Assets/balancin/detalle1.png");
+    tex_balancin_base = cargar_textura_datos("Assets/balancin/detalle1.png");
     if (tex_balancin_base.id == 0) {
         TraceLog(LOG_WARNING, "Textura balancin base no encontrada: detalle1.png");
     } else {
         TraceLog(LOG_INFO, "Textura balancin base cargada: %dx%d", tex_balancin_base.width, tex_balancin_base.height);
     }
 
-    tex_balancin_tabla = load_tex("Assets/balancin/balancin2.png");
+    tex_balancin_tabla = cargar_textura_datos("Assets/balancin/balancin2.png");
     if (tex_balancin_tabla.id == 0) {
         TraceLog(LOG_WARNING, "Textura balancin tabla no encontrada: balancin2.png");
     } else {
         TraceLog(LOG_INFO, "Textura balancin tabla cargada: %dx%d", tex_balancin_tabla.width, tex_balancin_tabla.height);
     }
 
-    tex_plata_larga = load_tex("Assets/plataform/plata_larga.png");
+    tex_plata_larga = cargar_textura_datos("Assets/plataform/plata_larga.png");
     if (tex_plata_larga.id == 0) {
         TraceLog(LOG_WARNING, "Textura plataforma larga no encontrada: plata_larga.png");
     } else {
         TraceLog(LOG_INFO, "Textura plataforma larga cargada: %dx%d", tex_plata_larga.width, tex_plata_larga.height);
     }
 
-    tex_plata_peque = load_tex("Assets/plataform/plata_peque.png");
+    tex_plata_peque = cargar_textura_datos("Assets/plataform/plata_peque.png");
     if (tex_plata_peque.id == 0) {
         TraceLog(LOG_WARNING, "Textura plataforma peque no encontrada: plata_peque.png");
     } else {
         TraceLog(LOG_INFO, "Textura plataforma peque cargada: %dx%d", tex_plata_peque.width, tex_plata_peque.height);
     }
 
-    tex_plata_rampa_izq = load_tex("Assets/plataform/plataforma1.png");
+    tex_plata_rampa_izq = cargar_textura_datos("Assets/plataform/plataforma1.png");
     if (tex_plata_rampa_izq.id == 0) {
         TraceLog(LOG_WARNING, "Textura rampa izq no encontrada: plataforma1.png");
     } else {
         TraceLog(LOG_INFO, "Textura rampa izq cargada: %dx%d", tex_plata_rampa_izq.width, tex_plata_rampa_izq.height);
     }
 
-    tex_plata_rampa_der = load_tex("Assets/plataform/plataforma2.png");
+    tex_plata_rampa_der = cargar_textura_datos("Assets/plataform/plataforma2.png");
     if (tex_plata_rampa_der.id == 0) {
         TraceLog(LOG_WARNING, "Textura rampa der no encontrada: plataforma2.png");
     } else {
@@ -2562,13 +2576,13 @@ void cargandoTexturas() {
     }
 
     // Texturas de BolaRebotadora (robot rojo)
-    tex_robote_soporte = load_tex("Assets/rebote/proto-2.png");
+    tex_robote_soporte = cargar_textura_datos("Assets/rebote/proto-2.png");
     if (tex_robote_soporte.id == 0) {
         TraceLog(LOG_WARNING, "Textura robote soporte no encontrada: Assets/rebote/proto-2.png");
     } else {
         TraceLog(LOG_INFO, "Textura robote soporte cargada: %dx%d", tex_robote_soporte.width, tex_robote_soporte.height);
     }
-    tex_robote_pelota = load_tex("Assets/rebote/proto-1.png");
+    tex_robote_pelota = cargar_textura_datos("Assets/rebote/proto-1.png");
     if (tex_robote_pelota.id == 0) {
         TraceLog(LOG_WARNING, "Textura robote pelota no encontrada: Assets/rebote/proto-1.png");
     } else {
@@ -2576,13 +2590,13 @@ void cargandoTexturas() {
     }
 
     // Texturas del ventilador (cuerpo + aspa)
-    tex_ventilador_cuerpo = load_tex("Assets/ventilador/cuerpo.png");
+    tex_ventilador_cuerpo = cargar_textura_datos("Assets/ventilador/cuerpo.png");
     if (tex_ventilador_cuerpo.id == 0) {
         TraceLog(LOG_WARNING, "Textura ventilador cuerpo no encontrada: Assets/ventilador/cuerpo.png");
     } else {
         TraceLog(LOG_INFO, "Textura ventilador cuerpo cargada: %dx%d", tex_ventilador_cuerpo.width, tex_ventilador_cuerpo.height);
     }
-    tex_ventilador_aspa = load_tex("Assets/ventilador/aspa.png");
+    tex_ventilador_aspa = cargar_textura_datos("Assets/ventilador/aspa.png");
     if (tex_ventilador_aspa.id == 0) {
         TraceLog(LOG_WARNING, "Textura ventilador aspa no encontrada: Assets/ventilador/aspa.png");
     } else {
@@ -2590,7 +2604,7 @@ void cargandoTexturas() {
     }
 
     // Cargar asset de celda de menú
-    tex_celda_menu = load_tex("Assets/hud/obj-vacio.png");
+    tex_celda_menu = cargar_textura_datos("Assets/hud/obj-vacio.png");
     if (tex_celda_menu.id == 0) {
         TraceLog(LOG_WARNING, "Textura celda menú no encontrada: Assets/hud/obj-vacio.png");
     } else {
@@ -2598,7 +2612,7 @@ void cargandoTexturas() {
     }
 
     // Cargar asset de encabezado de categoría
-    tex_barra_encabezado = load_tex("Assets/hud/barra.png");
+    tex_barra_encabezado = cargar_textura_datos("Assets/hud/barra.png");
     if (tex_barra_encabezado.id == 0) {
         TraceLog(LOG_WARNING, "Textura barra encabezado no encontrada: Assets/hud/barra.png");
     } else {
@@ -2606,7 +2620,7 @@ void cargandoTexturas() {
     }
     
     // Cargar fuente personalizada
-    fuente_menu = LoadFont("fonts/Gamer.ttf");
+    fuente_menu = cargar_fuente_datos("fonts/Gamer.ttf", 32);
     if (fuente_menu.baseSize == 0) {
         TraceLog(LOG_WARNING, "Fuente Gamer.ttf no encontrada: usando fuente por defecto");
     } else {
@@ -2649,15 +2663,24 @@ int main() {
         int mx = GetMouseX();
         int my = GetMouseY();
 
-        if ((IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) || IsKeyPressed(KEY_ESCAPE)) &&
+        if (IsKeyPressed(KEY_ESCAPE)) {
+            if (modo_panel_guardado != ModoPanelGuardado::CERRADO) {
+                modo_panel_guardado = ModoPanelGuardado::CERRADO;
+            } else if (estado_cuerda != EstadoColocacionCuerda::INACTIVA) {
+                cancelar_colocacion_cuerda();
+            }
+        }
+        if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) &&
             estado_cuerda != EstadoColocacionCuerda::INACTIVA) {
             cancelar_colocacion_cuerda();
         }
 
+        manejar_teclas_panel_guardado(motor, ANCHO, ALTO, contador_bolas);
+
         // Click izquierdo: menú, spawn drag, o arrastre de entidad en canvas
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             if (punto_en_menu(mx, my)) {
-                if (manejar_click_menu(mx, my)) {
+                if (manejar_click_menu(mx, my, motor)) {
                     // UI consumió el click (pestaña, acordeón, paginación, colapsar)
                 } else {
                     TipoObjetoMenu tipo = tipo_en_celda(mx, my, celdas_menu_cache);
@@ -2768,13 +2791,8 @@ int main() {
         if (IsKeyPressed(KEY_R)) {
             motor.limpiar();
             contador_bolas = 0;
-            borde_suelo = nullptr;
-            borde_izquierda = nullptr;
-            borde_derecha = nullptr;
-            borde_techo = nullptr;
-            entidad_arrastrada = nullptr;
-            entidad_seleccionada = nullptr;
-            cancelar_colocacion_cuerda();
+            resetear_punteros_borde();
+            limpiar_estado_tras_cargar_partida();
             crear_escena(motor);
         }
 
@@ -2806,6 +2824,8 @@ int main() {
         if (spawn_error_timer > 0.0f) {
             spawn_error_timer -= GetFrameTime();
         }
+
+        actualizar_mensaje_guardado(GetFrameTime());
 
         // ======== RENDER ========
         BeginDrawing();
