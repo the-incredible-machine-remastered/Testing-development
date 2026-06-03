@@ -1212,9 +1212,9 @@ void dibujar_encabezado_categoria(int panel_x, int y, const char* titulo, bool a
 
 
 
-    int tamanio_titulo = 15;
+    int tamanio_titulo = 17;
     Vector2 title_size = MeasureTextEx(fuente_menu, titulo, tamanio_titulo, 1);
-    Vector2 title_pos = {hdr.x + (hdr.width - title_size.x) / 2 - 105, hdr.y + (hdr.height - title_size.y) / 2 -8};
+    Vector2 title_pos = {hdr.x +5+ (hdr.width - title_size.x) / 2 , hdr.y + (hdr.height - title_size.y) / 2 -8};
     DrawTextEx(fuente_menu, titulo, title_pos, tamanio_titulo, 1, MENU_TEXTO);
     
 
@@ -1297,13 +1297,15 @@ void dibujar_menu_lateral() {
     
     // Centrar texto OBJETOS
     Vector2 obj_size = MeasureTextEx(fuente_menu, "OBJETOS", 14, 1);
-    Vector2 obj_pos = {tab_obj.x + (tab_obj.width - obj_size.x) / 2 - 45 , tab_obj.y + (tab_obj.height - obj_size.y) / 2};
-    DrawTextEx(fuente_menu, "OBJETOS", obj_pos, 14, 1, MENU_TEXTO);
+
+    Vector2 obj_pos = {tab_obj.x + (tab_obj.width - obj_size.x) / 2 , tab_obj.y + (tab_obj.height - obj_size.y) / 2};
+    DrawTextEx(fuente_menu, "OBJETOS", obj_pos, 17, 1, MENU_TEXTO);
     
     // Centrar texto DECORACION
     Vector2 dec_size = MeasureTextEx(fuente_menu, "DECORACION", 13, 1);
-    Vector2 dec_pos = {tab_dec.x + (tab_dec.width - dec_size.x) / 2 - 45, tab_dec.y + (tab_dec.height - dec_size.y) / 2};
-    DrawTextEx(fuente_menu, "DECORACION", dec_pos, 13, 1, MENU_TEXTO);
+
+    Vector2 dec_pos = {tab_dec.x + (tab_dec.width - dec_size.x) / 2, tab_dec.y + (tab_dec.height - dec_size.y) / 2};
+    DrawTextEx(fuente_menu, "DECORACION", dec_pos, 17, 1, MENU_TEXTO);
     if (menu_tab == 0)
         DrawRectangle(static_cast<int>(tab_obj.x), static_cast<int>(tab_obj.y + tab_obj.height - 3), tab_w -15, 3, MENU_AZUL);
     else
@@ -2319,20 +2321,21 @@ void dibujar_entidad(const EntidadFisica* e) {
         bool invertido = ramp->get_invertido();
 
         bool texturizado = false;
-        if (!invertido && tex_plata_rampa_izq.id > 0) {
+        if (!invertido && tex_plata_rampa_der.id > 0) {
             DrawTexturePro(
-                tex_plata_rampa_izq,
-                { 0, 0, (float)tex_plata_rampa_izq.width, (float)tex_plata_rampa_izq.height },
+                tex_plata_rampa_der,
+                { 0 , 0, static_cast<float>(tex_plata_rampa_der.width), static_cast<float>(tex_plata_rampa_der.height) },
                 { px, py, pw, ph },
                 { 0, 0 },
                 0.0f,
                 WHITE
             );
             texturizado = true;
-        } else if (invertido && tex_plata_rampa_der.id > 0) {
+        } else if (invertido && tex_plata_rampa_izq.id > 0) {
+            // Usar asset diferente cuando está invertido
             DrawTexturePro(
-                tex_plata_rampa_der,
-                { 0, 0, (float)tex_plata_rampa_der.width, (float)tex_plata_rampa_der.height },
+                tex_plata_rampa_izq,
+                { 0, 0, (float)tex_plata_rampa_izq.width, (float)tex_plata_rampa_izq.height },
                 { px, py, pw, ph },
                 { 0, 0 },
                 0.0f,
@@ -2513,9 +2516,9 @@ void cargandoTexturas() {
         TraceLog(LOG_INFO, "Textura seguidor corriendo cargada: %dx%d", tex_seguidor_corriendo.width, tex_seguidor_corriendo.height);
     }
 
-    tex_seguidor_cabezazo = cargar_textura_datos("Assets/messi/messi-cabezazo.png");
+    tex_seguidor_cabezazo = cargar_textura_datos("Assets/messi/cabezazo2.png");
     if (tex_seguidor_cabezazo.id == 0) {
-        TraceLog(LOG_WARNING, "Textura seguidor cabezazo no encontrada: messi-cabezazo.png");
+        TraceLog(LOG_WARNING, "Textura seguidor cabezazo no encontrada: cabezazo2.png");
     } else {
         TraceLog(LOG_INFO, "Textura seguidor cabezazo cargada: %dx%d", tex_seguidor_cabezazo.width, tex_seguidor_cabezazo.height);
     }
@@ -2561,16 +2564,16 @@ void cargandoTexturas() {
         TraceLog(LOG_INFO, "Textura plataforma peque cargada: %dx%d", tex_plata_peque.width, tex_plata_peque.height);
     }
 
-    tex_plata_rampa_izq = cargar_textura_datos("Assets/plataform/plataforma1.png");
+    tex_plata_rampa_izq = cargar_textura_datos("Assets/plataform/rampa.png");
     if (tex_plata_rampa_izq.id == 0) {
-        TraceLog(LOG_WARNING, "Textura rampa izq no encontrada: plataforma1.png");
+        TraceLog(LOG_WARNING, "Textura rampa izq no encontrada: rampa.png");
     } else {
         TraceLog(LOG_INFO, "Textura rampa izq cargada: %dx%d", tex_plata_rampa_izq.width, tex_plata_rampa_izq.height);
     }
 
-    tex_plata_rampa_der = cargar_textura_datos("Assets/plataform/plataforma2.png");
+    tex_plata_rampa_der = cargar_textura_datos("Assets/plataform/rampa_2.png");
     if (tex_plata_rampa_der.id == 0) {
-        TraceLog(LOG_WARNING, "Textura rampa der no encontrada: plataforma2.png");
+        TraceLog(LOG_WARNING, "Textura rampa der no encontrada: rampa_2.png");
     } else {
         TraceLog(LOG_INFO, "Textura rampa der cargada: %dx%d", tex_plata_rampa_der.width, tex_plata_rampa_der.height);
     }
