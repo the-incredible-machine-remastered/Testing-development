@@ -6,6 +6,7 @@
 
 #include "../core/entidad_fisica.h"
 #include "../core/math_utils.h"
+#include "../core/registro_eventos.h"
 #include "bola.h"
 #include <vector>
 #include <cmath>
@@ -41,6 +42,8 @@ protected:
     double cooldown_cabezazo;
 
 public:
+    std::vector<RegistroEventoEspecial> eventos_pendientes;
+
     SeguidorBooster(int id, Vector2D pos, double w = 24.0, double h = 48.0)
         : EntidadFisica(id, pos, 15.0, TipoForma::AABB, false), // AABB dinámico con masa = 15.0 (pesado)
           posicion_inicial(pos), radio(30.0), ancho(w), alto(h),
@@ -105,6 +108,12 @@ public:
                         cabezazo_activo = true;
                         cabezazo_timer = 0.6;
                         cooldown_cabezazo = 1.0; // Cooldown para evitar disparos sucesivos
+
+                        eventos_pendientes.push_back({
+                            TipoEventoEspecial::CABEZAZO,
+                            this->get_id(),
+                            bola->get_id()
+                        });
 
                         // Retornar a la base tras cabecear
                         velocidad.x = 0.0;
@@ -236,6 +245,12 @@ public:
 
                         // Efecto de patada
                         kicker_factor = 1.0; 
+
+                        eventos_pendientes.push_back({
+                            TipoEventoEspecial::PATADA,
+                            this->get_id(),
+                            bola->get_id()
+                        });
 
                         // Volver a la base
                         velocidad.x = 0.0;

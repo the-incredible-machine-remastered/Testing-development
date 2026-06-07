@@ -15,6 +15,8 @@
 #include "../objetos/cubeta.h"
 #include "../objetos/soporte_torque.h"
 #include "../objetos/cuerda.h"
+#include "../objetos/zona_meta.h"
+#include "eventos.h"
 #include "rutas_datos.h"
 
 #include <algorithm>
@@ -114,7 +116,7 @@ inline void escribir_dinamica(std::ostream& out, const EntidadFisica* e) {
         << " omega=" << e->get_velocidad_angular();
 }
 
-inline bool guardar_partida(const MotorFisica& motor, const std::string& nombre,
+inline bool guardar_partida(const MotorFisica& motor, GestorEventos& gestor, const std::string& nombre,
                             int ancho, int alto, int contador_bolas) {
     std::string carpeta = carpeta_partidas();
     std::error_code ec;
@@ -206,9 +208,19 @@ inline bool guardar_partida(const MotorFisica& motor, const std::string& nombre,
                 if (i > 0) out << ",";
                 out << sops[i];
             }
-            out << "\n";
+        } else if (const auto* zm = dynamic_cast<const ZonaMeta*>(e)) {
+            Vector2D pos = zm->get_posicion();
+            out << "ent ZONA_META id=" << zm->get_id()
+                << " x=" << pos.x << " y=" << pos.y
+                << " w=" << zm->ancho << " h=" << zm->alto << "\n";
         }
     }
+
+    out << "eventos_count " << gestor.eventos.size() << "\n";
+    for (const auto& ev : gestor.eventos) {
+        out << serializar_evento(ev) << "\n";
+    }
+    out << "siguiente_id_evento " << gestor.siguiente_id_evento << "\n";
 
     mensaje_guardado = "Partida guardada: " + sanitizar_nombre_partida(nombre);
     mensaje_guardado_timer = 3.0f;
@@ -316,10 +328,14 @@ inline void instanciar_desde_linea(MotorFisica& motor, const std::string& linea,
             }
         }
         motor.agregar_entidad(new Cuerda(id, a, soportes, b, leer_valor(linea, "len=", 200)));
+    } else if (tipo == "ZONA_META") {
+        motor.agregar_entidad(new ZonaMeta(id,
+            Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+            leer_valor(linea, "w=", 80), leer_valor(linea, "h=", 80)));
     }
 }
 
-inline bool cargar_partida(MotorFisica& motor, const std::string& ruta_archivo,
+inline bool cargar_partida(MotorFisica& motor, GestorEventos& gestor, const std::string& ruta_archivo,
                            int& ancho, int& alto, int& contador_bolas) {
     std::ifstream in(ruta_archivo);
     if (!in) {
@@ -330,6 +346,7 @@ inline bool cargar_partida(MotorFisica& motor, const std::string& ruta_archivo,
 
     resetear_punteros_borde();
     motor.limpiar();
+    gestor.limpiar();
     crear_bordes_nivel(motor);
 
     double gravedad_y = 500.0;
@@ -350,6 +367,11 @@ inline bool cargar_partida(MotorFisica& motor, const std::string& ruta_archivo,
             alto = std::stoi(linea.substr(5));
         } else if (linea.rfind("ent ", 0) == 0) {
             instanciar_desde_linea(motor, linea, max_id);
+        } else if (linea.rfind("evt ", 0) == 0) {
+            EventoJuego ev = deserializar_evento(linea);
+            gestor.eventos.push_back(ev);
+        } else if (linea.rfind("siguiente_id_evento", 0) == 0) {
+            gestor.siguiente_id_evento = std::stoi(linea.substr(20));
         }
     }
 
@@ -443,7 +465,7 @@ inline void dibujar_panel_guardado(int px, int py_base, int ancho_panel, Font fu
     }
 }
 
-inline bool manejar_click_panel_guardado(int mx, int my, MotorFisica& motor,
+inline bool manejar_click_panel_guardado(int mx, int my, MotorFisica& motor, GestorEventos& gestor,
                                          int& ancho, int& alto, int& contador_bolas) {
     Vector2 p_click = {static_cast<float>(mx), static_cast<float>(my)};
 
@@ -459,7 +481,7 @@ inline bool manejar_click_panel_guardado(int mx, int my, MotorFisica& motor,
         for (size_t i = 0; i < partidas_guardadas.size() && i < 4; ++i) {
             Rectangle fila = {rect_btn_ver_partidas.x, ly, rect_btn_ver_partidas.width, 22};
             if (CheckCollisionPointRec(p_click, fila)) {
-                cargar_partida(motor, partidas_guardadas[i].ruta_archivo, ancho, alto, contador_bolas);
+                cargar_partida(motor, gestor, partidas_guardadas[i].ruta_archivo, ancho, alto, contador_bolas);
                 modo_panel_guardado = ModoPanelGuardado::CERRADO;
                 return true;
             }
@@ -484,12 +506,12 @@ inline bool manejar_click_panel_guardado(int mx, int my, MotorFisica& motor,
     return false;
 }
 
-inline void manejar_teclas_panel_guardado(MotorFisica& motor, int& ancho, int& alto,
+inline void manejar_teclas_panel_guardado(MotorFisica& motor, GestorEventos& gestor, int& ancho, int& alto,
                                           int& contador_bolas) {
     if (modo_panel_guardado == ModoPanelGuardado::PEDIR_NOMBRE_GUARDAR) {
         manejar_texto_nombre_partida();
         if (IsKeyPressed(KEY_ENTER) && buffer_nombre_partida[0] != '\0') {
-            guardar_partida(motor, buffer_nombre_partida, ancho, alto, contador_bolas);
+            guardar_partida(motor, gestor, buffer_nombre_partida, ancho, alto, contador_bolas);
             modo_panel_guardado = ModoPanelGuardado::CERRADO;
         }
         if (IsKeyPressed(KEY_ESCAPE)) {

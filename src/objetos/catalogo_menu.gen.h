@@ -20,6 +20,7 @@ enum class TipoObjetoMenu {
     BARRIL_CHAVO,
     SEGUIDOR_BOOSTER,
     VENTILADOR,
+    ZONA_META,
     PLATAFORMA_DECOR,
     COUNT
 };
@@ -47,6 +48,7 @@ static const ItemCatalogo CATALOGO_MENU[] = {
     { TipoObjetoMenu::BARRIL_CHAVO, "Barril", 0, 0, 1, true },
     { TipoObjetoMenu::SEGUIDOR_BOOSTER, "Futbolista", 0, 0, 1, true },
     { TipoObjetoMenu::VENTILADOR, "Ventilador", 0, 0, 1, true },
+    { TipoObjetoMenu::ZONA_META, "Zona Meta", 0, 0, 1, true },
     { TipoObjetoMenu::PLATAFORMA_DECOR, "Ladrillo", 0, 1, 0, true },
 };
 

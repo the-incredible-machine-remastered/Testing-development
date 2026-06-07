@@ -11,6 +11,7 @@
 // ============================================================================
 
 #include "../core/entidad_fisica.h"
+#include "../core/registro_eventos.h"
 #include "../objetos/pared_rectangular.h"
 #include "../objetos/plano_inclinado.h"
 #include "../objetos/bola.h"
@@ -35,6 +36,8 @@ private:
     double acumulador_tiempo;    // Acumula tiempo real para pasos fijos
     bool pausado;
     int siguiente_id;
+    std::vector<RegistroColision> colisiones_frame;
+    std::vector<RegistroEventoEspecial> eventos_especiales_frame;
 
 public:
     MotorFisica(double dt = 1.0 / 120.0, Vector2D grav = Vector2D(0, 500.0))
@@ -83,6 +86,8 @@ public:
     void set_gravedad(const Vector2D& g) { gravedad = g; }
     Vector2D get_gravedad() const { return gravedad; }
     const std::vector<EntidadFisica*>& get_entidades() const { return entidades; }
+    const std::vector<RegistroColision>& get_colisiones_frame() const { return colisiones_frame; }
+    const std::vector<RegistroEventoEspecial>& get_eventos_especiales_frame() const { return eventos_especiales_frame; }
 
     // --- Bucle principal ---
     // Recibe el delta time real (variable) y lo subdivide en pasos fijos.
@@ -168,6 +173,9 @@ private:
     }
 
     void paso_fisico(double dt) {
+        colisiones_frame.clear();
+        eventos_especiales_frame.clear();
+
         // 1. Aplicar fuerzas globales
         aplicar_gravedad();
 
@@ -182,6 +190,12 @@ private:
             auto* seg = dynamic_cast<SeguidorBooster*>(e);
             if (seg) {
                 seg->actualizar_comportamiento(entidades, dt);
+                if (!seg->eventos_pendientes.empty()) {
+                    for (const auto& ev : seg->eventos_pendientes) {
+                        eventos_especiales_frame.push_back(ev);
+                    }
+                    seg->eventos_pendientes.clear();
+                }
             }
         }
  
@@ -230,6 +244,12 @@ private:
                 InfoColision info = detectar_colision(a, b);
                 if (info.hay_colision) {
                     Colisiones::resolver_colision(a, b, info);
+                    
+                    colisiones_frame.push_back({
+                        a->get_id(), b->get_id(),
+                        info.punto_contacto, info.normal, info.profundidad
+                    });
+
                     aplicar_efecto_trampolin(a, b, info);
                     aplicar_efecto_barril(a, b, info);
                     aplicar_efecto_bola_rebotadora(a, b, info);
@@ -373,6 +393,12 @@ private:
                 // Solo disparamos si estaba esperando
                 if (barril->get_estado() == EstadoBarril::ESPERANDO) {
                     barril->disparar_chavo();
+                    
+                    eventos_especiales_frame.push_back({
+                        TipoEventoEspecial::BARRIL_LANZADO,
+                        barril->get_id(),
+                        bola->get_id()
+                    });
                     
                     // Lanzar la bola a 75 grados hacia arriba
                     // En coordenadas de pantalla Y es hacia abajo, por lo que "arriba" es -Y

@@ -34,6 +34,8 @@
 #include "fisica/motor_fisica.h"
 #include "objetos/catalogo_menu.gen.h"
 #include "sistema/rutas_datos.h"
+#include "sistema/eventos.h"
+#include "sistema/eventos_ui.h"
 #include "sistema/guardado_partida.h"
 
 #include <cmath>
@@ -81,6 +83,7 @@ const Color COLOR_CONTROLES   = {130, 130, 160, 200};   // Texto controles
 // Estado del prototipo
 bool modo_debug = false;
 int contador_bolas = 0;
+GestorEventos gestor_eventos;
 
 // Feedback visual de spawn fallido
 float spawn_error_timer = 0.0f;
@@ -852,6 +855,11 @@ bool crear_barril_chavo(MotorFisica& motor, Vector2D pos);
 bool crear_cubeta(MotorFisica& motor, Vector2D pos);
 bool crear_soporte_torque(MotorFisica& motor, Vector2D pos);
 
+bool crear_zona_meta(MotorFisica& motor, Vector2D pos) {
+    motor.agregar_entidad(new ZonaMeta(motor.generar_id(), pos, 80.0, 80.0));
+    return true;
+}
+
 bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
     switch (tipo) {
         case TipoObjetoMenu::BOLA:              return crear_bola(motor, pos);
@@ -867,6 +875,7 @@ bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
         case TipoObjetoMenu::VENTILADOR:        return crear_ventilador(motor, pos);
         case TipoObjetoMenu::CUBETA:            return crear_cubeta(motor, pos);
         case TipoObjetoMenu::SOPORTE_TORQUE:    return crear_soporte_torque(motor, pos);
+        case TipoObjetoMenu::ZONA_META:         return crear_zona_meta(motor, pos);
         case TipoObjetoMenu::CUERDA:            return false;
         default: return false;
     }
@@ -1372,7 +1381,7 @@ void dibujar_menu_lateral() {
 }
 
 bool manejar_click_menu(int mx, int my, MotorFisica& motor) {
-    if (manejar_click_panel_guardado(mx, my, motor, ANCHO, ALTO, contador_bolas)) {
+    if (manejar_click_panel_guardado(mx, my, motor, gestor_eventos, ANCHO, ALTO, contador_bolas)) {
         return true;
     }
 
@@ -1687,6 +1696,12 @@ void dibuja_seguidor_geometrico(Vector2D pos, float w, float h, float draw_y,
 // Renderizado de entidades
 // ============================================================================
 void dibujar_entidad(const EntidadFisica* e) {
+    if (const auto* zm = dynamic_cast<const ZonaMeta*>(e)) {
+        Vector2D min_p = zm->get_posicion() - Vector2D(zm->ancho / 2.0, zm->alto / 2.0);
+        DrawRectangle(min_p.x, min_p.y, zm->ancho, zm->alto, zm->color_editor);
+        DrawRectangleLines(min_p.x, min_p.y, zm->ancho, zm->alto, GREEN);
+        return;
+    }
     const SoporteTorque* soporte = dynamic_cast<const SoporteTorque*>(e);
     if (soporte) {
         Vector2D pos = soporte->get_punto_cuerda();
@@ -2678,11 +2693,13 @@ int main() {
             cancelar_colocacion_cuerda();
         }
 
-        manejar_teclas_panel_guardado(motor, ANCHO, ALTO, contador_bolas);
+        manejar_teclas_panel_guardado(motor, gestor_eventos, ANCHO, ALTO, contador_bolas);
 
         // Click izquierdo: menú, spawn drag, o arrastre de entidad en canvas
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            if (punto_en_menu(mx, my)) {
+            if (mx < 260) {
+                // Click en panel eventos izquierdo manejado in dibujar_panel_eventos_izquierdo
+            } else if (punto_en_menu(mx, my)) {
                 if (manejar_click_menu(mx, my, motor)) {
                     // UI consumió el click (pestaña, acordeón, paginación, colapsar)
                 } else {
@@ -2707,6 +2724,9 @@ int main() {
                 } else {
                 EntidadFisica* clicked = obtener_entidad_bajo_mouse(motor, mouse_pos);
                 if (clicked) {
+                    if (manejar_click_evento_ui(gestor_eventos, clicked)) {
+                        continue; // Click consumido por la creación de evento
+                    }
                     entidad_arrastrada = clicked;
                     entidad_seleccionada = clicked;  // Seleccionar al hacer click
                     offset_arrastre = clicked->get_posicion() - mouse_pos;
@@ -2797,6 +2817,8 @@ int main() {
             resetear_punteros_borde();
             limpiar_estado_tras_cargar_partida();
             crear_escena(motor);
+            gestor_eventos.limpiar();
+            modo_evento_ui = ModoEventoUI::INACTIVO;
         }
 
         // +/-: ajustar gravedad
@@ -2811,6 +2833,7 @@ int main() {
 
         // ======== UPDATE ========
         motor.actualizar(GetFrameTime());
+        gestor_eventos.evaluar(motor.get_colisiones_frame(), motor.get_eventos_especiales_frame(), motor.get_entidades(), GetFrameTime());
 
         // Actualizar animaciones del SeguidorBooster
         if (anim_seguidor_corriendo) {
@@ -2984,10 +3007,20 @@ int main() {
 
         dibujar_ghost_spawn();
 
-        // HUD
-        dibujar_hud(motor);
+        // Menú Lateral Izquierdo
+        dibujar_panel_eventos_izquierdo(motor, gestor_eventos, ALTO);
 
-        dibujar_menu_lateral();
+        // Menú Lateral Derecho
+        dibujar_menu();
+
+        // Victory Screen
+        if (gestor_eventos.victoria_alcanzada) {
+            DrawRectangle(0, 0, ANCHO, ALTO, ColorAlpha(BLACK, 0.7f));
+            DrawText("VICTORIA!", ANCHO/2 - 100, ALTO/2 - 40, 40, GREEN);
+            DrawText("Presiona R para reiniciar el nivel", ANCHO/2 - 160, ALTO/2 + 20, 20, WHITE);
+        }
+
+        EndDrawing();
 
         // Splash de título (desaparece gradualmente)
         if (titulo_alpha > 0.01f) {
