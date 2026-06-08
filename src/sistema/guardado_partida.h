@@ -221,6 +221,7 @@ inline bool guardar_partida(const MotorFisica& motor, GestorEventos& gestor, con
         out << serializar_evento(ev) << "\n";
     }
     out << "siguiente_id_evento " << gestor.siguiente_id_evento << "\n";
+    out << "logica_victoria " << (gestor.logica_victoria == TipoLogicaVictoria::TODAS ? "TODAS" : "CUALQUIERA") << "\n";
 
     mensaje_guardado = "Partida guardada: " + sanitizar_nombre_partida(nombre);
     mensaje_guardado_timer = 3.0f;
@@ -372,6 +373,12 @@ inline bool cargar_partida(MotorFisica& motor, GestorEventos& gestor, const std:
             gestor.eventos.push_back(ev);
         } else if (linea.rfind("siguiente_id_evento", 0) == 0) {
             gestor.siguiente_id_evento = std::stoi(linea.substr(20));
+        } else if (linea.rfind("logica_victoria", 0) == 0) {
+            if (linea.find("TODAS") != std::string::npos) {
+                gestor.logica_victoria = TipoLogicaVictoria::TODAS;
+            } else {
+                gestor.logica_victoria = TipoLogicaVictoria::CUALQUIERA;
+            }
         }
     }
 

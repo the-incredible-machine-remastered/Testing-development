@@ -147,9 +147,15 @@ struct EventoJuego {
     bool una_sola_vez = true;
 };
 
+enum class TipoLogicaVictoria {
+    CUALQUIERA,
+    TODAS
+};
+
 class GestorEventos {
 public:
     std::vector<EventoJuego> eventos;
+    TipoLogicaVictoria logica_victoria = TipoLogicaVictoria::CUALQUIERA;
     bool victoria_alcanzada = false;
     float timer_victoria = 0.0f;
     int siguiente_id_evento = 1;
@@ -194,16 +200,33 @@ public:
             return;
         }
 
+        if (eventos.empty()) return;
+
+        bool todos_cumplidos = true;
+        bool alguno_cumplido_nuevo = false;
+
         for (auto& ev : eventos) {
-            if (ev.disparado && ev.una_sola_vez) continue;
+            if (!ev.disparado || !ev.una_sola_vez) {
+                bool cumplida = evaluar_condicion(
+                    ev.condicion, colisiones, eventos_especiales, entidades
+                );
+                if (cumplida) {
+                    ev.disparado = true;
+                    alguno_cumplido_nuevo = true;
+                }
+            }
+            if (!ev.disparado) {
+                todos_cumplidos = false;
+            }
+        }
 
-            bool cumplida = evaluar_condicion(
-                ev.condicion, colisiones, eventos_especiales, entidades
-            );
-
-            if (cumplida) {
-                ev.disparado = true;
-                ejecutar_accion(ev.accion);
+        if (logica_victoria == TipoLogicaVictoria::CUALQUIERA) {
+            if (alguno_cumplido_nuevo) {
+                ejecutar_accion(AccionEvento{TipoAccion::VICTORIA});
+            }
+        } else if (logica_victoria == TipoLogicaVictoria::TODAS) {
+            if (todos_cumplidos) {
+                ejecutar_accion(AccionEvento{TipoAccion::VICTORIA});
             }
         }
     }
@@ -302,13 +325,11 @@ private:
 
     bool verificar_en_zona(ZonaMeta* zona, EntidadFisica* ent) {
         if (auto* bola = dynamic_cast<Bola*>(ent)) {
-            return zona->intersecta_circulo(bola->get_posicion(), bola->radio);
-        }
-        if (auto* br = dynamic_cast<BolaRebotadora*>(ent)) {
-            return zona->intersecta_circulo(br->get_posicion(), br->radio);
-        }
-        if (auto* cub = dynamic_cast<Cubeta*>(ent)) {
-            return zona->intersecta_aabb(cub->get_posicion(), cub->ancho, cub->alto);
+            return zona->intersecta_circulo(bola->get_posicion(), bola->get_radio());
+        } else if (auto* br = dynamic_cast<BolaRebotadora*>(ent)) {
+            return zona->intersecta_circulo(br->get_posicion(), br->get_radio());
+        } else if (auto* cub = dynamic_cast<Cubeta*>(ent)) {
+            return zona->intersecta_aabb(cub->get_posicion(), cub->get_ancho(), cub->get_alto());
         }
         return zona->contiene_punto(ent->get_posicion());
     }

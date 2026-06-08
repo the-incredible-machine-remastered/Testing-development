@@ -497,12 +497,46 @@ EntidadFisica* obtener_entidad_bajo_mouse(const MotorFisica& motor, Vector2D mou
                 }
             }
         }
+        else if (forma == TipoForma::NINGUNA) {
+            const ZonaMeta* zm = dynamic_cast<const ZonaMeta*>(e);
+            if (zm) {
+                Vector2D pos = zm->get_posicion();
+                double w = zm->ancho;
+                double h = zm->alto;
+                // posicion es el CENTRO de la zona meta
+                if (mouse_pos.x >= pos.x - w / 2.0 - 15 && mouse_pos.x <= pos.x + w / 2.0 + 15 &&
+                    mouse_pos.y >= pos.y - h / 2.0 - 15 && mouse_pos.y <= pos.y + h / 2.0 + 15) {
+                    return const_cast<ZonaMeta*>(zm);
+                }
+            }
+            const SoporteTorque* st = dynamic_cast<const SoporteTorque*>(e);
+            if (st) {
+                Vector2D pos = st->get_punto_cuerda();
+                double r = st->get_radio();
+                double dist = (pos - mouse_pos).magnitud();
+                if (dist < r + 15.0) {
+                    return const_cast<SoporteTorque*>(st);
+                }
+            }
+        }
         else if (forma == TipoForma::POLIGONO) {
             const Balancin* bal = dynamic_cast<const Balancin*>(e);
             if (bal) {
-                // Pivot central del balancín
-                double dist = (bal->get_posicion() - mouse_pos).magnitud();
-                if (dist < 45.0) {
+                Vector2D pos = bal->get_posicion();
+                double ang = bal->get_angulo();
+                double half_l = bal->get_largo() / 2.0;
+                Vector2D dir(std::cos(ang), std::sin(ang));
+                Vector2D A = pos - dir * half_l;
+                Vector2D B = pos + dir * half_l;
+                
+                Vector2D v = B - A;
+                Vector2D w = mouse_pos - A;
+                double dot = w.x * v.x + w.y * v.y;
+                double len_sq = v.x * v.x + v.y * v.y;
+                double t = (len_sq > 0.0) ? std::max(0.0, std::min(1.0, dot / len_sq)) : 0.0;
+                Vector2D C = A + v * t;
+                double dist = (mouse_pos - C).magnitud();
+                if (dist < bal->get_espesor() / 2.0 + 15.0) {
                     return const_cast<Balancin*>(bal);
                 }
             }
@@ -552,10 +586,13 @@ void actualizar_bordes_nivel() {
 }
 
 void sincronizar_tamano_ventana() {
-    if (!IsWindowResized()) return;
-    ANCHO = GetScreenWidth();
-    ALTO = GetScreenHeight();
-    actualizar_bordes_nivel();
+    int current_w = GetScreenWidth();
+    int current_h = GetScreenHeight();
+    if (current_w != ANCHO || current_h != ALTO) {
+        ANCHO = current_w;
+        ALTO = current_h;
+        actualizar_bordes_nivel();
+    }
 }
 
 void resetear_punteros_borde() {
@@ -593,34 +630,6 @@ void crear_bordes_nivel(MotorFisica& motor) {
 
 void crear_escena(MotorFisica& motor) {
     crear_bordes_nivel(motor);
-
-    // ---- Plataformas ----
-    motor.agregar_entidad(new ParedRectangular(
-        motor.generar_id(), Vector2D(80, 320), 220, 15));               // Plataforma superior izq
-    motor.agregar_entidad(new ParedRectangular(
-        motor.generar_id(), Vector2D(550, 260), 230, 15));              // Plataforma superior der
-    motor.agregar_entidad(new ParedRectangular(
-        motor.generar_id(), Vector2D(350, 550), 200, 15));              // Plataforma inferior centro
-
-    motor.agregar_entidad(new ParedRectangular(
-        motor.generar_id(), Vector2D(20, ALTO - 150), 1900, 10));      // Sidebar inferior
-    // ---- Rampas ----
-    // Rampa \ (pendiente de arriba-izq a abajo-der)
-    // Conecta visualmente con la plataforma superior izquierda
-    motor.agregar_entidad(new PlanoInclinado(
-        motor.generar_id(), Vector2D(300, 320), 200, 200, false));
-
-    // Rampa / (pendiente de abajo-izq a arriba-der) 
-    motor.agregar_entidad(new PlanoInclinado(
-        motor.generar_id(), Vector2D(700, 280), 200, 200, true));
-
-    // ---- Barril Chavo inicial ----
-    motor.agregar_entidad(new BarrilChavo(
-        motor.generar_id(), Vector2D(420, 470), 90.0, 120.0));
-
-    // ---- Bola Rebotadora inicial ----
-    motor.agregar_entidad(new BolaRebotadora(
-        motor.generar_id(), Vector2D(640, 470), 48.0));
 }
 
 // ============================================================================
@@ -2654,6 +2663,8 @@ int main() {
     // ---- Inicializar ventana ----
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
     InitWindow(ANCHO, ALTO, "TIM - Motor de Fisica | Prototipo RK4 + Raylib");
+    ANCHO = GetScreenWidth();
+    ALTO = GetScreenHeight();
     SetWindowMinSize(ANCHO_MIN, ALTO_MIN);
     SetTargetFPS(60);
     cargandoTexturas();
@@ -2724,12 +2735,11 @@ int main() {
                 } else {
                 EntidadFisica* clicked = obtener_entidad_bajo_mouse(motor, mouse_pos);
                 if (clicked) {
-                    if (manejar_click_evento_ui(gestor_eventos, clicked)) {
-                        continue; // Click consumido por la creación de evento
+                    if (!manejar_click_evento_ui(gestor_eventos, clicked)) {
+                        entidad_arrastrada = clicked;
+                        entidad_seleccionada = clicked;  // Seleccionar al hacer click
+                        offset_arrastre = clicked->get_posicion() - mouse_pos;
                     }
-                    entidad_arrastrada = clicked;
-                    entidad_seleccionada = clicked;  // Seleccionar al hacer click
-                    offset_arrastre = clicked->get_posicion() - mouse_pos;
                 } else {
                     entidad_seleccionada = nullptr;  // Deseleccionar al hacer click en vacío
                 }
@@ -3011,7 +3021,7 @@ int main() {
         dibujar_panel_eventos_izquierdo(motor, gestor_eventos, ALTO);
 
         // Menú Lateral Derecho
-        dibujar_menu();
+        dibujar_menu_lateral();
 
         // Victory Screen
         if (gestor_eventos.victoria_alcanzada) {

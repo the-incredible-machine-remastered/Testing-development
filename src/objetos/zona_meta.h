@@ -13,7 +13,7 @@ public:
     Color color_editor = {0, 255, 100, 80};
 
     ZonaMeta(int id, Vector2D pos, double w = 80, double h = 80)
-        : EntidadFisica(id, pos, 0.0, true), ancho(w), alto(h)
+        : EntidadFisica(id, pos, 0.0, TipoForma::NINGUNA, true), ancho(w), alto(h)
     {
         tipo_forma = TipoForma::NINGUNA; // Sin colision fisica
         es_estatico = true;

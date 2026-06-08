@@ -39,6 +39,7 @@ inline void dibujar_panel_eventos_izquierdo(const MotorFisica& motor, GestorEven
             DrawText("X", btn_del.x + 6, btn_del.y + 4, 10, WHITE);
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), btn_del)) {
                 gestor.remover_evento(ev.id);
+                break;
             }
             py += 25;
         }
@@ -49,6 +50,18 @@ inline void dibujar_panel_eventos_izquierdo(const MotorFisica& motor, GestorEven
         DrawText("NUEVO EVENTO", btn_nuevo.x + 40, btn_nuevo.y + 10, 12, WHITE);
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), btn_nuevo)) {
             modo_evento_ui = ModoEventoUI::SELECCIONAR_TIPO;
+        }
+
+        py += 40;
+        Rectangle btn_logica = { (float)px + 20, (float)py, (float)w - 40, 30 };
+        DrawRectangleRec(btn_logica, Color{100, 100, 120, 255});
+        if (gestor.logica_victoria == TipoLogicaVictoria::CUALQUIERA) {
+            DrawText("LOGICA: CUALQUIERA (OR)", btn_logica.x + 10, btn_logica.y + 10, 12, WHITE);
+        } else {
+            DrawText("LOGICA: TODAS (AND)", btn_logica.x + 25, btn_logica.y + 10, 12, WHITE);
+        }
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), btn_logica)) {
+            gestor.logica_victoria = (gestor.logica_victoria == TipoLogicaVictoria::CUALQUIERA) ? TipoLogicaVictoria::TODAS : TipoLogicaVictoria::CUALQUIERA;
         }
     } else if (modo_evento_ui == ModoEventoUI::SELECCIONAR_TIPO) {
         DrawText("Seleccionar Tipo:", px + 10, py, 14, DARKGRAY);
