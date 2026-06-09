@@ -476,17 +476,32 @@ inline bool manejar_click_panel_guardado(int mx, int my, MotorFisica& motor, Ges
                                          int& ancho, int& alto, int& contador_bolas) {
     Vector2 p_click = {static_cast<float>(mx), static_cast<float>(my)};
 
+    // Calcular las mismas dimensiones de panel y botones que en dibujar_panel_guardado
+    int px = ancho - 300; // MENU_ANCHO = 300
+    int py_base = alto - 50 - 180 - 215; // MENU_PAGINACION_ALTO = 50, MENU_PAGINACION_ALTO - 180 - 215
+    const int alto_panel = 200;
+    Rectangle panel = {static_cast<float>(px + 8), static_cast<float>(py_base),
+                       static_cast<float>(300 - 16), static_cast<float>(alto_panel)};
+    
+    Rectangle btn_guardar = {panel.x + 10, panel.y + 10, panel.width - 20, 32};
+    Rectangle btn_ver = {panel.x + 10, panel.y + 50, panel.width - 20, 32};
+
+    // Sincronizar variables globales por consistencia
+    rect_panel_guardado = panel;
+    rect_btn_guardar_partida = btn_guardar;
+    rect_btn_ver_partidas = btn_ver;
+
     if (modo_panel_guardado == ModoPanelGuardado::PEDIR_NOMBRE_GUARDAR) {
-        if (CheckCollisionPointRec(p_click, rect_panel_guardado)) {
+        if (CheckCollisionPointRec(p_click, panel)) {
             return true;
         }
         return false;
     }
 
     if (modo_panel_guardado == ModoPanelGuardado::LISTA_PARTIDAS) {
-        float ly = rect_btn_ver_partidas.y + 62;
+        float ly = btn_ver.y + 62;
         for (size_t i = 0; i < partidas_guardadas.size() && i < 4; ++i) {
-            Rectangle fila = {rect_btn_ver_partidas.x, ly, rect_btn_ver_partidas.width, 22};
+            Rectangle fila = {btn_ver.x, ly, btn_ver.width, 22};
             if (CheckCollisionPointRec(p_click, fila)) {
                 cargar_partida(motor, gestor, partidas_guardadas[i].ruta_archivo, ancho, alto, contador_bolas);
                 modo_panel_guardado = ModoPanelGuardado::CERRADO;
@@ -494,17 +509,20 @@ inline bool manejar_click_panel_guardado(int mx, int my, MotorFisica& motor, Ges
             }
             ly += 24;
         }
+        if (CheckCollisionPointRec(p_click, panel)) {
+            return true; // Consumir click para que no actúe sobre el canvas
+        }
         return false;
     }
 
     if (modo_panel_guardado != ModoPanelGuardado::CERRADO) return false;
 
-    if (CheckCollisionPointRec(p_click, rect_btn_guardar_partida)) {
+    if (CheckCollisionPointRec(p_click, btn_guardar)) {
         buffer_nombre_partida[0] = '\0';
         modo_panel_guardado = ModoPanelGuardado::PEDIR_NOMBRE_GUARDAR;
         return true;
     }
-    if (CheckCollisionPointRec(p_click, rect_btn_ver_partidas)) {
+    if (CheckCollisionPointRec(p_click, btn_ver)) {
         refrescar_lista_partidas();
         indice_partida_lista = -1;
         modo_panel_guardado = ModoPanelGuardado::LISTA_PARTIDAS;

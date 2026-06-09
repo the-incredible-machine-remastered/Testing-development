@@ -153,7 +153,7 @@ const EntidadFisica* buscar_entidad_por_id(const MotorFisica& motor, int id) {
 
 bool detectar_anclaje_cuerda(const MotorFisica& motor, Vector2D mouse_pos,
                              AnclajeCuerda& out, Vector2D& punto_out) {
-    const double radio_hit = 18.0;
+    const double radio_hit = 30.0;
     double mejor_dist2 = radio_hit * radio_hit;
     bool encontrado = false;
 
@@ -200,7 +200,7 @@ bool detectar_anclaje_cuerda(const MotorFisica& motor, Vector2D mouse_pos,
 
 bool detectar_soporte_torque(const MotorFisica& motor, Vector2D mouse_pos,
                              int& soporte_id_out, Vector2D& punto_out) {
-    const double radio_extra = 8.0;
+    const double radio_extra = 16.0;
     for (const auto* e : motor.get_entidades()) {
         const SoporteTorque* soporte = dynamic_cast<const SoporteTorque*>(e);
         if (!soporte) continue;
@@ -260,8 +260,6 @@ bool manejar_click_colocacion_cuerda(MotorFisica& motor, Vector2D mouse_pos) {
             cuerda_extremo_a = anclaje;
             cuerda_punto_a_preview = punto;
             estado_cuerda = EstadoColocacionCuerda::ESPERANDO_SOPORTE;
-        } else {
-            cancelar_colocacion_cuerda();
         }
         return true;
     }
@@ -273,8 +271,24 @@ bool manejar_click_colocacion_cuerda(MotorFisica& motor, Vector2D mouse_pos) {
             cuerda_soportes_id.push_back(soporte_id);
             cuerda_soportes_preview.push_back(punto_soporte);
             estado_cuerda = EstadoColocacionCuerda::ESPERANDO_EXTREMO_B;
-        } else {
+            return true;
+        }
+
+        AnclajeCuerda extremo_b;
+        Vector2D punto_b;
+        if (detectar_anclaje_cuerda(motor, mouse_pos, extremo_b, punto_b)) {
+            if (extremo_b.entidad_id == cuerda_extremo_a.entidad_id && extremo_b.tipo == cuerda_extremo_a.tipo) {
+                return true; // Evitar anclar al mismo punto
+            }
+            const EntidadFisica* ent_a = buscar_entidad_por_id(motor, cuerda_extremo_a.entidad_id);
+            if (ent_a) {
+                Vector2D punto_a = posicion_anclaje_cuerda(ent_a, cuerda_extremo_a.tipo);
+                double longitud = calcular_longitud_ruta_cuerda(punto_a, cuerda_soportes_preview, punto_b);
+                motor.agregar_entidad(new Cuerda(
+                    motor.generar_id(), cuerda_extremo_a, cuerda_soportes_id, extremo_b, longitud));
+            }
             cancelar_colocacion_cuerda();
+            return true;
         }
         return true;
     }
@@ -292,22 +306,20 @@ bool manejar_click_colocacion_cuerda(MotorFisica& motor, Vector2D mouse_pos) {
 
         AnclajeCuerda extremo_b;
         Vector2D punto_b;
-        if (!detectar_anclaje_cuerda(motor, mouse_pos, extremo_b, punto_b)) {
+        if (detectar_anclaje_cuerda(motor, mouse_pos, extremo_b, punto_b)) {
+            if (extremo_b.entidad_id == cuerda_extremo_a.entidad_id && extremo_b.tipo == cuerda_extremo_a.tipo) {
+                return true; // Evitar anclar al mismo punto
+            }
+            const EntidadFisica* ent_a = buscar_entidad_por_id(motor, cuerda_extremo_a.entidad_id);
+            if (ent_a) {
+                Vector2D punto_a = posicion_anclaje_cuerda(ent_a, cuerda_extremo_a.tipo);
+                double longitud = calcular_longitud_ruta_cuerda(punto_a, cuerda_soportes_preview, punto_b);
+                motor.agregar_entidad(new Cuerda(
+                    motor.generar_id(), cuerda_extremo_a, cuerda_soportes_id, extremo_b, longitud));
+            }
             cancelar_colocacion_cuerda();
             return true;
         }
-
-        const EntidadFisica* ent_a = buscar_entidad_por_id(motor, cuerda_extremo_a.entidad_id);
-        if (!ent_a) {
-            cancelar_colocacion_cuerda();
-            return true;
-        }
-
-        Vector2D punto_a = posicion_anclaje_cuerda(ent_a, cuerda_extremo_a.tipo);
-        double longitud = calcular_longitud_ruta_cuerda(punto_a, cuerda_soportes_preview, punto_b);
-        motor.agregar_entidad(new Cuerda(
-            motor.generar_id(), cuerda_extremo_a, cuerda_soportes_id, extremo_b, longitud));
-        cancelar_colocacion_cuerda();
         return true;
     }
 
@@ -381,7 +393,7 @@ int ancho_area_juego() {
 bool punto_en_menu(int mx, int my) {
     // Siempre incluir el área del botón de abrir/cerrar
     int px = ANCHO - MENU_ANCHO;
-    int bx = px - 28;
+    int bx = menu_visible ? (px - 28) : (ANCHO - 26);
     
     // Área del botón de abrir/cerrar
     if (mx >= bx && mx < bx + 24 && my >= ALTO / 2 - 40 && my < ALTO / 2 + 40) {
@@ -1217,15 +1229,21 @@ void dibujar_encabezado_categoria(int panel_x, int y, const char* titulo, bool a
         static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN)-25,
         static_cast<float>(MENU_CATEGORIA_ALTO)
     };
+    
+    Vector2 mouse = GetMousePosition();
+    bool hover = CheckCollisionPointRec(mouse, hdr);
+    Color tint_color = hover ? Color{230, 235, 245, 255} : WHITE;
+    Color fallback_color = hover ? Color{165, 170, 182, 255} : MENU_FONDO_OSCURO;
+
     // Dibujar asset de encabezado si está cargado
     if (tex_barra_encabezado.id > 0) {
         DrawTexturePro(tex_barra_encabezado, 
                       {0, 0, (float)tex_barra_encabezado.width, (float)tex_barra_encabezado.height},
                       hdr,
-                      {0, 0}, 0.0f, WHITE);
+                      {0, 0}, 0.0f, tint_color);
     } else {
         // Fallback si no se carga la textura
-        DrawRectangleRounded(hdr, 0.06f, 4, MENU_FONDO_OSCURO);
+        DrawRectangleRounded(hdr, 0.06f, 4, fallback_color);
     }
 
 
@@ -1282,11 +1300,13 @@ void reconstruir_celdas_menu() {
 }
 
 void dibujar_menu_lateral() {
+    Vector2 mouse = GetMousePosition();
     if (!menu_visible) {
         int bx = ANCHO - 26;
-        DrawRectangle(bx, ALTO / 2 - 40, 24, 80, MENU_FONDO_OSCURO);
+        bool hover = CheckCollisionPointRec(mouse, Rectangle{static_cast<float>(bx), static_cast<float>(ALTO / 2 - 40), 24, 80});
+        DrawRectangle(bx, ALTO / 2 - 40, 24, 80, hover ? Color{165, 170, 182, 255} : MENU_FONDO_OSCURO);
         DrawRectangleLines(bx, ALTO / 2 - 40, 24, 80, MENU_BORDE);
-        DrawText("<", bx + 7, ALTO / 2 - 8, 18, MENU_AZUL);
+        DrawText("<", bx + 7, ALTO / 2 - 8, 18, hover ? MENU_AZUL_CLARO : MENU_AZUL);
         return;
     }
 
@@ -1310,8 +1330,11 @@ void dibujar_menu_lateral() {
                           static_cast<float>(tab_w)-15, static_cast<float>(MENU_PESTANA_ALTO - 8) };
     Rectangle tab_dec = { tab_obj.x + tab_w, tab_obj.y, tab_obj.width, tab_obj.height };
 
-    DrawRectangleRec(tab_obj, menu_tab == 0 ? WHITE : ColorAlpha(WHITE, 0.4f));
-    DrawRectangleRec(tab_dec, menu_tab == 1 ? WHITE : ColorAlpha(WHITE, 0.4f));
+    bool hover_obj = CheckCollisionPointRec(mouse, tab_obj);
+    bool hover_dec = CheckCollisionPointRec(mouse, tab_dec);
+
+    DrawRectangleRec(tab_obj, menu_tab == 0 ? WHITE : (hover_obj ? ColorAlpha(WHITE, 0.7f) : ColorAlpha(WHITE, 0.4f)));
+    DrawRectangleRec(tab_dec, menu_tab == 1 ? WHITE : (hover_dec ? ColorAlpha(WHITE, 0.7f) : ColorAlpha(WHITE, 0.4f)));
     
     // Centrar texto OBJETOS
     Vector2 obj_size = MeasureTextEx(fuente_menu, "OBJETOS", 14, 1);
@@ -1331,9 +1354,10 @@ void dibujar_menu_lateral() {
 
     // Botón cerrar a la izquierda del menú
     int bx = px - 28;
-    DrawRectangle(bx, ALTO / 2 - 40, 24, 80, MENU_FONDO_OSCURO);
+    bool hover_cerrar = CheckCollisionPointRec(mouse, Rectangle{static_cast<float>(bx), static_cast<float>(ALTO / 2 - 40), 24, 80});
+    DrawRectangle(bx, ALTO / 2 - 40, 24, 80, hover_cerrar ? Color{165, 170, 182, 255} : MENU_FONDO_OSCURO);
     DrawRectangleLines(bx, ALTO / 2 - 40, 24, 80, MENU_BORDE);
-    DrawText(">", bx + 7, ALTO / 2 - 8, 18, MENU_AZUL);
+    DrawText(">", bx + 7, ALTO / 2 - 8, 18, hover_cerrar ? MENU_AZUL_CLARO : MENU_AZUL);
 
     int y = MENU_PESTANA_ALTO + 36;
     int hdr_h = 0;
@@ -1353,10 +1377,9 @@ void dibujar_menu_lateral() {
     }
 
     reconstruir_celdas_menu();
-    Vector2 mouse = GetMousePosition();
     for (const auto& c : celdas_menu_cache) {
-        bool hot = (arrastrando_spawn == c.tipo &&
-            CheckCollisionPointRec(mouse, c.rect));
+        bool hover_cell = CheckCollisionPointRec(mouse, c.rect);
+        bool hot = hover_cell || (arrastrando_spawn == c.tipo);
         dibujar_celda_menu(c, hot);
     }
 
@@ -1387,6 +1410,52 @@ void dibujar_menu_lateral() {
         {static_cast<float>(px + MENU_ANCHO - MENU_MARGEN - flecha_w), static_cast<float>(py), static_cast<float>(flecha_w), static_cast<float>(flecha_h)},
         0.15f, 4, hover_next ? Color{110, 125, 145, 230} : Color{80, 90, 105, 180});
     DrawText(">", px + MENU_ANCHO - MENU_MARGEN - flecha_w / 2 - 6, py + flecha_h / 2 - 9, 20, hover_next ? MENU_AZUL_CLARO : MENU_AZUL);
+
+    // ==================== RENDERING DE DEBUG DE HITBOXES ====================
+    if (modo_debug) {
+        // Pestañas (Rojo)
+        DrawRectangleLinesEx(tab_obj, 1.5f, RED);
+        DrawRectangleLinesEx(tab_dec, 1.5f, RED);
+
+        // Botón de cerrar
+        DrawRectangleLinesEx(Rectangle{static_cast<float>(bx), static_cast<float>(ALTO / 2 - 40), 24, 80}, 1.5f, RED);
+
+        // Categorías
+        int y_debug = MENU_PESTANA_ALTO + 36;
+        if (menu_tab == 0) {
+            Rectangle h1 = { static_cast<float>(px + MENU_MARGEN) + 10, static_cast<float>(y_debug),
+                static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN) - 25, static_cast<float>(MENU_CATEGORIA_ALTO) };
+            DrawRectangleLinesEx(h1, 1.5f, RED);
+            y_debug += MENU_CATEGORIA_ALTO + 4;
+            if (cat_mecanicas_abierta) {
+                std::vector<RectCeldaMenu> temp_celdas;
+                layout_celdas_categoria(px, y_debug, 0, temp_celdas);
+                int filas = (static_cast<int>(temp_celdas.size()) + MENU_COLS - 1) / MENU_COLS;
+                y_debug += filas * (MENU_CELDA + 6) + 8;
+            }
+            Rectangle h2 = { static_cast<float>(px + MENU_MARGEN) + 10, static_cast<float>(y_debug),
+                static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN) - 25, static_cast<float>(MENU_CATEGORIA_ALTO) };
+            DrawRectangleLinesEx(h2, 1.5f, RED);
+        } else {
+            Rectangle h1 = { static_cast<float>(px + MENU_MARGEN) + 10, static_cast<float>(y_debug),
+                static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN) - 25, static_cast<float>(MENU_CATEGORIA_ALTO) };
+            DrawRectangleLinesEx(h1, 1.5f, RED);
+        }
+
+        // Celdas de items (Verde)
+        for (const auto& c : celdas_menu_cache) {
+            DrawRectangleLinesEx(c.rect, 1.5f, GREEN);
+        }
+
+        // Botones de página (Rojo)
+        DrawRectangleLinesEx(Rectangle{static_cast<float>(px + MENU_MARGEN), static_cast<float>(py), static_cast<float>(flecha_w), static_cast<float>(flecha_h)}, 1.5f, RED);
+        DrawRectangleLinesEx(Rectangle{static_cast<float>(px + MENU_ANCHO - MENU_MARGEN - flecha_w), static_cast<float>(py), static_cast<float>(flecha_w), static_cast<float>(flecha_h)}, 1.5f, RED);
+
+        // Panel de guardado y sus botones (Rojo)
+        DrawRectangleLinesEx(rect_panel_guardado, 2.0f, RED);
+        DrawRectangleLinesEx(rect_btn_guardar_partida, 1.5f, RED);
+        DrawRectangleLinesEx(rect_btn_ver_partidas, 1.5f, RED);
+    }
 }
 
 bool manejar_click_menu(int mx, int my, MotorFisica& motor) {
@@ -1395,8 +1464,7 @@ bool manejar_click_menu(int mx, int my, MotorFisica& motor) {
     }
 
     if (!menu_visible) {
-        int px = ANCHO - MENU_ANCHO;
-        int bx = px - 28;
+        int bx = ANCHO - 26;
         Rectangle btn_abrir = { static_cast<float>(bx), static_cast<float>(ALTO / 2 - 40), 24, 80 };
         if (click_en_rect(mx, my, btn_abrir)) {
             menu_visible = true;
@@ -1408,8 +1476,8 @@ bool manejar_click_menu(int mx, int my, MotorFisica& motor) {
     int px = ANCHO - MENU_ANCHO;
     int tab_w = (MENU_ANCHO - 2 * MENU_MARGEN) / 2;
 
-    Rectangle tab_obj = { static_cast<float>(px + MENU_MARGEN), 8.0f,
-                          static_cast<float>(tab_w)+10, static_cast<float>(MENU_PESTANA_ALTO - 8)+10 };
+    Rectangle tab_obj = { static_cast<float>(px + MENU_MARGEN) + 10, 30.0f,
+                          static_cast<float>(tab_w) - 15, static_cast<float>(MENU_PESTANA_ALTO - 8) };
     Rectangle tab_dec = { tab_obj.x + tab_w, tab_obj.y, tab_obj.width, tab_obj.height };
     if (click_en_rect(mx, my, tab_obj)) { menu_tab = 0; menu_pagina = 0; return true; }
     if (click_en_rect(mx, my, tab_dec)) { menu_tab = 1; menu_pagina = 0; return true; }
@@ -1421,8 +1489,8 @@ bool manejar_click_menu(int mx, int my, MotorFisica& motor) {
 
     int y = MENU_PESTANA_ALTO + 36;
     if (menu_tab == 0) {
-        Rectangle hdr_mec = { static_cast<float>(px + MENU_MARGEN), static_cast<float>(y),
-            static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN), static_cast<float>(MENU_CATEGORIA_ALTO) };
+        Rectangle hdr_mec = { static_cast<float>(px + MENU_MARGEN) + 10, static_cast<float>(y),
+            static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN) - 25, static_cast<float>(MENU_CATEGORIA_ALTO) };
         if (click_en_rect(mx, my, hdr_mec)) { cat_mecanicas_abierta = !cat_mecanicas_abierta; return true; }
         y += MENU_CATEGORIA_ALTO + 4;
         if (cat_mecanicas_abierta) {
@@ -1431,12 +1499,12 @@ bool manejar_click_menu(int mx, int my, MotorFisica& motor) {
             int filas = (static_cast<int>(celdas.size()) + MENU_COLS - 1) / MENU_COLS;
             y += filas * (MENU_CELDA + 6) + 8;
         }
-        Rectangle hdr_int = { static_cast<float>(px + MENU_MARGEN), static_cast<float>(y),
-            static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN), static_cast<float>(MENU_CATEGORIA_ALTO) };
+        Rectangle hdr_int = { static_cast<float>(px + MENU_MARGEN) + 10, static_cast<float>(y),
+            static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN) - 25, static_cast<float>(MENU_CATEGORIA_ALTO) };
         if (click_en_rect(mx, my, hdr_int)) { cat_interactivos_abierta = !cat_interactivos_abierta; return true; }
     } else {
-        Rectangle hdr_dec = { static_cast<float>(px + MENU_MARGEN), static_cast<float>(y),
-            static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN), static_cast<float>(MENU_CATEGORIA_ALTO) };
+        Rectangle hdr_dec = { static_cast<float>(px + MENU_MARGEN) + 10, static_cast<float>(y),
+            static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN) - 25, static_cast<float>(MENU_CATEGORIA_ALTO) };
         if (click_en_rect(mx, my, hdr_dec)) { cat_decor_abierta = !cat_decor_abierta; return true; }
     }
 
@@ -2451,13 +2519,17 @@ void dibujar_hud(const MotorFisica& motor) {
     if (entidad_seleccionada) {
         bool rotable = dynamic_cast<Ventilador*>(entidad_seleccionada) != nullptr ||
                        dynamic_cast<PlanoInclinado*>(entidad_seleccionada) != nullptr;
+        bool redimensionable = dynamic_cast<ParedRectangular*>(entidad_seleccionada) != nullptr &&
+                               !es_borde_nivel(entidad_seleccionada);
         const char* rotar_txt = rotable ? "  [F] Rotar" : "";
-        DrawText(TextFormat("Seleccionado: Entidad #%d  [DEL] Eliminar%s", entidad_seleccionada->get_id(), rotar_txt),
+        const char* resize_txt = redimensionable ? "  [Flechas] Resize" : "";
+        DrawText(TextFormat("Seleccionado: Entidad #%d  [DEL] Eliminar%s%s  [Click Der/ESC] Deseleccionar",
+                 entidad_seleccionada->get_id(), rotar_txt, resize_txt),
                  margin, y + 88, 14, Color{255, 200, 80, 255});
     }
 
     // Controles
-    DrawText("[TAB] Menu  [Arrastrar] Crear/Mover  [CLICK] Seleccionar  [DEL] Eliminar  [F] Rotar  [SPACE] Pausa  [D] Debug  [R] Reset",
+    DrawText("[TAB] Menu  [Arrastrar] Crear/Mover  [CLICK] Seleccionar  [Click Der/ESC] Deseleccionar  [DEL] Eliminar  [Flechas] Resize  [SPACE] Pausa  [D] Debug",
              margin, ALTO - 30, 14, COLOR_CONTROLES);
 }
 
@@ -2661,7 +2733,7 @@ void cargandoTexturas() {
 // ============================================================================
 int main() {
     // ---- Inicializar ventana ----
-    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
+    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_HIGHDPI);
     InitWindow(ANCHO, ALTO, "TIM - Motor de Fisica | Prototipo RK4 + Raylib");
     ANCHO = GetScreenWidth();
     ALTO = GetScreenHeight();
@@ -2697,11 +2769,16 @@ int main() {
                 modo_panel_guardado = ModoPanelGuardado::CERRADO;
             } else if (estado_cuerda != EstadoColocacionCuerda::INACTIVA) {
                 cancelar_colocacion_cuerda();
+            } else if (entidad_seleccionada) {
+                entidad_seleccionada = nullptr;
             }
         }
-        if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) &&
-            estado_cuerda != EstadoColocacionCuerda::INACTIVA) {
-            cancelar_colocacion_cuerda();
+        if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+            if (estado_cuerda != EstadoColocacionCuerda::INACTIVA) {
+                cancelar_colocacion_cuerda();
+            } else if (entidad_seleccionada) {
+                entidad_seleccionada = nullptr;
+            }
         }
 
         manejar_teclas_panel_guardado(motor, gestor_eventos, ANCHO, ALTO, contador_bolas);
@@ -2709,8 +2786,10 @@ int main() {
         // Click izquierdo: menú, spawn drag, o arrastre de entidad en canvas
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             if (mx < 260) {
+                entidad_seleccionada = nullptr;  // Deseleccionar al interactuar con el panel de eventos
                 // Click en panel eventos izquierdo manejado in dibujar_panel_eventos_izquierdo
             } else if (punto_en_menu(mx, my)) {
+                entidad_seleccionada = nullptr;  // Deseleccionar al clickear en el menú
                 if (manejar_click_menu(mx, my, motor)) {
                     // UI consumió el click (pestaña, acordeón, paginación, colapsar)
                 } else {
@@ -2730,19 +2809,22 @@ int main() {
                 }
             } else if (punto_en_area_juego(mx, my)) {
                 Vector2D mouse_pos(mx, my);
-                if (manejar_click_colocacion_cuerda(motor, mouse_pos)) {
+                if (arrastrando_spawn != TipoObjetoMenu::NINGUNO) {
+                    spawn_desde_menu(motor, arrastrando_spawn, mouse_pos);
+                    arrastrando_spawn = TipoObjetoMenu::NINGUNO;
+                } else if (manejar_click_colocacion_cuerda(motor, mouse_pos)) {
                     entidad_arrastrada = nullptr;
                 } else {
-                EntidadFisica* clicked = obtener_entidad_bajo_mouse(motor, mouse_pos);
-                if (clicked) {
-                    if (!manejar_click_evento_ui(gestor_eventos, clicked)) {
-                        entidad_arrastrada = clicked;
-                        entidad_seleccionada = clicked;  // Seleccionar al hacer click
-                        offset_arrastre = clicked->get_posicion() - mouse_pos;
+                    EntidadFisica* clicked = obtener_entidad_bajo_mouse(motor, mouse_pos);
+                    if (clicked) {
+                        if (!manejar_click_evento_ui(gestor_eventos, clicked)) {
+                            entidad_arrastrada = clicked;
+                            entidad_seleccionada = clicked;  // Seleccionar al hacer click
+                            offset_arrastre = clicked->get_posicion() - mouse_pos;
+                        }
+                    } else {
+                        entidad_seleccionada = nullptr;  // Deseleccionar al hacer click en vacío
                     }
-                } else {
-                    entidad_seleccionada = nullptr;  // Deseleccionar al hacer click en vacío
-                }
                 }
             }
         }
@@ -2772,17 +2854,10 @@ int main() {
             if (arrastrando_spawn != TipoObjetoMenu::NINGUNO) {
                 if (punto_en_area_juego(mx, my)) {
                     spawn_desde_menu(motor, arrastrando_spawn, Vector2D(mx, my));
+                    arrastrando_spawn = TipoObjetoMenu::NINGUNO;
                 }
-                arrastrando_spawn = TipoObjetoMenu::NINGUNO;
             }
             entidad_arrastrada = nullptr;
-        }
-
-        // Abrir menú con click en pestaña colapsada
-        if (!menu_visible && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            Rectangle btn_abrir = { static_cast<float>(ANCHO - 26), static_cast<float>(ALTO / 2 - 40), 24, 80 };
-            if (click_en_rect(mx, my, btn_abrir))
-                menu_visible = true;
         }
 
         // Spacebar: pausar/reanudar
@@ -2816,6 +2891,26 @@ int main() {
                 auto* ramp = dynamic_cast<PlanoInclinado*>(entidad_seleccionada);
                 if (ramp) {
                     ramp->invertir();
+                }
+            }
+        }
+
+        // Flechas: redimensionar ParedRectangular seleccionada (plataformas/decoración)
+        if (entidad_seleccionada && !es_borde_nivel(entidad_seleccionada)) {
+            ParedRectangular* pared_sel = dynamic_cast<ParedRectangular*>(entidad_seleccionada);
+            if (pared_sel) {
+                double paso = IsKeyDown(KEY_LEFT_SHIFT) ? 10.0 : 2.0;  // Shift = más rápido
+                double w_actual = pared_sel->get_ancho();
+                double h_actual = pared_sel->get_alto();
+                bool cambio = false;
+                if (IsKeyDown(KEY_RIGHT)) { w_actual += paso; cambio = true; }
+                if (IsKeyDown(KEY_LEFT) && w_actual > 20.0) { w_actual -= paso; cambio = true; }
+                if (IsKeyDown(KEY_DOWN)) { h_actual += paso; cambio = true; }
+                if (IsKeyDown(KEY_UP) && h_actual > 10.0) { h_actual -= paso; cambio = true; }
+                if (cambio) {
+                    if (w_actual < 20.0) w_actual = 20.0;
+                    if (h_actual < 10.0) h_actual = 10.0;
+                    pared_sel->set_dimensiones(w_actual, h_actual);
                 }
             }
         }
@@ -2908,7 +3003,53 @@ int main() {
                 }
             } else if (sel_forma == TipoForma::AABB) {
                 const ParedRectangular* sp = dynamic_cast<const ParedRectangular*>(entidad_seleccionada);
-                if (sp) {
+                if (sp && !es_borde_nivel(sp)) {
+                    Vector2D spos = sp->get_posicion();
+                    float sx = (float)spos.x;
+                    float sy = (float)spos.y;
+                    float sw_p = (float)sp->get_ancho();
+                    float sh_p = (float)sp->get_alto();
+                    DrawRectangleLinesEx({sx - 3, sy - 3, sw_p + 6, sh_p + 6}, 2.0f, sel_color);
+
+                    // Handles de redimensionado en las 4 esquinas y bordes medios
+                    Color handle_col = {255, 255, 255, 220};
+                    Color handle_border = {255, 200, 50, 255};
+                    float hs = 5.0f;  // handle size
+                    // Esquinas
+                    DrawRectangleRec({sx - hs, sy - hs, hs*2, hs*2}, handle_col);
+                    DrawRectangleLinesEx({sx - hs, sy - hs, hs*2, hs*2}, 1.0f, handle_border);
+                    DrawRectangleRec({sx + sw_p - hs, sy - hs, hs*2, hs*2}, handle_col);
+                    DrawRectangleLinesEx({sx + sw_p - hs, sy - hs, hs*2, hs*2}, 1.0f, handle_border);
+                    DrawRectangleRec({sx - hs, sy + sh_p - hs, hs*2, hs*2}, handle_col);
+                    DrawRectangleLinesEx({sx - hs, sy + sh_p - hs, hs*2, hs*2}, 1.0f, handle_border);
+                    DrawRectangleRec({sx + sw_p - hs, sy + sh_p - hs, hs*2, hs*2}, handle_col);
+                    DrawRectangleLinesEx({sx + sw_p - hs, sy + sh_p - hs, hs*2, hs*2}, 1.0f, handle_border);
+                    // Bordes medios
+                    DrawRectangleRec({sx + sw_p/2 - hs, sy - hs, hs*2, hs*2}, handle_col);
+                    DrawRectangleLinesEx({sx + sw_p/2 - hs, sy - hs, hs*2, hs*2}, 1.0f, handle_border);
+                    DrawRectangleRec({sx + sw_p/2 - hs, sy + sh_p - hs, hs*2, hs*2}, handle_col);
+                    DrawRectangleLinesEx({sx + sw_p/2 - hs, sy + sh_p - hs, hs*2, hs*2}, 1.0f, handle_border);
+                    DrawRectangleRec({sx - hs, sy + sh_p/2 - hs, hs*2, hs*2}, handle_col);
+                    DrawRectangleLinesEx({sx - hs, sy + sh_p/2 - hs, hs*2, hs*2}, 1.0f, handle_border);
+                    DrawRectangleRec({sx + sw_p - hs, sy + sh_p/2 - hs, hs*2, hs*2}, handle_col);
+                    DrawRectangleLinesEx({sx + sw_p - hs, sy + sh_p/2 - hs, hs*2, hs*2}, 1.0f, handle_border);
+
+                    // Indicador de dimensiones
+                    char dim_txt[48];
+                    snprintf(dim_txt, sizeof(dim_txt), "%.0fx%.0f", sw_p, sh_p);
+                    int dim_tw = MeasureText(dim_txt, 12);
+                    DrawRectangleRec({sx + sw_p/2 - dim_tw/2.0f - 4, sy - 22, (float)dim_tw + 8, 18},
+                                     Color{0, 0, 0, 160});
+                    DrawText(dim_txt, (int)(sx + sw_p/2 - dim_tw/2.0f), (int)(sy - 20), 12,
+                             Color{255, 230, 100, 255});
+
+                    // Hint de controles
+                    const char* hint = "Flechas: resize | Shift: rapido";
+                    int hint_tw = MeasureText(hint, 10);
+                    DrawText(hint, (int)(sx + sw_p/2 - hint_tw/2.0f), (int)(sy + sh_p + 8), 10,
+                             Color{255, 200, 50, 180});
+                } else if (sp) {
+                    // Borde de nivel: solo outline simple
                     Vector2D spos = sp->get_posicion();
                     DrawRectangleLinesEx({(float)spos.x - 3, (float)spos.y - 3,
                         (float)sp->get_ancho() + 6, (float)sp->get_alto() + 6}, 2.0f, sel_color);
@@ -2949,6 +3090,16 @@ int main() {
                         DrawCircleLines(static_cast<int>(sp.x), static_cast<int>(sp.y), 50.0f, sel_color);
                     }
                 }
+            }
+
+            // ZonaMeta highlight
+            const ZonaMeta* zm_sel = dynamic_cast<const ZonaMeta*>(entidad_seleccionada);
+            if (zm_sel) {
+                Vector2D zp = zm_sel->get_posicion();
+                float zw = zm_sel->ancho;
+                float zh = zm_sel->alto;
+                DrawRectangleLinesEx({(float)(zp.x - zw/2) - 3, (float)(zp.y - zh/2) - 3,
+                    zw + 6, zh + 6}, 2.0f, sel_color);
             }
 
             // Badge de rotación sutil cerca del objeto seleccionado si es rotable
@@ -3029,8 +3180,6 @@ int main() {
             DrawText("VICTORIA!", ANCHO/2 - 100, ALTO/2 - 40, 40, GREEN);
             DrawText("Presiona R para reiniciar el nivel", ANCHO/2 - 160, ALTO/2 + 20, 20, WHITE);
         }
-
-        EndDrawing();
 
         // Splash de título (desaparece gradualmente)
         if (titulo_alpha > 0.01f) {

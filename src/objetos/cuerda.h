@@ -117,7 +117,7 @@ public:
                         std::vector<Vector2D>& puntos) const {
         EntidadFisica* ent_a = buscar_entidad(entidades, extremo_a.entidad_id);
         EntidadFisica* ent_b = buscar_entidad(entidades, extremo_b.entidad_id);
-        if (!ent_a || !ent_b || soportes_id.empty()) return false;
+        if (!ent_a || !ent_b) return false;
 
         puntos.clear();
         puntos.push_back(posicion_anclaje(ent_a, extremo_a.tipo));
@@ -134,7 +134,7 @@ public:
         EntidadFisica* ent_a = buscar_entidad(entidades, extremo_a.entidad_id);
         EntidadFisica* ent_b = buscar_entidad(entidades, extremo_b.entidad_id);
         std::vector<Vector2D> puntos;
-        if (!ent_a || !ent_b || !obtener_puntos(entidades, puntos) || puntos.size() < 3) {
+        if (!ent_a || !ent_b || !obtener_puntos(entidades, puntos) || puntos.size() < 2) {
             ultima_tension = 0.0;
             return;
         }
