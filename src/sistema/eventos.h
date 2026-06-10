@@ -468,7 +468,12 @@ inline EventoJuego deserializar_evento(const std::string& linea) {
     };
     auto extraer_int = [&](const std::string& clave) -> int {
         std::string val = extraer_str(clave);
-        return val.empty() ? -1 : std::stoi(val);
+        if (val.empty()) return -1;
+        try {
+            return std::stoi(val);
+        } catch (...) {
+            return -1;
+        }
     };
 
     size_t pos1 = linea.find(' ');
