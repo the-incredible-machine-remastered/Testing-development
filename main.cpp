@@ -44,6 +44,10 @@
 #include <string>
 #include <cstdio>
 
+// Compatibilidad con versiones de Raylib sin IsMusicReady
+inline bool IsMusicReady(Music music) {
+    return music.ctxData != nullptr;
+}
 
 // ============================================================================
 // Configuración global
@@ -99,6 +103,10 @@ bool mostrar_pausa_overlay = false;
 bool modo_debug = false;
 int contador_bolas = 0;
 GestorEventos gestor_eventos;
+
+// Audio del juego
+Music musica_menu;
+bool sonido_mutado = false;
 
 
 // Feedback visual de spawn fallido
@@ -2642,6 +2650,20 @@ void cargandoTexturas() {
     tex_btn_salir2 = cargar_textura_datos("Assets/menu/salir2.png");
     tex_menu_titulo = cargar_textura_datos("Assets/menu/titulo.png");
     
+    // Cargar musica de fondo
+    if (FileExists("Assets/Music/menu.wav")) {
+        musica_menu = LoadMusicStream("Assets/Music/menu.wav");
+        if (IsMusicReady(musica_menu)) {
+            musica_menu.looping = true;
+            PlayMusicStream(musica_menu);
+            TraceLog(LOG_INFO, "Musica de menu cargada y reproduciendose (menu.wav).");
+        } else {
+            TraceLog(LOG_ERROR, "Error al preparar stream de musica: Assets/Music/menu.wav");
+        }
+    } else {
+        TraceLog(LOG_WARNING, "Archivo de musica no encontrado: Assets/Music/menu.wav");
+    }
+    
     // Cargar texturas del BarrilChavo
     tex_barril = cargar_textura_datos("Assets/chavo/barril.png");
     if (tex_barril.id == 0) {
@@ -3558,6 +3580,35 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     }
 }
 
+// Dibuja un boton interactivo en la esquina superior derecha para silenciar el sonido.
+void dibujar_y_actualizar_boton_silencio() {
+    float size = 45.0f;
+    Rectangle rect_mute = { (float)ANCHO - size - 20.0f, 20.0f, size, size };
+    Vector2 mouse = GetMousePosition();
+    bool hover = CheckCollisionPointRec(mouse, rect_mute);
+    
+    if (hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        sonido_mutado = !sonido_mutado;
+        if (IsMusicReady(musica_menu)) {
+            SetMusicVolume(musica_menu, sonido_mutado ? 0.0f : 0.6f);
+        }
+    }
+    
+    Color color_base = sonido_mutado ? Color{180, 50, 50, 255} : Color{50, 180, 50, 255};
+    Color color_hover = sonido_mutado ? Color{220, 70, 70, 255} : Color{70, 220, 70, 255};
+    Color color_dibujo = hover ? color_hover : color_base;
+    
+    // Dibujar el cuadro de referencia estilo glassmorphism
+    DrawRectangleRounded(rect_mute, 0.2f, 4, ColorAlpha(color_dibujo, 0.4f));
+    DrawRectangleRoundedLinesEx(rect_mute, 0.2f, 4, 2.0f, color_dibujo);
+    
+    // Dibujar indicador textual "MUTE" o "SOUND"
+    const char* txt = sonido_mutado ? "MUTED" : "SOUND";
+    float text_size = 11.0f;
+    Vector2 t_size = MeasureTextEx(fuente_menu, txt, text_size, 1);
+    DrawTextEx(fuente_menu, txt, { rect_mute.x + (rect_mute.width - t_size.x)/2.0f, rect_mute.y + (rect_mute.height - t_size.y)/2.0f }, text_size, 1, WHITE);
+}
+
 // ============================================================================
 // Punto de entrada
 // ============================================================================
@@ -3565,6 +3616,7 @@ int main() {
     // ---- Inicializar ventana ----
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_HIGHDPI);
     InitWindow(ANCHO, ALTO, "TIM - Motor de Fisica | Prototipo RK4 + Raylib");
+    InitAudioDevice(); // Inicializar dispositivo de audio de Raylib
     ANCHO = GetScreenWidth();
     ALTO = GetScreenHeight();
     SetWindowMinSize(ANCHO_MIN, ALTO_MIN);
@@ -3583,6 +3635,11 @@ int main() {
     // ---- Bucle principal ----
     while (!WindowShouldClose() && !salir_juego) {
         sincronizar_tamano_ventana();
+        
+        // Actualizar el stream de musica
+        if (IsMusicReady(musica_menu)) {
+            UpdateMusicStream(musica_menu);
+        }
 
 
         // ======== UPDATE ========
@@ -3625,6 +3682,9 @@ int main() {
                 dibujar_juego_core(motor, true);
                 break;
         }
+
+        // Dibujar boton de silencio en la capa superior
+        dibujar_y_actualizar_boton_silencio();
 
         EndDrawing();
     }
@@ -3677,6 +3737,12 @@ int main() {
     
     // Descargar fuente personalizada
     if (fuente_menu.baseSize > 0) UnloadFont(fuente_menu);
+    
+    // Descargar stream de musica y cerrar dispositivo de audio
+    if (IsMusicReady(musica_menu)) {
+        UnloadMusicStream(musica_menu);
+    }
+    CloseAudioDevice();
     
     CloseWindow();
     return 0;

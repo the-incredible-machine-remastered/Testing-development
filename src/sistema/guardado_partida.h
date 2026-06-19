@@ -98,13 +98,21 @@ inline TipoAnclajeCuerda tipo_anclaje_desde_int(int v) {
 inline double leer_valor(const std::string& linea, const char* clave, double defecto) {
     size_t p = linea.find(clave);
     if (p == std::string::npos) return defecto;
-    return std::stod(linea.substr(p + std::strlen(clave)));
+    try {
+        return std::stod(linea.substr(p + std::strlen(clave)));
+    } catch (...) {
+        return defecto;
+    }
 }
 
 inline int leer_valor_i(const std::string& linea, const char* clave, int defecto) {
     size_t p = linea.find(clave);
     if (p == std::string::npos) return defecto;
-    return std::stoi(linea.substr(p + std::strlen(clave)));
+    try {
+        return std::stoi(linea.substr(p + std::strlen(clave)));
+    } catch (...) {
+        return defecto;
+    }
 }
 
 inline void escribir_dinamica(std::ostream& out, const EntidadFisica* e) {
@@ -325,7 +333,11 @@ inline void instanciar_desde_linea(MotorFisica& motor, const std::string& linea,
             std::stringstream ls(lista);
             std::string item;
             while (std::getline(ls, item, ',')) {
-                if (!item.empty()) soportes.push_back(std::stoi(item));
+                if (!item.empty()) {
+                    try {
+                        soportes.push_back(std::stoi(item));
+                    } catch (...) {}
+                }
             }
         }
         motor.agregar_entidad(new Cuerda(id, a, soportes, b, leer_valor(linea, "len=", 200)));
@@ -356,29 +368,33 @@ inline bool cargar_partida(MotorFisica& motor, GestorEventos& gestor, const std:
 
     while (std::getline(in, linea)) {
         if (linea.empty()) continue;
-        if (linea.rfind("gravedad_y", 0) == 0) {
-            gravedad_y = std::stod(linea.substr(11));
-        } else if (linea.rfind("contador_bolas", 0) == 0) {
-            contador_bolas = std::stoi(linea.substr(15));
-        } else if (linea.rfind("siguiente_id", 0) == 0) {
-            max_id = std::stoi(linea.substr(13));
-        } else if (linea.rfind("ancho", 0) == 0) {
-            ancho = std::stoi(linea.substr(6));
-        } else if (linea.rfind("alto", 0) == 0) {
-            alto = std::stoi(linea.substr(5));
-        } else if (linea.rfind("ent ", 0) == 0) {
-            instanciar_desde_linea(motor, linea, max_id);
-        } else if (linea.rfind("evt ", 0) == 0) {
-            EventoJuego ev = deserializar_evento(linea);
-            gestor.eventos.push_back(ev);
-        } else if (linea.rfind("siguiente_id_evento", 0) == 0) {
-            gestor.siguiente_id_evento = std::stoi(linea.substr(20));
-        } else if (linea.rfind("logica_victoria", 0) == 0) {
-            if (linea.find("TODAS") != std::string::npos) {
-                gestor.logica_victoria = TipoLogicaVictoria::TODAS;
-            } else {
-                gestor.logica_victoria = TipoLogicaVictoria::CUALQUIERA;
+        try {
+            if (linea.rfind("gravedad_y", 0) == 0) {
+                gravedad_y = std::stod(linea.substr(11));
+            } else if (linea.rfind("contador_bolas", 0) == 0) {
+                contador_bolas = std::stoi(linea.substr(15));
+            } else if (linea.rfind("siguiente_id_evento", 0) == 0) {
+                gestor.siguiente_id_evento = std::stoi(linea.substr(20));
+            } else if (linea.rfind("siguiente_id", 0) == 0) {
+                max_id = std::stoi(linea.substr(13));
+            } else if (linea.rfind("ancho", 0) == 0) {
+                ancho = std::stoi(linea.substr(6));
+            } else if (linea.rfind("alto", 0) == 0) {
+                alto = std::stoi(linea.substr(5));
+            } else if (linea.rfind("ent ", 0) == 0) {
+                instanciar_desde_linea(motor, linea, max_id);
+            } else if (linea.rfind("evt ", 0) == 0) {
+                EventoJuego ev = deserializar_evento(linea);
+                gestor.eventos.push_back(ev);
+            } else if (linea.rfind("logica_victoria", 0) == 0) {
+                if (linea.find("TODAS") != std::string::npos) {
+                    gestor.logica_victoria = TipoLogicaVictoria::TODAS;
+                } else {
+                    gestor.logica_victoria = TipoLogicaVictoria::CUALQUIERA;
+                }
             }
+        } catch (...) {
+            TraceLog(LOG_WARNING, "Linea de guardado malformada ignorada de forma segura: '%s'", linea.c_str());
         }
     }
 
