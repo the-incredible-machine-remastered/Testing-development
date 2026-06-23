@@ -17,6 +17,7 @@
 
 #include "obstaculo_estatico.h"
 #include <vector>
+#include <cmath>
 
 class PlanoInclinado : public ObstaculoEstatico {
 protected:
@@ -69,6 +70,28 @@ public:
     void invertir() {
         es_invertido = !es_invertido;
         recalcular_vertices();
+    }
+
+    void set_dimensiones(double b, double h) {
+        base_ancho = b;
+        altura_alto = h;
+        recalcular_vertices();
+        angulo_inclinacion = std::atan2(altura_alto, base_ancho);
+    }
+
+    void alternar_tamano() {
+        // Ciclar entre 3 tamaños predefinidos:
+        // Mediano (160x120) -> Grande (240x180) -> Pequeño (80x60) -> Mediano (160x120)
+        double b = base_ancho;
+        double h = altura_alto;
+        
+        if (std::abs(b - 160.0) < 1.0 && std::abs(h - 120.0) < 1.0) {
+            set_dimensiones(240.0, 180.0);
+        } else if (std::abs(b - 240.0) < 1.0 && std::abs(h - 180.0) < 1.0) {
+            set_dimensiones(80.0, 60.0);
+        } else {
+            set_dimensiones(160.0, 120.0);
+        }
     }
 };
 

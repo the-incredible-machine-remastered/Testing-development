@@ -137,6 +137,18 @@ Vector2D offset_arrastre;
 // Estado de selección (para eliminar objetos)
 EntidadFisica* entidad_seleccionada = nullptr;
 
+enum class HandleResize {
+    NINGUNO,
+    TOP_LEFT, TOP_CENTER, TOP_RIGHT,
+    MID_LEFT,             MID_RIGHT,
+    BOT_LEFT, BOT_CENTER, BOT_RIGHT
+};
+HandleResize handle_activo = HandleResize::NINGUNO;
+Vector2D     handle_pos_inicial_mouse;
+double       handle_w_inicial = 0;
+double       handle_h_inicial = 0;
+Vector2D     handle_pos_inicial_ent;
+
 bool es_borde_nivel(const EntidadFisica* e);
 
 enum class EstadoColocacionCuerda {
@@ -470,6 +482,29 @@ bool es_borde_nivel(const EntidadFisica* e) {
     return e == borde_suelo || e == borde_izquierda || e == borde_derecha || e == borde_techo;
 }
 
+struct InfoHandles {
+    Rectangle rects[8];
+    HandleResize tipos[8];
+};
+InfoHandles calcular_handles(const ParedRectangular* p) {
+    const float S = 10.0f;
+    float x = (float)p->get_posicion().x;
+    float y = (float)p->get_posicion().y;
+    float w = (float)p->get_ancho();
+    float h = (float)p->get_alto();
+    float hs = S / 2.0f;
+    InfoHandles out;
+    out.tipos[0] = HandleResize::TOP_LEFT;    out.rects[0] = {x-hs,       y-hs,       S,S};
+    out.tipos[1] = HandleResize::TOP_CENTER;  out.rects[1] = {x+w/2-hs,   y-hs,       S,S};
+    out.tipos[2] = HandleResize::TOP_RIGHT;   out.rects[2] = {x+w-hs,     y-hs,       S,S};
+    out.tipos[3] = HandleResize::MID_LEFT;    out.rects[3] = {x-hs,       y+h/2-hs,   S,S};
+    out.tipos[4] = HandleResize::MID_RIGHT;   out.rects[4] = {x+w-hs,     y+h/2-hs,   S,S};
+    out.tipos[5] = HandleResize::BOT_LEFT;    out.rects[5] = {x-hs,       y+h-hs,     S,S};
+    out.tipos[6] = HandleResize::BOT_CENTER;  out.rects[6] = {x+w/2-hs,   y+h-hs,     S,S};
+    out.tipos[7] = HandleResize::BOT_RIGHT;   out.rects[7] = {x+w-hs,     y+h-hs,     S,S};
+    return out;
+}
+
 // Obtener qué objeto está debajo del cursor del mouse (incluye estáticos)
 EntidadFisica* obtener_entidad_bajo_mouse(const MotorFisica& motor, Vector2D mouse_pos) {
     for (auto* e : motor.get_entidades()) {
@@ -675,6 +710,7 @@ void limpiar_estado_tras_cargar_partida() {
     entidad_seleccionada = nullptr;
     arrastrando_spawn = TipoObjetoMenu::NINGUNO;
     cancelar_colocacion_cuerda();
+    handle_activo = HandleResize::NINGUNO;
 }
 
 void crear_bordes_nivel(MotorFisica& motor) {
@@ -3080,7 +3116,7 @@ void dibujar_menu_opciones() {
         dibujar_linea_opcion("[TAB]", "Mostrar u ocultar el menu lateral de herramientas", content_y + dy * 2);
         dibujar_linea_opcion("[ESPACIO]", "Pausar / Reanudar la simulacion fisica", content_y + dy * 3);
         dibujar_linea_opcion("[D]", "Activar / Desactivar modo debug (wireframes y vectores)", content_y + dy * 4);
-        dibujar_linea_opcion("[F]", "Rotar o invertir direccion (Ventilador y Rampas)", content_y + dy * 5);
+        dibujar_linea_opcion("[F / T]", "Rotar (F) / Alternar tamano (T) (Rampas y Ventilador)", content_y + dy * 5);
         dibujar_linea_opcion("[R]", "Reiniciar escena (borra todo y recarga inicial)", content_y + dy * 6);
         dibujar_linea_opcion("[+/-]", "Aumentar / Disminuir gravedad", content_y + dy * 7);
         dibujar_linea_opcion("[SUPR/X]", "Eliminar el objeto seleccionado", content_y + dy * 8);
@@ -3486,15 +3522,36 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             } else if (manejar_click_colocacion_cuerda(motor, mouse_pos)) {
                 entidad_arrastrada = nullptr;
             } else {
-                EntidadFisica* clicked = obtener_entidad_bajo_mouse(motor, mouse_pos);
-                if (clicked) {
-                    if (!manejar_click_evento_ui(gestor_eventos, clicked)) {
-                        entidad_arrastrada = clicked;
-                        entidad_seleccionada = clicked;
-                        offset_arrastre = clicked->get_posicion() - mouse_pos;
+                bool handle_click_detectado = false;
+                if (estado_actual == EstadoJuego::JUEGO_CREATIVO && entidad_seleccionada && motor.get_pausado()) {
+                    ParedRectangular* p = dynamic_cast<ParedRectangular*>(entidad_seleccionada);
+                    if (p && !es_borde_nivel(p)) {
+                        auto handles = calcular_handles(p);
+                        for (int i = 0; i < 8; ++i) {
+                            if (CheckCollisionPointRec({(float)mx, (float)my}, handles.rects[i])) {
+                                handle_activo = handles.tipos[i];
+                                handle_pos_inicial_mouse = Vector2D(mx, my);
+                                handle_w_inicial = p->get_ancho();
+                                handle_h_inicial = p->get_alto();
+                                handle_pos_inicial_ent = p->get_posicion();
+                                handle_click_detectado = true;
+                                break;
+                            }
+                        }
                     }
-                } else {
-                    entidad_seleccionada = nullptr;
+                }
+
+                if (!handle_click_detectado) {
+                    EntidadFisica* clicked = obtener_entidad_bajo_mouse(motor, mouse_pos);
+                    if (clicked) {
+                        if (!manejar_click_evento_ui(gestor_eventos, clicked)) {
+                            entidad_arrastrada = clicked;
+                            entidad_seleccionada = clicked;
+                            offset_arrastre = clicked->get_posicion() - mouse_pos;
+                        }
+                    } else {
+                        entidad_seleccionada = nullptr;
+                    }
                 }
             }
         }
@@ -3502,6 +3559,24 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
 
     if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && arrastrando_spawn != TipoObjetoMenu::NINGUNO) {
         // Ghost spawn
+    } else if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && handle_activo != HandleResize::NINGUNO && entidad_seleccionada) {
+        ParedRectangular* p = dynamic_cast<ParedRectangular*>(entidad_seleccionada);
+        if (p) {
+            double dx = mx - handle_pos_inicial_mouse.x;
+            double dy = my - handle_pos_inicial_mouse.y;
+            double nw = handle_w_inicial, nh = handle_h_inicial;
+            Vector2D npos = handle_pos_inicial_ent;
+            bool izq  = handle_activo==HandleResize::TOP_LEFT||handle_activo==HandleResize::MID_LEFT||handle_activo==HandleResize::BOT_LEFT;
+            bool der  = handle_activo==HandleResize::TOP_RIGHT||handle_activo==HandleResize::MID_RIGHT||handle_activo==HandleResize::BOT_RIGHT;
+            bool arr  = handle_activo==HandleResize::TOP_LEFT||handle_activo==HandleResize::TOP_CENTER||handle_activo==HandleResize::TOP_RIGHT;
+            bool abaj = handle_activo==HandleResize::BOT_LEFT||handle_activo==HandleResize::BOT_CENTER||handle_activo==HandleResize::BOT_RIGHT;
+            if (der)  nw = std::max(20.0, handle_w_inicial + dx);
+            if (izq)  { nw = std::max(20.0, handle_w_inicial - dx); npos.x = handle_pos_inicial_ent.x + (handle_w_inicial - nw); }
+            if (abaj) nh = std::max(8.0, handle_h_inicial + dy);
+            if (arr)  { nh = std::max(8.0, handle_h_inicial - dy); npos.y = handle_pos_inicial_ent.y + (handle_h_inicial - nh); }
+            p->set_posicion(npos);
+            p->set_dimensiones(nw, nh);
+        }
     } else if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && entidad_arrastrada != nullptr) {
         Vector2D mouse_pos(mx, my);
         Vector2D nueva_pos = mouse_pos + offset_arrastre;
@@ -3527,6 +3602,7 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             }
         }
         entidad_arrastrada = nullptr;
+        handle_activo = HandleResize::NINGUNO;
     }
 
     if (!menu_visible && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
@@ -3561,6 +3637,43 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             auto* ramp = dynamic_cast<PlanoInclinado*>(entidad_seleccionada);
             if (ramp) {
                 ramp->invertir();
+            }
+        }
+    }
+
+    if (IsKeyPressed(KEY_T) && entidad_seleccionada) {
+        auto* ramp = dynamic_cast<PlanoInclinado*>(entidad_seleccionada);
+        if (ramp) {
+            ramp->alternar_tamano();
+        }
+    }
+
+    if (estado_actual == EstadoJuego::JUEGO_CREATIVO && entidad_seleccionada && motor.get_pausado()) {
+        ParedRectangular* p = dynamic_cast<ParedRectangular*>(entidad_seleccionada);
+        if (p && !es_borde_nivel(p)) {
+            double paso = (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)) ? 1.0 : 10.0;
+            double nw = p->get_ancho(), nh = p->get_alto();
+            bool cambiado = false;
+            if (IsKeyPressed(KEY_RIGHT)) { nw = std::max(20.0, nw + paso); cambiado = true; }
+            if (IsKeyPressed(KEY_LEFT))  { nw = std::max(20.0, nw - paso); cambiado = true; }
+            if (IsKeyPressed(KEY_DOWN))  { nh = std::max(8.0,  nh + paso); cambiado = true; }
+            if (IsKeyPressed(KEY_UP))    { nh = std::max(8.0,  nh - paso); cambiado = true; }
+            if (cambiado) {
+                p->set_dimensiones(nw, nh);
+            }
+        } else {
+            PlanoInclinado* ramp = dynamic_cast<PlanoInclinado*>(entidad_seleccionada);
+            if (ramp) {
+                double paso = (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)) ? 1.0 : 10.0;
+                double nb = ramp->get_base(), nh = ramp->get_altura();
+                bool cambiado = false;
+                if (IsKeyPressed(KEY_RIGHT)) { nb = std::max(20.0, nb + paso); cambiado = true; }
+                if (IsKeyPressed(KEY_LEFT))  { nb = std::max(20.0, nb - paso); cambiado = true; }
+                if (IsKeyPressed(KEY_DOWN))  { nh = std::max(8.0,  nh + paso); cambiado = true; }
+                if (IsKeyPressed(KEY_UP))    { nh = std::max(8.0,  nh - paso); cambiado = true; }
+                if (cambiado) {
+                    ramp->set_dimensiones(nb, nh);
+                }
             }
         }
     }
@@ -3646,6 +3759,17 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                 Vector2D spos = sp->get_posicion();
                 DrawRectangleLinesEx({(float)spos.x - 3, (float)spos.y - 3,
                     (float)sp->get_ancho() + 6, (float)sp->get_alto() + 6}, 2.0f, sel_color);
+
+                // Draw resize handles if in JUEGO_CREATIVO and paused
+                if (estado_actual == EstadoJuego::JUEGO_CREATIVO && motor.get_pausado() && !es_borde_nivel(sp)) {
+                    auto handles = calcular_handles(sp);
+                    for (int i = 0; i < 8; ++i) {
+                        bool activo = (handle_activo == handles.tipos[i]);
+                        Color col = activo ? Color{255, 200, 50, 255} : Color{80, 160, 255, 200};
+                        DrawRectangleRec(handles.rects[i], col);
+                        DrawRectangleLinesEx(handles.rects[i], 1.5f, {20, 80, 200, 255});
+                    }
+                }
             } else {
                 Vector2D spos = entidad_seleccionada->get_posicion();
                 const Trampolin* st = dynamic_cast<const Trampolin*>(entidad_seleccionada);
@@ -3717,6 +3841,14 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                 { p_ext.x + 1, p_ext.y + 4 },
                 Color{40, 40, 40, 255}
             );
+
+            // Si es una rampa, dibujar también el badge de cambiar tamaño [T]
+            if (sr_rot) {
+                Vector2 size_badge_pos = { badge_pos.x + 32.0f, badge_pos.y };
+                DrawCircleV(size_badge_pos, 14.0f, Color{50, 180, 255, 240});
+                DrawCircleLines(size_badge_pos.x, size_badge_pos.y, 14.0f, WHITE);
+                DrawTextEx(fuente_menu, "T", { size_badge_pos.x - 5.0f, size_badge_pos.y - 8.0f }, 16.0f, 1.0f, Color{40, 40, 40, 255});
+            }
         }
     }
 
@@ -3830,7 +3962,7 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
         draw_help_line("Objetivo:", "Coloca objetos para que la pelota llegue a la zona meta.", start_y, box.x + 30.0f);
         draw_help_line("Arrastrar:", "Arrastra objetos del menu lateral al canvas.", start_y + dy, box.x + 30.0f);
         draw_help_line("Mover:", "Haz click izquierdo en un objeto y arrastralo.", start_y + dy * 2, box.x + 30.0f);
-        draw_help_line("Rotar (F):", "Selecciona un objeto y presiona F para rotarlo o invertirlo.", start_y + dy * 3, box.x + 30.0f);
+        draw_help_line("Rotar / Tamano:", "F: rotar/invertir. T: alternar tamano de rampas.", start_y + dy * 3, box.x + 30.0f);
         draw_help_line("Borrar (SUPR/X):", "Selecciona un objeto y presiona X o SUPR para eliminarlo.", start_y + dy * 4, box.x + 30.0f);
         draw_help_line("Simulacion:", "Presiona ESPACIO para correr o pausar la fisica.", start_y + dy * 5, box.x + 30.0f);
         draw_help_line("Menu Lateral:", "Presiona TAB para ocultar/mostrar el catalogo de objetos.", start_y + dy * 6, box.x + 30.0f);
