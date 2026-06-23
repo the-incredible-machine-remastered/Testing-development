@@ -1,5 +1,0 @@
-# Hashes of file build rules.
-525ff15a6532494907c3bc4a2fc039ae CMakeFiles/catalogo_menu_gen
-2872d32a7394b375ad477c01d20700b0 _deps/raylib-build/CMakeFiles/uninstall
-3ab148b705555d331dce642320be28be _deps/raylib-build/raylib/external/glfw/src/CMakeFiles/update_mappings
-a6db2a72d9288801b2f28ed0cac90dd2 src/objetos/catalogo_menu.gen.h

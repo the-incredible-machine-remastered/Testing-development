@@ -11,3 +11,11 @@
 # Local or temp files
 /bin/
 /lib/
+_deps/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.exe
+*.txt
+*.log
