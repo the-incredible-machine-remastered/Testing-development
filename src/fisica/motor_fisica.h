@@ -27,9 +27,11 @@
 #include "fisica_ventilador.h"
 #include <vector>
 #include <algorithm>
+#include <memory>
 
 class MotorFisica {
 private:
+    std::vector<std::unique_ptr<EntidadFisica>> entidades_owner;
     std::vector<EntidadFisica*> entidades;
     Vector2D gravedad;
     double dt_fijo;              // Timestep fijo (ej. 1/120 s)
@@ -59,23 +61,33 @@ public:
     int get_siguiente_id() const { return siguiente_id; }
 
     void agregar_entidad(EntidadFisica* e) {
+        if (!e) return;
         entidades.push_back(e);
+        entidades_owner.push_back(std::unique_ptr<EntidadFisica>(e));
+    }
+
+    void agregar_entidad(std::unique_ptr<EntidadFisica> e) {
+        if (!e) return;
+        entidades.push_back(e.get());
+        entidades_owner.push_back(std::move(e));
     }
 
     void remover_entidad(int id) {
         entidades.erase(
             std::remove_if(entidades.begin(), entidades.end(),
-                [id](EntidadFisica* e) {
-                    if (e->get_id() == id) { delete e; return true; }
-                    return false;
-                }),
+                [id](EntidadFisica* e) { return e->get_id() == id; }),
             entidades.end()
+        );
+        entidades_owner.erase(
+            std::remove_if(entidades_owner.begin(), entidades_owner.end(),
+                [id](const std::unique_ptr<EntidadFisica>& e) { return e->get_id() == id; }),
+            entidades_owner.end()
         );
     }
 
     void limpiar() {
-        for (auto* e : entidades) delete e;
         entidades.clear();
+        entidades_owner.clear();
         siguiente_id = 1;
     }
 
@@ -190,12 +202,6 @@ private:
             auto* seg = dynamic_cast<SeguidorBooster*>(e);
             if (seg) {
                 seg->actualizar_comportamiento(entidades, dt);
-                if (!seg->eventos_pendientes.empty()) {
-                    for (const auto& ev : seg->eventos_pendientes) {
-                        eventos_especiales_frame.push_back(ev);
-                    }
-                    seg->eventos_pendientes.clear();
-                }
             }
         }
  
@@ -206,6 +212,17 @@ private:
  
         // 4. Detectar y resolver colisiones
         detectar_y_resolver_colisiones();
+
+        // 5. Recolectar eventos especiales pendientes de todas las entidades
+        for (auto* e : entidades) {
+            auto& evs = e->get_eventos_pendientes();
+            if (!evs.empty()) {
+                for (const auto& ev : evs) {
+                    eventos_especiales_frame.push_back(ev);
+                }
+                e->limpiar_eventos_pendientes();
+            }
+        }
     }
 
     void aplicar_gravedad() {
@@ -250,9 +267,9 @@ private:
                         info.punto_contacto, info.normal, info.profundidad
                     });
 
-                    aplicar_efecto_trampolin(a, b, info);
-                    aplicar_efecto_barril(a, b, info);
-                    aplicar_efecto_bola_rebotadora(a, b, info);
+                    a->on_collision(b, info);
+                    Vector2D normal_inv = info.normal * -1.0;
+                    b->on_collision(a, InfoColision{info.hay_colision, normal_inv, info.profundidad, info.punto_contacto});
                 }
             }
         }
@@ -336,110 +353,7 @@ private:
         return InfoColision{};
     }
 
-    // Helper para aplicar el rebote elástico hacia arriba del Trampolín
-    void aplicar_efecto_trampolin(EntidadFisica* a, EntidadFisica* b, const InfoColision& info) {
-        Bola* bola = dynamic_cast<Bola*>(a);
-        Trampolin* tramp = dynamic_cast<Trampolin*>(b);
-        Vector2D normal_para_bola = info.normal; // Normal de separación para A
 
-        if (!bola || !tramp) {
-            bola = dynamic_cast<Bola*>(b);
-            tramp = dynamic_cast<Trampolin*>(a);
-            normal_para_bola = info.normal * -1.0;
-        }
-
-        if (bola && tramp) {
-            // Si la colisión es en la lona del trampolín (la parte superior, normal hacia arriba en pantalla Y-)
-            if (normal_para_bola.y < -0.4) {
-                // Obtener velocidad vertical previa para estimar la fuerza del impacto
-                double velocidad_impacto = std::abs(bola->get_velocidad().y);
-
-                // Forzar velocidad vertical hacia arriba
-                Vector2D vel = bola->get_velocidad();
-                vel.y = -tramp->get_fuerza_rebote();
-                bola->set_velocidad(vel);
-
-                // Deformar la lona proporcionalmente a la velocidad del impacto
-                double nueva_def = std::max(10.0, velocidad_impacto * 0.04);
-                tramp->set_deformacion(std::min(24.0, nueva_def));
-
-                // Aplicar un giro (torque) basado en qué tan lejos del centro cayó para un efecto más interactivo
-                double centro_tramp = tramp->get_posicion().x + tramp->get_ancho() / 2.0;
-                double offset = bola->get_posicion().x - centro_tramp;
-                
-                // Agregamos rotación proporcional al descentrado
-                double kick_rotacional = offset * 0.4;
-                bola->set_velocidad_angular(bola->get_velocidad_angular() + kick_rotacional);
-            }
-        }
-    }
-
-    // Helper para aplicar el impulso de lanzamiento de 75 grados del Barril Chavo
-    void aplicar_efecto_barril(EntidadFisica* a, EntidadFisica* b, const InfoColision& info) {
-        Bola* bola = dynamic_cast<Bola*>(a);
-        BarrilChavo* barril = dynamic_cast<BarrilChavo*>(b);
-        Vector2D normal_para_bola = info.normal; // Normal de separación para A
-
-        if (!bola || !barril) {
-            bola = dynamic_cast<Bola*>(b);
-            barril = dynamic_cast<BarrilChavo*>(a);
-            normal_para_bola = info.normal * -1.0;
-        }
-
-        if (bola && barril) {
-            // Si la colisión es en la parte superior del barril (normal hacia arriba en pantalla Y-)
-            // Y el centro de la bola está por encima (su Y está cerca o por encima de la parte superior del barril)
-            if (normal_para_bola.y < -0.4 && bola->get_posicion().y < barril->get_posicion().y + 10.0) {
-                // Solo disparamos si estaba esperando
-                if (barril->get_estado() == EstadoBarril::ESPERANDO) {
-                    barril->disparar_chavo();
-                    
-                    eventos_especiales_frame.push_back({
-                        TipoEventoEspecial::BARRIL_LANZADO,
-                        barril->get_id(),
-                        bola->get_id()
-                    });
-                    
-                    // Lanzar la bola a 75 grados hacia arriba
-                    // En coordenadas de pantalla Y es hacia abajo, por lo que "arriba" es -Y
-                    // Así que el ángulo de 75 grados hacia arriba-derecha es:
-                    // cos(75°) * X_dir + sin(-75°) * Y_dir = (0.258819, -0.965926)
-                    double angulo_rad = MathUtils::grados_a_radianes(-75.0);
-                    Vector2D dir_impulso(std::cos(angulo_rad), std::sin(angulo_rad));
-                    
-                    double fuerza_lanzamiento = 750.0;
-                    bola->set_velocidad(dir_impulso * fuerza_lanzamiento);
-
-                    // Pequeño giro a la bola para dinamismo
-                    bola->set_velocidad_angular(3.0);
-                }
-            }
-        }
-    }
-
-    // Helper para activar la vibracion elastica de la BolaRebotadora al recibir impactos
-    void aplicar_efecto_bola_rebotadora(EntidadFisica* a, EntidadFisica* b, const InfoColision& info) {
-        Bola* bola = dynamic_cast<Bola*>(a);
-        BolaRebotadora* rebotadora = dynamic_cast<BolaRebotadora*>(b);
-
-        if (!bola || !rebotadora) {
-            bola = dynamic_cast<Bola*>(b);
-            rebotadora = dynamic_cast<BolaRebotadora*>(a);
-        }
-
-        if (bola && rebotadora) {
-            Vector2D normal_bola = (bola == a) ? info.normal : info.normal * -1.0;
-            double velocidad_normal = Vector2D::dot(bola->get_velocidad(), normal_bola);
-            double velocidad_impacto = std::abs(velocidad_normal);
-            rebotadora->registrar_impacto(velocidad_impacto);
-
-            if (velocidad_normal > 0.0 && rebotadora->get_multiplicador_rebote() > 1.0) {
-                Vector2D vel = bola->get_velocidad();
-                double impulso_extra = velocidad_normal * (rebotadora->get_multiplicador_rebote() - 1.0);
-                bola->set_velocidad(vel + normal_bola * impulso_extra);
-            }
-        }
-    }
 
     // Helper: Círculo (circ_ent) vs Polígono (poly_ent)
     InfoColision colision_circulo_poligono(EntidadFisica* circ_ent, EntidadFisica* poly_ent) {

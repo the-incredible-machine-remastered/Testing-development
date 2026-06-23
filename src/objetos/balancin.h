@@ -5,7 +5,10 @@
 
 #include "../core/entidad_fisica.h"
 #include "../core/math_utils.h"
+#include "../sistema/assets_extern.h"
 #include <vector>
+#include <cmath>
+#include <algorithm>
 
 class Balancin : public EntidadFisica {
 protected:
@@ -98,6 +101,126 @@ public:
         aceleracion = Vector2D(0.0, 0.0);
         fuerza_neta = Vector2D(0.0, 0.0);
         torque_neto = 0.0;
+    }
+
+    // --- Métodos polimórficos ---
+    TipoEntidadJuego get_tipo_entidad() const override {
+        return TipoEntidadJuego::BALANCIN;
+    }
+
+    std::string serializar() const override {
+        std::stringstream ss;
+        ss << "ent BALANCIN id=" << get_id() << serializar_base()
+           << " largo=" << largo << " esp=" << espesor;
+        return ss.str();
+    }
+
+    bool contiene_punto(const Vector2D& p) const override {
+        double ang = angulo;
+        double half_l = largo / 2.0;
+        Vector2D dir(std::cos(ang), std::sin(ang));
+        Vector2D A = posicion - dir * half_l;
+        Vector2D B = posicion + dir * half_l;
+        
+        Vector2D v = B - A;
+        Vector2D w = p - A;
+        double dot = w.x * v.x + w.y * v.y;
+        double len_sq = v.x * v.x + v.y * v.y;
+        double t = (len_sq > 0.0) ? std::max(0.0, std::min(1.0, dot / len_sq)) : 0.0;
+        Vector2D C = A + v * t;
+        double dist = (p - C).magnitud();
+        return dist < espesor / 2.0 + 15.0;
+    }
+
+    void dibujar(bool debug) const override {
+        int px = static_cast<int>(posicion.x);
+        int py = static_cast<int>(posicion.y);
+        int larg = static_cast<int>(largo);
+        int esp = static_cast<int>(espesor);
+        float rot_deg = static_cast<float>(angulo * 180.0 / MathUtils::TIM_PI);
+        double cos_a = std::cos(angulo);
+        double sin_a = std::sin(angulo);
+
+        // 1. Dibujar soporte del pivot
+        if (tex_balancin_base.id > 0) {
+            float base_w = 34.0f;
+            float base_h = 44.0f;
+            DrawTexturePro(
+                tex_balancin_base,
+                { 0, 0, (float)tex_balancin_base.width, (float)tex_balancin_base.height },
+                { (float)px - base_w / 2.0f, (float)py - 2.0f, base_w, base_h },
+                { 0, 0 },
+                0.0f,
+                WHITE
+            );
+        } else {
+            DrawTriangle(
+                {static_cast<float>(px), static_cast<float>(py)},
+                {static_cast<float>(px - 16), static_cast<float>(py + 40)},
+                {static_cast<float>(px + 16), static_cast<float>(py + 40)},
+                DARKGRAY
+            );
+            DrawTriangleLines(
+                {static_cast<float>(px), static_cast<float>(py)},
+                {static_cast<float>(px - 16), static_cast<float>(py + 40)},
+                {static_cast<float>(px + 16), static_cast<float>(py + 40)},
+                GRAY
+            );
+        }
+
+        // 2. Dibujar la tabla giratoria (plank)
+        if (tex_balancin_tabla.id > 0) {
+            float board_h = esp * 3.5f;
+            Rectangle rec = { static_cast<float>(px), static_cast<float>(py), static_cast<float>(larg), board_h };
+            Vector2 origin = { static_cast<float>(larg / 2.0), board_h / 2.0f };
+            DrawTexturePro(
+                tex_balancin_tabla,
+                { 0, 0, (float)tex_balancin_tabla.width, (float)tex_balancin_tabla.height },
+                rec,
+                origin,
+                rot_deg,
+                WHITE
+            );
+        } else {
+            Rectangle rec = { static_cast<float>(px), static_cast<float>(py), static_cast<float>(larg), static_cast<float>(esp) };
+            Vector2 origin = { static_cast<float>(larg / 2.0), static_cast<float>(esp / 2.0) };
+            DrawRectanglePro(rec, origin, rot_deg, Color{190, 110, 50, 255});
+            
+            // Dibujar contorno ocre rotado usando las 4 esquinas del tablón
+            double hl = larg / 2.0;
+            double ht = esp / 2.0;
+            Vector2D dir_x(cos_a, sin_a);
+            Vector2D dir_y(-sin_a, cos_a);
+            Vector2D c1 = posicion - dir_x * hl - dir_y * ht;
+            Vector2D c2 = posicion + dir_x * hl - dir_y * ht;
+            Vector2D c3 = posicion + dir_x * hl + dir_y * ht;
+            Vector2D c4 = posicion - dir_x * hl + dir_y * ht;
+
+            Color color_borde = Color{220, 140, 70, 255};
+            DrawLineEx({(float)c1.x, (float)c1.y}, {(float)c2.x, (float)c2.y}, 1.5f, color_borde);
+            DrawLineEx({(float)c2.x, (float)c2.y}, {(float)c3.x, (float)c3.y}, 1.5f, color_borde);
+            DrawLineEx({(float)c3.x, (float)c3.y}, {(float)c4.x, (float)c4.y}, 1.5f, color_borde);
+            DrawLineEx({(float)c4.x, (float)c4.y}, {(float)c1.x, (float)c1.y}, 1.5f, color_borde);
+        }
+
+        // 3. Asientos rojos en los extremos (siempre dibujados encima para mayor detalle)
+        Vector2 seat_l = {
+            static_cast<float>(px - (larg / 2.0 - 5.0) * cos_a),
+            static_cast<float>(py - (larg / 2.0 - 5.0) * sin_a)
+        };
+        DrawCircle(static_cast<int>(seat_l.x), static_cast<int>(seat_l.y), 6.0f, RED);
+        DrawCircleLines(static_cast<int>(seat_l.x), static_cast<int>(seat_l.y), 6.0f, MAROON);
+
+        Vector2 seat_r = {
+            static_cast<float>(px + (larg / 2.0 - 5.0) * cos_a),
+            static_cast<float>(py + (larg / 2.0 - 5.0) * sin_a)
+        };
+        DrawCircle(static_cast<int>(seat_r.x), static_cast<int>(seat_r.y), 6.0f, RED);
+        DrawCircleLines(static_cast<int>(seat_r.x), static_cast<int>(seat_r.y), 6.0f, MAROON);
+
+        // 4. Perno central negro/gris
+        DrawCircle(px, py, 6, BLACK);
+        DrawCircle(px, py, 4, LIGHTGRAY);
     }
 };
 

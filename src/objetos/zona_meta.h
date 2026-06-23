@@ -1,7 +1,9 @@
 #pragma once
-#include "core/entidad_fisica.h"
-#include "core/math_utils.h"
+#include "../core/entidad_fisica.h"
+#include "../core/math_utils.h"
+#include "../sistema/assets_extern.h"
 #include <string>
+#include <algorithm>
 
 // TIM_MENU_SPAWN etiqueta="Zona Meta" tab=0 categoria=1
 
@@ -9,7 +11,6 @@ class ZonaMeta : public EntidadFisica {
 public:
     double ancho;
     double alto;
-    // Color/estilo visual del editor (no se renderiza en simulacion)
     Color color_editor = {0, 255, 100, 80};
 
     ZonaMeta(int id, Vector2D pos, double w = 80, double h = 80)
@@ -19,13 +20,13 @@ public:
         es_estatico = true;
     }
 
-    bool contiene_punto(Vector2D punto) const {
-        double min_x = posicion.x - ancho / 2.0;
-        double max_x = posicion.x + ancho / 2.0;
-        double min_y = posicion.y - alto / 2.0;
-        double max_y = posicion.y + alto / 2.0;
-        return punto.x >= min_x && punto.x <= max_x &&
-               punto.y >= min_y && punto.y <= max_y;
+    bool contiene_punto(const Vector2D& p) const override {
+        double min_x = posicion.x - ancho / 2.0 - 15;
+        double max_x = posicion.x + ancho / 2.0 + 15;
+        double min_y = posicion.y - alto / 2.0 - 15;
+        double max_y = posicion.y + alto / 2.0 + 15;
+        return p.x >= min_x && p.x <= max_x &&
+               p.y >= min_y && p.y <= max_y;
     }
 
     bool intersecta_circulo(Vector2D centro, double radio) const {
@@ -54,4 +55,23 @@ public:
     }
 
     void actualizar_fisica(double) override {} // No-op
+
+    // --- Métodos polimórficos ---
+    TipoEntidadJuego get_tipo_entidad() const override {
+        return TipoEntidadJuego::ZONA_META;
+    }
+
+    std::string serializar() const override {
+        std::stringstream ss;
+        ss << "ent ZONA_META id=" << get_id()
+           << " x=" << posicion.x << " y=" << posicion.y
+           << " w=" << ancho << " h=" << alto;
+        return ss.str();
+    }
+
+    void dibujar(bool debug) const override {
+        Vector2D min_p = posicion - Vector2D(ancho / 2.0, alto / 2.0);
+        DrawRectangle(min_p.x, min_p.y, ancho, alto, color_editor);
+        DrawRectangleLines(min_p.x, min_p.y, ancho, alto, GREEN);
+    }
 };

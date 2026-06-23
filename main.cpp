@@ -77,10 +77,7 @@ const int NUM_COLORES = 7;
 
 // Colores del escenario
 const Color COLOR_FONDO       = {22,  22,  42,  255};   // Navy oscuro
-const Color COLOR_PARED       = {40,  42,  68,  255};   // Azul-gris oscuro
-const Color COLOR_PARED_BORDE = {70,  75,  110, 255};   // Azul-gris claro
-const Color COLOR_RAMPA       = {35,  75,  58,  255};   // Verde bosque oscuro
-const Color COLOR_RAMPA_BORDE = {65,  140, 100, 255};   // Verde bosque claro
+// COLOR_PARED, COLOR_PARED_BORDE, COLOR_RAMPA, COLOR_RAMPA_BORDE son definidos en assets_extern.h
 const Color COLOR_HUD         = {200, 200, 220, 255};   // Texto claro
 const Color COLOR_CONTROLES   = {130, 130, 160, 200};   // Texto controles
 
@@ -508,161 +505,9 @@ InfoHandles calcular_handles(const ParedRectangular* p) {
 // Obtener qué objeto está debajo del cursor del mouse (incluye estáticos)
 EntidadFisica* obtener_entidad_bajo_mouse(const MotorFisica& motor, Vector2D mouse_pos) {
     for (auto* e : motor.get_entidades()) {
-        // Excluir bordes del nivel del arrastre/selección
         if (es_borde_nivel(e)) continue;
-
-        const SoporteTorque* soporte = dynamic_cast<const SoporteTorque*>(e);
-        if (soporte) {
-            double dist = (soporte->get_punto_cuerda() - mouse_pos).magnitud();
-            if (dist < soporte->get_radio() + 10.0) {
-                return const_cast<SoporteTorque*>(soporte);
-            }
-        }
-
-        TipoForma forma = e->get_tipo_forma();
-        if (forma == TipoForma::CIRCULO) {
-            const BolaRebotadora* rebotadora = dynamic_cast<const BolaRebotadora*>(e);
-            if (rebotadora) {
-                double dist = (rebotadora->get_posicion() - mouse_pos).magnitud();
-                if (dist < rebotadora->get_radio() + 15.0) {
-                    return const_cast<BolaRebotadora*>(rebotadora);
-                }
-            }
-
-            const Bola* b = dynamic_cast<const Bola*>(e);
-            if (b) {
-                double dist = (b->get_posicion() - mouse_pos).magnitud();
-                if (dist < b->get_radio() + 15.0) {
-                    return const_cast<Bola*>(b);
-                }
-            }
-        }
-        else if (forma == TipoForma::AABB) {
-            const Trampolin* t = dynamic_cast<const Trampolin*>(e);
-            if (t) {
-                Vector2D pos = t->get_posicion();
-                double w = t->get_ancho();
-                double h = t->get_alto();
-                if (mouse_pos.x >= pos.x - 10 && mouse_pos.x <= pos.x + w + 10 &&
-                    mouse_pos.y >= pos.y - 10 && mouse_pos.y <= pos.y + h + 10) {
-                    return const_cast<Trampolin*>(t);
-                }
-            }
-            const SeguidorBooster* seg = dynamic_cast<const SeguidorBooster*>(e);
-            if (seg) {
-                Vector2D pos = seg->get_posicion();
-                double w = seg->get_ancho();
-                double h = seg->get_alto();
-                if (mouse_pos.x >= pos.x - w/2 - 10 && mouse_pos.x <= pos.x + w/2 + 10 &&
-                    mouse_pos.y >= pos.y - h/2 - 10 && mouse_pos.y <= pos.y + h/2 + 10) {
-                    return const_cast<SeguidorBooster*>(seg);
-                }
-            }
-            const BarrilChavo* bar = dynamic_cast<const BarrilChavo*>(e);
-            if (bar) {
-                Vector2D pos = bar->get_posicion();
-                double w = bar->get_ancho();
-                double h = bar->get_alto();
-                if (mouse_pos.x >= pos.x - 10 && mouse_pos.x <= pos.x + w + 10 &&
-                    mouse_pos.y >= pos.y - 10 && mouse_pos.y <= pos.y + h + 10) {
-                    return const_cast<BarrilChavo*>(bar);
-                }
-            }
-            const Ventilador* vent = dynamic_cast<const Ventilador*>(e);
-            if (vent) {
-                Vector2D pos = vent->get_posicion();
-                double w = vent->get_ancho();
-                double h = vent->get_alto();
-                if (mouse_pos.x >= pos.x - 10 && mouse_pos.x <= pos.x + w + 10 &&
-                    mouse_pos.y >= pos.y - 10 && mouse_pos.y <= pos.y + h + 10) {
-                    return const_cast<Ventilador*>(vent);
-                }
-            }
-            const Cubeta* cubeta = dynamic_cast<const Cubeta*>(e);
-            if (cubeta) {
-                Vector2D pos = cubeta->get_posicion();
-                double w = cubeta->get_ancho();
-                double h = cubeta->get_alto();
-                if (mouse_pos.x >= pos.x - 10 && mouse_pos.x <= pos.x + w + 10 &&
-                    mouse_pos.y >= pos.y - 10 && mouse_pos.y <= pos.y + h + 10) {
-                    return const_cast<Cubeta*>(cubeta);
-                }
-            }
-            // ParedRectangular (plataformas, paredes colocadas por el usuario)
-            const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
-            if (p) {
-                Vector2D pos = p->get_posicion();
-                double w = p->get_ancho();
-                double h = p->get_alto();
-                if (mouse_pos.x >= pos.x - 10 && mouse_pos.x <= pos.x + w + 10 &&
-                    mouse_pos.y >= pos.y - 10 && mouse_pos.y <= pos.y + h + 10) {
-                    return const_cast<ParedRectangular*>(p);
-                }
-            }
-        }
-        else if (forma == TipoForma::NINGUNA) {
-            const ZonaMeta* zm = dynamic_cast<const ZonaMeta*>(e);
-            if (zm) {
-                Vector2D pos = zm->get_posicion();
-                double w = zm->ancho;
-                double h = zm->alto;
-                // posicion es el CENTRO de la zona meta
-                if (mouse_pos.x >= pos.x - w / 2.0 - 15 && mouse_pos.x <= pos.x + w / 2.0 + 15 &&
-                    mouse_pos.y >= pos.y - h / 2.0 - 15 && mouse_pos.y <= pos.y + h / 2.0 + 15) {
-                    return const_cast<ZonaMeta*>(zm);
-                }
-            }
-            const SoporteTorque* st = dynamic_cast<const SoporteTorque*>(e);
-            if (st) {
-                Vector2D pos = st->get_punto_cuerda();
-                double r = st->get_radio();
-                double dist = (pos - mouse_pos).magnitud();
-                if (dist < r + 15.0) {
-                    return const_cast<SoporteTorque*>(st);
-                }
-            }
-        }
-        else if (forma == TipoForma::POLIGONO) {
-            const Balancin* bal = dynamic_cast<const Balancin*>(e);
-            if (bal) {
-                Vector2D pos = bal->get_posicion();
-                double ang = bal->get_angulo();
-                double half_l = bal->get_largo() / 2.0;
-                Vector2D dir(std::cos(ang), std::sin(ang));
-                Vector2D A = pos - dir * half_l;
-                Vector2D B = pos + dir * half_l;
-                
-                Vector2D v = B - A;
-                Vector2D w = mouse_pos - A;
-                double dot = w.x * v.x + w.y * v.y;
-                double len_sq = v.x * v.x + v.y * v.y;
-                double t = (len_sq > 0.0) ? std::max(0.0, std::min(1.0, dot / len_sq)) : 0.0;
-                Vector2D C = A + v * t;
-                double dist = (mouse_pos - C).magnitud();
-                if (dist < bal->get_espesor() / 2.0 + 15.0) {
-                    return const_cast<Balancin*>(bal);
-                }
-            }
-            // PlanoInclinado (rampas)
-            const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
-            if (ramp) {
-                const auto& verts = ramp->get_vertices();
-                if (verts.size() >= 3) {
-                    // Bounding box de los vértices con margen
-                    double min_x = verts[0].x, max_x = verts[0].x;
-                    double min_y = verts[0].y, max_y = verts[0].y;
-                    for (const auto& v : verts) {
-                        if (v.x < min_x) min_x = v.x;
-                        if (v.x > max_x) max_x = v.x;
-                        if (v.y < min_y) min_y = v.y;
-                        if (v.y > max_y) max_y = v.y;
-                    }
-                    if (mouse_pos.x >= min_x - 10 && mouse_pos.x <= max_x + 10 &&
-                        mouse_pos.y >= min_y - 10 && mouse_pos.y <= max_y + 10) {
-                        return const_cast<PlanoInclinado*>(ramp);
-                    }
-                }
-            }
+        if (e->contiene_punto(mouse_pos)) {
+            return e;
         }
     }
     return nullptr;
@@ -739,101 +584,71 @@ void crear_escena(MotorFisica& motor) {
 // ============================================================================
 // Validación de spawn — no crear objetos dentro de otros
 // ============================================================================
-bool posicion_valida_para_bola(const MotorFisica& motor, Vector2D pos, double radio) {
+bool posicion_valida_para_spawn(const MotorFisica& motor, Vector2D pos, TipoForma forma, double w_r, double h) {
     for (const auto* e : motor.get_entidades()) {
-        TipoForma forma = e->get_tipo_forma();
+        TipoForma forma_e = e->get_tipo_forma();
 
         if (forma == TipoForma::CIRCULO) {
-            Vector2D pos_circ;
-            double radio_circ = 0.0;
-            if (obtener_datos_circulo(e, pos_circ, radio_circ)) {
-                InfoColision info = Colisiones::circulo_vs_circulo(
-                    pos, radio, pos_circ, radio_circ);
+            double radio = w_r;
+            if (forma_e == TipoForma::CIRCULO) {
+                Vector2D pos_circ;
+                double radio_circ = 0.0;
+                if (obtener_datos_circulo(e, pos_circ, radio_circ)) {
+                    InfoColision info = Colisiones::circulo_vs_circulo(pos, radio, pos_circ, radio_circ);
+                    if (info.hay_colision) return false;
+                }
+            }
+            else if (forma_e == TipoForma::AABB) {
+                InfoColision info = Colisiones::circulo_vs_aabb(pos, radio, e->get_min(), e->get_max());
                 if (info.hay_colision) return false;
+            }
+            else if (forma_e == TipoForma::POLIGONO) {
+                const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
+                if (ramp) {
+                    InfoColision info = Colisiones::circulo_vs_poligono(pos, radio, ramp->get_vertices());
+                    if (info.hay_colision) return false;
+                }
+                const Balancin* bal = dynamic_cast<const Balancin*>(e);
+                if (bal) {
+                    InfoColision info = Colisiones::circulo_vs_balancin(
+                        pos, radio, bal->get_posicion(), bal->get_angulo(),
+                        bal->get_largo(), bal->get_espesor());
+                    if (info.hay_colision) return false;
+                }
             }
         }
         else if (forma == TipoForma::AABB) {
-            const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
-            if (p) {
-                InfoColision info = Colisiones::circulo_vs_aabb(
-                    pos, radio, p->get_min(), p->get_max());
-                if (info.hay_colision) return false;
+            double w = w_r;
+            if (forma_e == TipoForma::CIRCULO) {
+                Vector2D pos_circ;
+                double radio_circ = 0.0;
+                if (obtener_datos_circulo(e, pos_circ, radio_circ)) {
+                    InfoColision info = Colisiones::circulo_vs_aabb(pos_circ, radio_circ, pos, Vector2D(pos.x + w, pos.y + h));
+                    if (info.hay_colision) return false;
+                }
             }
-            const Trampolin* t = dynamic_cast<const Trampolin*>(e);
-            if (t) {
-                InfoColision info = Colisiones::circulo_vs_aabb(
-                    pos, radio, t->get_min(), t->get_max());
-                if (info.hay_colision) return false;
-            }
-            const BarrilChavo* bar = dynamic_cast<const BarrilChavo*>(e);
-            if (bar) {
-                InfoColision info = Colisiones::circulo_vs_aabb(
-                    pos, radio, bar->get_min(), bar->get_max());
-                if (info.hay_colision) return false;
-            }
-        }
-        else if (forma == TipoForma::POLIGONO) {
-            const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
-            if (ramp) {
-                InfoColision info = Colisiones::circulo_vs_poligono(
-                    pos, radio, ramp->get_vertices());
-                if (info.hay_colision) return false;
-            }
-            const Balancin* bal = dynamic_cast<const Balancin*>(e);
-            if (bal) {
-                InfoColision info = Colisiones::circulo_vs_balancin(
-                    pos, radio, bal->get_posicion(), bal->get_angulo(),
-                    bal->get_largo(), bal->get_espesor());
-                if (info.hay_colision) return false;
-            }
-        }
-    }
-    return true;
-}
-
-// Validación para crear balancín
-bool posicion_valida_para_balancin(const MotorFisica& motor, Vector2D pos, double w, double h) {
-    for (const auto* e : motor.get_entidades()) {
-        TipoForma forma = e->get_tipo_forma();
-
-        if (forma == TipoForma::CIRCULO) {
-            Vector2D pos_circ;
-            double radio_circ = 0.0;
-            if (obtener_datos_circulo(e, pos_circ, radio_circ)) {
-                InfoColision info = Colisiones::circulo_vs_aabb(
-                    pos_circ, radio_circ,
-                    pos, Vector2D(pos.x + w, pos.y + h));
-                if (info.hay_colision) return false;
-            }
-        }
-        else if (forma == TipoForma::AABB) {
-            const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
-            const Trampolin* t = dynamic_cast<const Trampolin*>(e);
-            const BarrilChavo* bar = dynamic_cast<const BarrilChavo*>(e);
-            Vector2D min_b = p ? p->get_min() : (t ? t->get_min() : (bar ? bar->get_min() : pos));
-            Vector2D max_b = p ? p->get_max() : (t ? t->get_max() : (bar ? bar->get_max() : pos));
-
-            if (p || t || bar) {
+            else if (forma_e == TipoForma::AABB) {
+                Vector2D min_b = e->get_min();
+                Vector2D max_b = e->get_max();
                 bool overlap = (pos.x < max_b.x && pos.x + w > min_b.x &&
                                 pos.y < max_b.y && pos.y + h > min_b.y);
                 if (overlap) return false;
             }
-        }
-        else if (forma == TipoForma::POLIGONO) {
-            const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
-            const Balancin* bal = dynamic_cast<const Balancin*>(e);
-            if (ramp) {
-                for (const auto& v : ramp->get_vertices()) {
-                    if (v.x >= pos.x && v.x <= pos.x + w &&
-                        v.y >= pos.y && v.y <= pos.y + h) {
-                        return false;
+            else if (forma_e == TipoForma::POLIGONO) {
+                const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
+                if (ramp) {
+                    for (const auto& v : ramp->get_vertices()) {
+                        if (v.x >= pos.x && v.x <= pos.x + w &&
+                            v.y >= pos.y && v.y <= pos.y + h) {
+                            return false;
+                        }
                     }
                 }
-            }
-            if (bal) {
-                // Evitar superponer pivotes demasiado cerca
-                Vector2D diff = (pos + Vector2D(w/2.0, h/2.0)) - bal->get_posicion();
-                if (diff.magnitud() < 40.0) return false;
+                const Balancin* bal = dynamic_cast<const Balancin*>(e);
+                if (bal) {
+                    Vector2D diff = (pos + Vector2D(w / 2.0, h / 2.0)) - bal->get_posicion();
+                    if (diff.magnitud() < 40.0) return false;
+                }
             }
         }
     }
@@ -849,7 +664,7 @@ bool crear_balancin(MotorFisica& motor, Vector2D pos) {
     Vector2D pivot_pos = pos;
     Vector2D spawn_min(pos.x - w / 2.0, pos.y - h / 2.0);
 
-    if (!posicion_valida_para_balancin(motor, spawn_min, w, h)) {
+    if (!posicion_valida_para_spawn(motor, spawn_min, TipoForma::AABB, w, h)) {
         spawn_error_timer = 0.5f;
         spawn_error_pos = pos;
         return false;
@@ -857,51 +672,6 @@ bool crear_balancin(MotorFisica& motor, Vector2D pos) {
 
     Balancin* b = new Balancin(motor.generar_id(), pivot_pos, w, h);
     motor.agregar_entidad(b);
-    return true;
-}
-
-// Validación para crear trampolín (evita colisiones con paredes, otras rampas, bolas)
-bool posicion_valida_para_trampolin(const MotorFisica& motor, Vector2D pos, double w, double h) {
-    for (const auto* e : motor.get_entidades()) {
-        TipoForma forma = e->get_tipo_forma();
-
-        if (forma == TipoForma::CIRCULO) {
-            Vector2D pos_circ;
-            double radio_circ = 0.0;
-            if (obtener_datos_circulo(e, pos_circ, radio_circ)) {
-                InfoColision info = Colisiones::circulo_vs_aabb(
-                    pos_circ, radio_circ,
-                    pos, Vector2D(pos.x + w, pos.y + h));
-                if (info.hay_colision) return false;
-            }
-        }
-        else if (forma == TipoForma::AABB) {
-            const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
-            const Trampolin* t = dynamic_cast<const Trampolin*>(e);
-            const BarrilChavo* bar = dynamic_cast<const BarrilChavo*>(e);
-            Vector2D min_b = p ? p->get_min() : (t ? t->get_min() : (bar ? bar->get_min() : pos));
-            Vector2D max_b = p ? p->get_max() : (t ? t->get_max() : (bar ? bar->get_max() : pos));
-
-            if (p || t || bar) {
-                // Intersección AABB vs AABB
-                bool overlap = (pos.x < max_b.x && pos.x + w > min_b.x &&
-                                pos.y < max_b.y && pos.y + h > min_b.y);
-                if (overlap) return false;
-            }
-        }
-        else if (forma == TipoForma::POLIGONO) {
-            const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
-            if (ramp) {
-                // Verificación simple para evitar spawn encima de vértices de la rampa
-                for (const auto& v : ramp->get_vertices()) {
-                    if (v.x >= pos.x && v.x <= pos.x + w &&
-                        v.y >= pos.y && v.y <= pos.y + h) {
-                        return false;
-                    }
-                }
-            }
-        }
-    }
     return true;
 }
 
@@ -914,7 +684,7 @@ bool crear_trampolin(MotorFisica& motor, Vector2D pos) {
     // Centrar en el mouse
     Vector2D spawn_pos(pos.x - w / 2.0, pos.y - h / 2.0);
 
-    if (!posicion_valida_para_trampolin(motor, spawn_pos, w, h)) {
+    if (!posicion_valida_para_spawn(motor, spawn_pos, TipoForma::AABB, w, h)) {
         spawn_error_timer = 0.5f;
         spawn_error_pos = pos;
         return false;
@@ -932,7 +702,7 @@ bool crear_bola(MotorFisica& motor, Vector2D pos) {
     double radio = 35.0 + GetRandomValue(0, 8);   // Radio entre 8-16 px
 
     // Verificar que no colisiona con nada existente
-    if (!posicion_valida_para_bola(motor, pos, radio)) {
+    if (!posicion_valida_para_spawn(motor, pos, TipoForma::CIRCULO, radio, 0.0)) {
         spawn_error_timer = 0.5f;  // Flash rojo de 0.5s
         spawn_error_pos = pos;
         return false;
@@ -1721,7 +1491,7 @@ bool crear_bola_rebotadora(MotorFisica& motor, Vector2D pos) {
     double radio = 48.0;
 
     // Verificar que no nace encima de paredes, rampas u otros mecanismos
-    if (!posicion_valida_para_bola(motor, pos, radio)) {
+    if (!posicion_valida_para_spawn(motor, pos, TipoForma::CIRCULO, radio, 0.0)) {
         spawn_error_timer = 0.5f;
         spawn_error_pos = pos;
         return false;
@@ -1755,39 +1525,6 @@ bool crear_seguidor_booster(MotorFisica& motor, Vector2D pos) {
 }
 
 // ============================================================================
-// Validación para crear barril (evita colisiones con paredes, trampolines, bolas, etc.)
-// ============================================================================
-bool posicion_valida_para_barril(const MotorFisica& motor, Vector2D pos, double w, double h) {
-    for (const auto* e : motor.get_entidades()) {
-        TipoForma forma = e->get_tipo_forma();
-
-        if (forma == TipoForma::CIRCULO) {
-            Vector2D pos_circ;
-            double radio_circ = 0.0;
-            if (obtener_datos_circulo(e, pos_circ, radio_circ)) {
-                InfoColision info = Colisiones::circulo_vs_aabb(
-                    pos_circ, radio_circ,
-                    pos, Vector2D(pos.x + w, pos.y + h));
-                if (info.hay_colision) return false;
-            }
-        }
-        else if (forma == TipoForma::AABB) {
-            const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
-            const Trampolin* t = dynamic_cast<const Trampolin*>(e);
-            const BarrilChavo* bar = dynamic_cast<const BarrilChavo*>(e);
-            Vector2D min_b = p ? p->get_min() : (t ? t->get_min() : (bar ? bar->get_min() : pos));
-            Vector2D max_b = p ? p->get_max() : (t ? t->get_max() : (bar ? bar->get_max() : pos));
-
-            if (p || t || bar) {
-                bool overlap = (pos.x < max_b.x && pos.x + w > min_b.x &&
-                                pos.y < max_b.y && pos.y + h > min_b.y);
-                if (overlap) return false;
-            }
-        }
-    }
-    return true;
-}
-
 // ============================================================================
 // Crear Barril Chavo en posición del mouse (con validación)
 // ============================================================================
@@ -1798,7 +1535,7 @@ bool crear_barril_chavo(MotorFisica& motor, Vector2D pos) {
     // Centrar en el mouse
     Vector2D spawn_pos(pos.x - w / 2.0, pos.y - h / 2.0);
 
-    if (!posicion_valida_para_barril(motor, spawn_pos, w, h)) {
+    if (!posicion_valida_para_spawn(motor, spawn_pos, TipoForma::AABB, w, h)) {
         spawn_error_timer = 0.5f;
         spawn_error_pos = pos;
         return false;
@@ -1865,680 +1602,8 @@ void dibuja_seguidor_geometrico(Vector2D pos, float w, float h, float draw_y,
 // Renderizado de entidades
 // ============================================================================
 void dibujar_entidad(const EntidadFisica* e) {
-    if (const auto* zm = dynamic_cast<const ZonaMeta*>(e)) {
-        Vector2D min_p = zm->get_posicion() - Vector2D(zm->ancho / 2.0, zm->alto / 2.0);
-        DrawRectangle(min_p.x, min_p.y, zm->ancho, zm->alto, zm->color_editor);
-        DrawRectangleLines(min_p.x, min_p.y, zm->ancho, zm->alto, GREEN);
-        return;
-    }
-    const SoporteTorque* soporte = dynamic_cast<const SoporteTorque*>(e);
-    if (soporte) {
-        Vector2D pos = soporte->get_punto_cuerda();
-        float r = static_cast<float>(soporte->get_radio());
-        DrawCircle(static_cast<int>(pos.x), static_cast<int>(pos.y), r,
-                   Color{135, 140, 145, 255});
-        DrawCircleLines(static_cast<int>(pos.x), static_cast<int>(pos.y), r,
-                        Color{65, 70, 78, 255});
-        DrawCircle(static_cast<int>(pos.x), static_cast<int>(pos.y), 5.0f,
-                   Color{35, 38, 42, 255});
-        return;
-    }
-
-    TipoForma forma = e->get_tipo_forma();
-
-    if (forma == TipoForma::CIRCULO) {
-        const BolaRebotadora* rebotadora = dynamic_cast<const BolaRebotadora*>(e);
-        if (rebotadora) {
-            Vector2D pos = rebotadora->get_posicion();
-            float r = static_cast<float>(rebotadora->get_radio());
-            float def = static_cast<float>(rebotadora->get_deformacion());
-            float wobble_x = static_cast<float>(rebotadora->get_offset_vibracion());
-            float escala_x = 1.0f + def / (r * 5.0f);
-            float escala_y = 1.0f - def / (r * 4.0f);
-            float draw_x = static_cast<float>(pos.x) + wobble_x;
-            float draw_y = static_cast<float>(pos.y) + def * 0.25f;
-            float rx = r * escala_x;
-            float ry = r * escala_y;
-            float base_top = static_cast<float>(pos.y + r * 0.72f);
-            float base_w = r * 1.35f;
-            float base_h = r * 0.58f;
-
-            // Dibujar soporte (proto-2)
-            if (tex_robote_soporte.id > 0) {
-                float scale_support = base_w / tex_robote_soporte.width;
-                DrawTextureEx(tex_robote_soporte, 
-                             {draw_x - base_w / 2.0f, base_top-25}, 
-                             0.0f, scale_support, WHITE);
-            } else {
-                // Fallback geométrico
-                Color col_base = Color{218, 48, 42, 255};
-                DrawRectangleRec({draw_x - base_w / 2.0f, base_top, base_w, base_h}, col_base);
-            }
-
-            // Dibujar pelota (proto-1)
-            if (tex_robote_pelota.id > 0) {
-                float scale_ball = (r * 2.0f) / tex_robote_pelota.width;
-                DrawTextureEx(tex_robote_pelota, 
-                             {draw_x - r, draw_y - r}, 
-                             0.0f, scale_ball * escala_x, WHITE);
-            } else {
-                // Fallback geométrico
-                float rx = r * escala_x;
-                float ry = r * escala_y;
-                Color col_base = Color{218, 48, 42, 255};
-                DrawEllipse(static_cast<int>(draw_x), static_cast<int>(draw_y), rx, ry, col_base);
-            }
-
-            if (modo_debug) {
-                DrawCircleLines(static_cast<int>(pos.x), static_cast<int>(pos.y), r, GREEN);
-            }
-            return;
-        }
-
-        const Bola* b = dynamic_cast<const Bola*>(e);
-        if (!b) return;
-
-        Vector2D pos = b->get_posicion();
-        float r = static_cast<float>(b->get_radio());
-        double ang = b->get_angulo();
-
-        // Dibujar sprite de la bola con rotación correcta alrededor del centro
-        int tex_idx = b->get_texture_idx();
-        if (tex_idx >= 0 && tex_idx < 3 && tex_bola[tex_idx].id > 0) {
-            DrawTexturePro(
-                tex_bola[tex_idx],
-                {0, 0, (float)tex_bola[tex_idx].width, (float)tex_bola[tex_idx].height},
-                {static_cast<float>(pos.x), static_cast<float>(pos.y), 2.0f * r, 2.0f * r},
-                {r, r},
-                static_cast<float>(ang * 180.0 / MathUtils::TIM_PI),
-                WHITE
-            );
-        } else {
-            // Fallback a círculo si la textura no se cargó
-            Color col = PALETA_BOLAS[b->get_color_idx()];
-            DrawCircle(static_cast<int>(pos.x), static_cast<int>(pos.y), r, col);
-            DrawCircleLines(static_cast<int>(pos.x), static_cast<int>(pos.y), r,
-                            ColorBrightness(col, -0.3f));
-        }
-
-        // Indicador de rotación (dos puntos en lados opuestos)
-        float dot_dist = r * 0.55f;
-        float dot_r = std::max(r * 0.2f, 2.0f);
-        Color dot_col = {100, 100, 100, 150};
-
-        int dx1 = static_cast<int>(pos.x + std::cos(ang) * dot_dist);
-        int dy1 = static_cast<int>(pos.y + std::sin(ang) * dot_dist);
-        DrawCircle(dx1, dy1, dot_r, dot_col);
-
-        int dx2 = static_cast<int>(pos.x - std::cos(ang) * dot_dist);
-        int dy2 = static_cast<int>(pos.y - std::sin(ang) * dot_dist);
-        DrawCircle(dx2, dy2, dot_r, dot_col);
-
-        // Debug extra: línea de velocidad angular
-        if (modo_debug) {
-            Vector2D dir(std::cos(ang) * r, std::sin(ang) * r);
-            DrawLine(static_cast<int>(pos.x), static_cast<int>(pos.y),
-                     static_cast<int>(pos.x + dir.x),
-                     static_cast<int>(pos.y + dir.y), WHITE);
-        }
-    }
-    else if (forma == TipoForma::AABB) {
-        const Ventilador* vent = dynamic_cast<const Ventilador*>(e);
-        if (vent) {
-            Vector2D pos = vent->get_posicion();
-            float px = static_cast<float>(pos.x);
-            float py = static_cast<float>(pos.y);
-            float w = static_cast<float>(vent->get_ancho());
-            float h = static_cast<float>(vent->get_alto());
-            float cx = px + w / 2.0f;
-            float cy = py + h / 2.0f;
-            float fase = static_cast<float>(vent->get_fase_aspas());
-
-            // 1. Cuerpo del ventilador
-            if (tex_ventilador_cuerpo.id > 0) {
-                Rectangle src = {0.0f, 0.0f, (float)tex_ventilador_cuerpo.width, (float)tex_ventilador_cuerpo.height};
-                Rectangle dst = {px, py, w, h};
-                DrawTexturePro(tex_ventilador_cuerpo, src, dst, {0,0}, 0.0f, WHITE);
-            } else {
-                DrawRectangleRec({px, py, w, h}, Color{70, 84, 96, 255});
-                DrawRectangleLinesEx({px, py, w, h}, 1.5f, Color{170, 190, 205, 255});
-            }
-
-            // 2. Rejilla frontal y aspas giratorias
-            if (tex_ventilador_aspa.id > 0) {
-                float aspa_w = h * 0.5f + 20.0f;
-                float aspa_h = h * 0.3f - 20.0f;
-                for (int i = 0; i < 4; ++i) {
-                    float ang = fase + i * MathUtils::TIM_PI / 2.0f;
-                    float ang_deg = ang * 180.0f / MathUtils::TIM_PI;
-                    Rectangle src = {0.0f, 0.0f, (float)tex_ventilador_aspa.width, (float)tex_ventilador_aspa.height};
-                    Rectangle dst = {cx - aspa_w/2.0f + 37.0f, cy - aspa_h/2.0f + 6, aspa_w, aspa_h};
-                    Vector2 origin = {aspa_w/2.0f, aspa_h/2.0f};
-                    DrawTexturePro(tex_ventilador_aspa, src, dst, origin, ang_deg, WHITE);
-                }
-                DrawCircle(static_cast<int>(cx), static_cast<int>(cy), 4.0f, Color{210, 230, 240, 255});
-            } else {
-                DrawCircleLines(static_cast<int>(cx), static_cast<int>(cy), h * 0.32f, Color{190, 210, 220, 255});
-                for (int i = 0; i < 4; ++i) {
-                    float ang = fase + i * MathUtils::TIM_PI / 2.0f;
-                    Vector2 p1 = {cx, cy};
-                    Vector2 p2 = {
-                        cx + std::cos(ang) * h * 0.26f,
-                        cy + std::sin(ang) * h * 0.26f
-                    };
-                    DrawLineEx(p1, p2, 3.0f, Color{135, 205, 255, 255});
-                }
-                DrawCircle(static_cast<int>(cx), static_cast<int>(cy), 4.0f, Color{210, 230, 240, 255});
-            }
-
-            // 3. Corriente de aire animada en la dirección actual
-            bool der = vent->mira_derecha();
-            for (int i = 0; i < 4; ++i) {
-                float y = cy - 24.0f + i * 16.0f;
-                float offset = std::sin(fase + i * 0.5f) * 15.0f;  // Desplazamiento según fase
-                float longitud = 70.0f + std::sin(fase + i * 0.3f) * 25.0f;  // Varía la longitud
-                float opacidad = 90 + std::sin(fase + i * 0.4f) * 50;  // Varía transparencia
-                
-                if (der) {
-                    DrawLineEx({px + w + 8.0f + offset, y}, {px + w + 8.0f + longitud, y}, 1.5f,
-                              Color{120, 200, 255, static_cast<unsigned char>(opacidad)});
-                } else {
-                    DrawLineEx({px - 8.0f - offset, y}, {px - 8.0f - longitud, y}, 1.5f,
-                              Color{120, 200, 255, static_cast<unsigned char>(opacidad)});
-                }
-            }
-
-            if (modo_debug) {
-                DrawRectangleLines(static_cast<int>(px), static_cast<int>(py),
-                                   static_cast<int>(w), static_cast<int>(h), GREEN);
-                if (der) {
-                    DrawRectangleLines(static_cast<int>(px + w), static_cast<int>(cy - vent->get_ancho_corriente() / 2.0),
-                                       static_cast<int>(vent->get_rango()), static_cast<int>(vent->get_ancho_corriente()), GREEN);
-                } else {
-                    DrawRectangleLines(static_cast<int>(px - vent->get_rango()), static_cast<int>(cy - vent->get_ancho_corriente() / 2.0),
-                                       static_cast<int>(vent->get_rango()), static_cast<int>(vent->get_ancho_corriente()), GREEN);
-                }
-            }
-            return;
-        }
-
-        const SeguidorBooster* seg = dynamic_cast<const SeguidorBooster*>(e);
-        if (seg) {
-            Vector2D pos = seg->get_posicion();
-            float w = static_cast<float>(seg->get_ancho());
-            float h = static_cast<float>(seg->get_alto());
-            EstadoSeguidor estado = seg->get_estado();
-            Vector2D pos_init = seg->get_posicion_inicial();
-            double dir_carr = seg->get_direccion_carrera();
-
-            float draw_y = pos.y - 6.0f; // Subir el sprite 6 píxeles para que no se hundan los pies en el suelo
-
-            // 1. Dibujar sombra sutil en el suelo
-            DrawEllipse(static_cast<int>(pos.x), static_cast<int>(pos.y + h / 2.0f - 2.0f), w * 0.8f, 3.0f, Color{0, 0, 0, 80});
-
-            // 2. Línea de anclaje (hilo elástico de retorno)
-            if (estado != EstadoSeguidor::ESPERANDO) {
-                DrawLineEx({(float)pos_init.x, (float)pos_init.y}, {(float)pos.x, (float)draw_y}, 1.5f, Color{100, 150, 255, 100});
-            }
-
-            // 3. Dibujar sprite del personaje
-            float sprite_w = w * 1.5f;
-            float sprite_h = h * 1.2f;
-            Vector2 pos_draw = {static_cast<float>(pos.x), draw_y};
-
-            if (seg->get_cabezazo_activo()) {
-                // Dibujar cabezazo
-                if (tex_seguidor_cabezazo.id > 0) {
-                    float flip_dir = (dir_carr < 0.0) ? -1.0f : 1.0f;
-                    Rectangle source = {0, 0, (float)tex_seguidor_cabezazo.width * flip_dir, (float)tex_seguidor_cabezazo.height};
-                    Rectangle dest = {pos_draw.x - sprite_w/2, pos_draw.y - sprite_h/2, sprite_w, sprite_h};
-                    DrawTexturePro(tex_seguidor_cabezazo, source, dest, {0, 0}, 0.0f, WHITE);
-                } else {
-                    dibuja_seguidor_geometrico(pos, w, h, draw_y, estado, pos_init, seg);
-                }
-            } else if (estado == EstadoSeguidor::ESPERANDO) {
-                // Personaje quieto: imagen estática sin animación
-                if (tex_seguidor_quieto.id > 0) {
-                    Rectangle source = {0, 0, (float)tex_seguidor_quieto.width, (float)tex_seguidor_quieto.height};
-                    Rectangle dest = {pos_draw.x - sprite_w/2, pos_draw.y - sprite_h/2, sprite_w, sprite_h};
-                    DrawTexturePro(tex_seguidor_quieto, source, dest, {0, 0}, 0.0f, WHITE);
-                } else {
-                    dibuja_seguidor_geometrico(pos, w, h, draw_y, estado, pos_init, seg);
-                }
-            } else if (anim_seguidor_corriendo) {
-                // Personaje corriendo: animación de sprite sheet
-                if (dir_carr > 0) {
-                    anim_seguidor_corriendo->dibujar(pos_draw, sprite_w, sprite_h);
-                } else {
-                    anim_seguidor_corriendo->dibujar_volteado(pos_draw, sprite_w, sprite_h);
-                }
-            } else if (tex_seguidor_corriendo.id > 0) {
-                // Fallback a sprite estático de correr si no hay animación
-                Rectangle source = {0, 0, (float)tex_seguidor_corriendo.width, (float)tex_seguidor_corriendo.height};
-                Rectangle dest = {pos_draw.x - sprite_w/2, pos_draw.y - sprite_h/2, sprite_w, sprite_h};
-                DrawTexturePro(tex_seguidor_corriendo, source, dest, {0, 0}, 0.0f, WHITE);
-            } else {
-                // Fallback: geometría original si no hay texturas/animaciones
-                dibuja_seguidor_geometrico(pos, w, h, draw_y, estado, pos_init, seg);
-            }
-
-            if (modo_debug) {
-                float rx = static_cast<float>(seg->get_rango_deteccion());
-                // Círculo de rango de detección dinámico
-                DrawCircleLines(static_cast<int>(pos.x), static_cast<int>(pos.y), rx, Color{0, 255, 0, 80});
-                
-                // Zona de detección en Y (corredor de altura +/- 120px)
-                DrawRectangleRec({(float)(pos.x - rx), (float)(pos.y - 120.0f), rx * 2.0f, 240.0f}, Color{0, 255, 0, 15});
-                DrawRectangleLinesEx({(float)(pos.x - rx), (float)(pos.y - 120.0f), rx * 2.0f, 240.0f}, 1.0f, Color{0, 255, 0, 45});
-
-                DrawRectangleLines(static_cast<int>(pos.x - w/2), static_cast<int>(pos.y - h/2), static_cast<int>(w), static_cast<int>(h), GREEN);
-            }
-            return;
-        }
-
-        // Primero verificamos si es un Trampolin
-        const Trampolin* tramp = dynamic_cast<const Trampolin*>(e);
-        if (tramp) {
-            Vector2D pos = tramp->get_posicion();
-            float px = static_cast<float>(pos.x);
-            float py = static_cast<float>(pos.y);
-            float pw = static_cast<float>(tramp->get_ancho());
-            float ph = static_cast<float>(tramp->get_alto());
-            float def = static_cast<float>(tramp->get_deformacion());
-
-            if (tex_trampolin.id > 0) {
-                int num_frames = 4;
-                float frame_w = 0.0f;
-                float frame_h = 0.0f;
-                Rectangle source;
-                int frame_idx = 0;
-                if (def > 12.0f) frame_idx = 3;
-                else if (def > 7.0f) frame_idx = 2;
-                else if (def > 2.0f) frame_idx = 1;
-
-                if (tex_trampolin.width > tex_trampolin.height) {
-                    frame_w = (float)tex_trampolin.width / num_frames;
-                    frame_h = (float)tex_trampolin.height;
-                    source = { frame_idx * frame_w, 0, frame_w, frame_h };
-                } else {
-                    frame_w = (float)tex_trampolin.width;
-                    frame_h = (float)tex_trampolin.height / num_frames;
-                    source = { 0, frame_idx * frame_h, frame_w, frame_h };
-                }
-
-                Rectangle dest = { px - 4.0f, py - 4.0f, pw + 8.0f, ph + 8.0f };
-                DrawTexturePro(tex_trampolin, source, dest, {0, 0}, 0.0f, WHITE);
-            } else {
-                // 1. Dibujar patas de soporte de acero cromado (estructura triangular estable)
-                DrawLineEx({px + 6, py + ph}, {px + 12, py + 8}, 3.0f, DARKGRAY);
-                DrawLineEx({px + 18, py + ph}, {px + 12, py + 8}, 3.0f, DARKGRAY);
-                DrawLineEx({px + pw - 6, py + ph}, {px + pw - 12, py + 8}, 3.0f, DARKGRAY);
-                DrawLineEx({px + pw - 18, py + ph}, {px + pw - 12, py + 8}, 3.0f, DARKGRAY);
-
-                // Barra inferior metálica horizontal de unión
-                DrawLineEx({px + 18, py + ph - 2}, {px + pw - 18, py + ph - 2}, 2.5f, GRAY);
-
-                // 2. Dibujar marcos rígidos laterales en los extremos (donde se anclan los resortes)
-                DrawRectangleRec({px, py, 6.0f, 10.0f}, GRAY);
-                DrawRectangleLinesEx({px, py, 6.0f, 10.0f}, 1.0f, DARKGRAY);
-                DrawRectangleRec({px + pw - 6.0f, py, 6.0f, 10.0f}, GRAY);
-                DrawRectangleLinesEx({px + pw - 6.0f, py, 6.0f, 10.0f}, 1.0f, DARKGRAY);
-
-                // 3. Dibujar resortes elásticos dorados estirándose hacia la lona curvada
-                int num_resortes = 6;
-                for (int i = 0; i < num_resortes; ++i) {
-                    // Anclaje en marco izquierdo
-                    float lx_start = px + 6.0f;
-                    float ly_start = py + 3.0f + i * 1.2f;
-                    
-                    // Fin en lona izquierda (interpolación hasta el centro)
-                    float t = static_cast<float>(i) / (num_resortes - 1);
-                    float lx_end = px + 6.0f + (pw / 2.0f - 14.0f) * t;
-                    float ly_end = py + 4.0f + def * t;
-                    
-                    // Dibujar resorte como zigzag dorado
-                    float mx = (lx_start + lx_end) / 2.0f;
-                    float my = (ly_start + ly_end) / 2.0f + 2.5f; // zigzag wave
-                    DrawLineEx({lx_start, ly_start}, {mx, my}, 1.5f, GOLD);
-                    DrawLineEx({mx, my}, {lx_end, ly_end}, 1.5f, GOLD);
-
-                    // Anclaje en marco derecho
-                    float rx_start = px + pw - 6.0f;
-                    float ry_start = py + 3.0f + i * 1.2f;
-                    
-                    // Fin en lona derecha
-                    float rx_end = px + pw - 6.0f - (pw / 2.0f - 14.0f) * t;
-                    float ry_end = py + 4.0f + def * t;
-
-                    float rmx = (rx_start + rx_end) / 2.0f;
-                    float rmy = (ry_start + ry_end) / 2.0f + 2.5f;
-                    DrawLineEx({rx_start, ry_start}, {rmx, rmy}, 1.5f, GOLD);
-                    DrawLineEx({rmx, rmy}, {rx_end, ry_end}, 1.5f, GOLD);
-                }
-
-                // 4. Dibujar la lona elástica central curvada por la deformación (rojo intenso con contorno naranja)
-                Vector2 p_left = { px + 10.0f, py + 4.0f };
-                Vector2 p_center = { px + pw / 2.0f, py + 4.0f + def };
-                Vector2 p_right = { px + pw - 10.0f, py + 4.0f };
-
-                // Lona elástica gruesa
-                DrawLineEx(p_left, p_center, 6.0f, RED);
-                DrawLineEx(p_center, p_right, 6.0f, RED);
-
-                // Borde brillante superior
-                DrawLineEx({p_left.x, p_left.y - 2.0f}, {p_center.x, p_center.y - 2.0f}, 1.5f, ORANGE);
-                DrawLineEx({p_center.x, p_center.y - 2.0f}, {p_right.x, p_right.y - 2.0f}, 1.5f, ORANGE);
-            }
-            return;
-        }
-
-        // Primero verificamos si es un BarrilChavo
-        const BarrilChavo* barril = dynamic_cast<const BarrilChavo*>(e);
-        if (barril) {
-            Vector2D pos = barril->get_posicion();
-            float px = static_cast<float>(pos.x);
-            float py = static_cast<float>(pos.y);
-            float pw = static_cast<float>(barril->get_ancho());
-            float ph = static_cast<float>(barril->get_alto());
-            float pop = static_cast<float>(barril->get_pop_factor());
-
-            // 1. Dibujar sombra del barril
-            DrawEllipse(static_cast<int>(px + pw / 2.0f), static_cast<int>(py + ph - 2.0f), pw * 0.7f, 4.0f, Color{0, 0, 0, 90});
-
-            // 2. Dibujar al "Chavo" saliendo si pop > 0.0
-            if (pop > 0.0f) {
-                // Si la textura está disponible, usarla; si no, usar geometría
-                if (tex_chavo.id > 0) {
-                    // Usar textura: El Chavo se desplaza verticalmente según pop
-                    float chavo_y = py + 15.0f - pop * 35.0f;
-                    float chavo_x = px + pw / 2.0f;
-                    float chavo_w = 70.0f;
-                    float chavo_h = 70.0f;
-                    
-                    DrawTexturePro(
-                        tex_chavo,
-                        {0, 0, (float)tex_chavo.width, (float)tex_chavo.height},
-                        {chavo_x - chavo_w / 2.0f, chavo_y - chavo_h / 2.0f, chavo_w, chavo_h},
-                        {0, 0},
-                        0.0f,
-                        WHITE
-                    );
-                } else {
-                    // Fallback: Geometría original de El Chavo
-                    float chavo_y = py + 15.0f - pop * 35.0f;
-                    float chavo_x = px + pw / 2.0f;
-                    float head_r = 15.0f;
-
-                    DrawRectangleRec({chavo_x - 8.0f, chavo_y + 10.0f, 16.0f, 15.0f}, Color{220, 220, 200, 255});
-                    DrawCircle(static_cast<int>(chavo_x), static_cast<int>(chavo_y), head_r, Color{253, 214, 185, 255});
-                    DrawCircleLines(static_cast<int>(chavo_x), static_cast<int>(chavo_y), head_r, Color{160, 110, 80, 255});
-                    DrawCircleSector({chavo_x, chavo_y}, head_r + 1.0f, 180.0f, 360.0f, 0, Color{84, 137, 101, 255});
-                    DrawCircle(static_cast<int>(chavo_x - 5.0f), static_cast<int>(chavo_y - 1.0f), 2.0f, BLACK);
-                    DrawCircle(static_cast<int>(chavo_x + 5.0f), static_cast<int>(chavo_y - 1.0f), 2.0f, BLACK);
-                    DrawCircleSector({chavo_x, chavo_y + 3.0f}, 4.0f, 0.0f, 180.0f, 0, Color{200, 80, 80, 255});
-                    DrawCircle(static_cast<int>(chavo_x - 5.0f), static_cast<int>(chavo_y + 2.0f), 2.0f, Color{253, 180, 160, 255});
-                    DrawCircle(static_cast<int>(chavo_x + 5.0f), static_cast<int>(chavo_y + 2.0f), 2.0f, Color{253, 180, 160, 255});
-                }
-            }
-
-            // 3. Dibujar el Barril
-            if (tex_barril.id > 0) {
-                // Usar textura del barril
-                DrawTexturePro(
-                    tex_barril,
-                    {0, 0, (float)tex_barril.width, (float)tex_barril.height},
-                    {px, py, pw, ph},
-                    {0, 0},
-                    0.0f,
-                    WHITE
-                );
-            } else {
-                // Fallback: Geometría original del barril (duelas de madera + aros metálicos)
-                Color col_madera = Color{139, 90, 43, 255};
-                Color col_borde = Color{90, 50, 20, 255};
-
-                int num_duelas = 5;
-                float duela_w = pw / num_duelas;
-                for (int i = 0; i < num_duelas; ++i) {
-                    float dx = px + i * duela_w;
-                    Color col_duela = col_madera;
-                    if (i % 2 == 0) col_duela = ColorBrightness(col_madera, -0.08f);
-                    DrawRectangleRec({dx, py, duela_w, ph}, col_duela);
-                    DrawLineEx({dx, py}, {dx, py + ph}, 1.0f, col_borde);
-                }
-                DrawRectangleLinesEx({px, py, pw, ph}, 1.5f, col_borde);
-
-                // Aros metálicos
-                Color col_metal = Color{160, 170, 180, 255};
-                Color col_metal_borde = Color{90, 100, 110, 255};
-                
-                DrawRectangleRec({px - 2.0f, py + 12.0f, pw + 4.0f, 6.0f}, col_metal);
-                DrawRectangleLinesEx({px - 2.0f, py + 12.0f, pw + 4.0f, 6.0f}, 1.0f, col_metal_borde);
-
-                DrawRectangleRec({px - 3.0f, py + ph / 2.0f - 3.0f, pw + 6.0f, 6.0f}, col_metal);
-                DrawRectangleLinesEx({px - 3.0f, py + ph / 2.0f - 3.0f, pw + 6.0f, 6.0f}, 1.0f, col_metal_borde);
-
-                DrawRectangleRec({px - 2.0f, py + ph - 18.0f, pw + 4.0f, 6.0f}, col_metal);
-                DrawRectangleLinesEx({px - 2.0f, py + ph - 18.0f, pw + 4.0f, 6.0f}, 1.0f, col_metal_borde);
-
-                DrawEllipse(static_cast<int>(px + pw / 2.0f), static_cast<int>(py + 2.0f), pw * 0.45f, 4.0f, BLACK);
-            }
-
-            if (modo_debug) {
-                DrawRectangleLines(static_cast<int>(px), static_cast<int>(py), static_cast<int>(pw), static_cast<int>(ph), GREEN);
-            }
-            return;
-        }
-
-        const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
-        const Cubeta* cubeta = dynamic_cast<const Cubeta*>(e);
-        if (cubeta) {
-            Vector2D pos = cubeta->get_posicion();
-            float px = static_cast<float>(pos.x);
-            float py = static_cast<float>(pos.y);
-            float pw = static_cast<float>(cubeta->get_ancho());
-            float ph = static_cast<float>(cubeta->get_alto());
-
-            DrawRectangleRec({px + 5.0f, py + 12.0f, pw - 10.0f, ph - 12.0f},
-                             Color{112, 140, 155, 255});
-            DrawRectangleLinesEx({px + 5.0f, py + 12.0f, pw - 10.0f, ph - 12.0f},
-                                 2.0f, Color{45, 55, 65, 255});
-            DrawLineEx({px + 9.0f, py + 14.0f}, {px + pw * 0.5f, py + 4.0f},
-                       2.5f, Color{215, 225, 230, 255});
-            DrawLineEx({px + pw - 9.0f, py + 14.0f}, {px + pw * 0.5f, py + 4.0f},
-                       2.5f, Color{215, 225, 230, 255});
-            DrawCircle(static_cast<int>(px + pw * 0.5f), static_cast<int>(py + 4.0f),
-                       5.0f, Color{35, 40, 45, 255});
-
-            if (modo_debug) {
-                DrawRectangleLines(static_cast<int>(px), static_cast<int>(py),
-                                   static_cast<int>(pw), static_cast<int>(ph), GREEN);
-            }
-            return;
-        }
-
-        if (!p) return;
-
-        Vector2D pos = p->get_posicion();
-        float px = static_cast<float>(pos.x);
-        float py = static_cast<float>(pos.y);
-        float pw = static_cast<float>(p->get_ancho());
-        float ph = static_cast<float>(p->get_alto());
-
-        bool texturizado = false;
-        if (!es_borde_nivel(p)) {
-            if (pw > ph) {
-                if (tex_plata_larga.id > 0) {
-                    DrawTexturePro(
-                        tex_plata_larga,
-                        { 0, 0, (float)tex_plata_larga.width, (float)tex_plata_larga.height },
-                        { px, py, pw, ph },
-                        { 0, 0 },
-                        0.0f,
-                        WHITE
-                    );
-                    texturizado = true;
-                }
-            } else {
-                if (tex_plata_peque.id > 0) {
-                    DrawTexturePro(
-                        tex_plata_peque,
-                        { 0, 0, (float)tex_plata_peque.width, (float)tex_plata_peque.height },
-                        { px, py, pw, ph },
-                        { 0, 0 },
-                        0.0f,
-                        WHITE
-                    );
-                    texturizado = true;
-                }
-            }
-        }
-
-        if (!texturizado) {
-            DrawRectangle(static_cast<int>(px), static_cast<int>(py), static_cast<int>(pw), static_cast<int>(ph), COLOR_PARED);
-            DrawRectangleLines(static_cast<int>(px), static_cast<int>(py), static_cast<int>(pw), static_cast<int>(ph), COLOR_PARED_BORDE);
-        }
-    }
-    else if (forma == TipoForma::POLIGONO) {
-        const Balancin* bal = dynamic_cast<const Balancin*>(e);
-        if (bal) {
-            Vector2D pos = bal->get_posicion();
-            int px = static_cast<int>(pos.x);
-            int py = static_cast<int>(pos.y);
-            int largo = static_cast<int>(bal->get_largo());
-            int espesor = static_cast<int>(bal->get_espesor());
-            float rot_deg = static_cast<float>(bal->get_angulo() * 180.0 / MathUtils::TIM_PI);
-            double cos_a = std::cos(bal->get_angulo());
-            double sin_a = std::sin(bal->get_angulo());
-
-            // 1. Dibujar soporte del pivot
-            if (tex_balancin_base.id > 0) {
-                float base_w = 34.0f;
-                float base_h = 44.0f;
-                DrawTexturePro(
-                    tex_balancin_base,
-                    { 0, 0, (float)tex_balancin_base.width, (float)tex_balancin_base.height },
-                    { (float)px - base_w / 2.0f, (float)py - 2.0f, base_w, base_h },
-                    { 0, 0 },
-                    0.0f,
-                    WHITE
-                );
-            } else {
-                DrawTriangle(
-                    {static_cast<float>(px), static_cast<float>(py)},
-                    {static_cast<float>(px - 16), static_cast<float>(py + 40)},
-                    {static_cast<float>(px + 16), static_cast<float>(py + 40)},
-                    DARKGRAY
-                );
-                DrawTriangleLines(
-                    {static_cast<float>(px), static_cast<float>(py)},
-                    {static_cast<float>(px - 16), static_cast<float>(py + 40)},
-                    {static_cast<float>(px + 16), static_cast<float>(py + 40)},
-                    GRAY
-                );
-            }
-
-            // 2. Dibujar la tabla giratoria (plank)
-            if (tex_balancin_tabla.id > 0) {
-                float board_h = espesor * 3.5f;
-                Rectangle rec = { static_cast<float>(px), static_cast<float>(py), static_cast<float>(largo), board_h };
-                Vector2 origin = { static_cast<float>(largo / 2.0), board_h / 2.0f };
-                DrawTexturePro(
-                    tex_balancin_tabla,
-                    { 0, 0, (float)tex_balancin_tabla.width, (float)tex_balancin_tabla.height },
-                    rec,
-                    origin,
-                    rot_deg,
-                    WHITE
-                );
-            } else {
-                Rectangle rec = { static_cast<float>(px), static_cast<float>(py), static_cast<float>(largo), static_cast<float>(espesor) };
-                Vector2 origin = { static_cast<float>(largo / 2.0), static_cast<float>(espesor / 2.0) };
-                DrawRectanglePro(rec, origin, rot_deg, Color{190, 110, 50, 255});
-                
-                // Dibujar contorno ocre rotado usando las 4 esquinas del tablón
-                double hl = largo / 2.0;
-                double ht = espesor / 2.0;
-                Vector2D dir_x(cos_a, sin_a);
-                Vector2D dir_y(-sin_a, cos_a);
-                Vector2D c1 = pos - dir_x * hl - dir_y * ht;
-                Vector2D c2 = pos + dir_x * hl - dir_y * ht;
-                Vector2D c3 = pos + dir_x * hl + dir_y * ht;
-                Vector2D c4 = pos - dir_x * hl + dir_y * ht;
-
-                Color color_borde = Color{220, 140, 70, 255};
-                DrawLineEx({(float)c1.x, (float)c1.y}, {(float)c2.x, (float)c2.y}, 1.5f, color_borde);
-                DrawLineEx({(float)c2.x, (float)c2.y}, {(float)c3.x, (float)c3.y}, 1.5f, color_borde);
-                DrawLineEx({(float)c3.x, (float)c3.y}, {(float)c4.x, (float)c4.y}, 1.5f, color_borde);
-                DrawLineEx({(float)c4.x, (float)c4.y}, {(float)c1.x, (float)c1.y}, 1.5f, color_borde);
-            }
-
-            // 3. Asientos rojos en los extremos (siempre dibujados encima para mayor detalle)
-            Vector2 seat_l = {
-                static_cast<float>(px - (largo / 2.0 - 5.0) * cos_a),
-                static_cast<float>(py - (largo / 2.0 - 5.0) * sin_a)
-            };
-            DrawCircle(static_cast<int>(seat_l.x), static_cast<int>(seat_l.y), 6.0f, RED);
-            DrawCircleLines(static_cast<int>(seat_l.x), static_cast<int>(seat_l.y), 6.0f, MAROON);
-
-            Vector2 seat_r = {
-                static_cast<float>(px + (largo / 2.0 - 5.0) * cos_a),
-                static_cast<float>(py + (largo / 2.0 - 5.0) * sin_a)
-            };
-            DrawCircle(static_cast<int>(seat_r.x), static_cast<int>(seat_r.y), 6.0f, RED);
-            DrawCircleLines(static_cast<int>(seat_r.x), static_cast<int>(seat_r.y), 6.0f, MAROON);
-
-            // 4. Perno central negro/gris
-            DrawCircle(px, py, 6, BLACK);
-            DrawCircle(px, py, 4, LIGHTGRAY);
-            return;
-        }
-
-        const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
-        if (!ramp) return;
-
-        Vector2D pos = ramp->get_posicion();
-        float px = static_cast<float>(pos.x);
-        float py = static_cast<float>(pos.y);
-        float pw = static_cast<float>(ramp->get_base());
-        float ph = static_cast<float>(ramp->get_altura());
-        bool invertido = ramp->get_invertido();
-
-        bool texturizado = false;
-        if (!invertido && tex_plata_rampa_der.id > 0) {
-            DrawTexturePro(
-                tex_plata_rampa_der,
-                { 0 , 0, static_cast<float>(tex_plata_rampa_der.width), static_cast<float>(tex_plata_rampa_der.height) },
-                { px, py, pw, ph },
-                { 0, 0 },
-                0.0f,
-                WHITE
-            );
-            texturizado = true;
-        } else if (invertido && tex_plata_rampa_izq.id > 0) {
-            // Usar asset diferente cuando está invertido
-            DrawTexturePro(
-                tex_plata_rampa_izq,
-                { 0, 0, (float)tex_plata_rampa_izq.width, (float)tex_plata_rampa_izq.height },
-                { px, py, pw, ph },
-                { 0, 0 },
-                0.0f,
-                WHITE
-            );
-            texturizado = true;
-        }
-
-        if (!texturizado) {
-            const auto& verts = ramp->get_vertices();
-            if (verts.size() >= 3) {
-                Vector2 v1 = {static_cast<float>(verts[0].x), static_cast<float>(verts[0].y)};
-                Vector2 v2 = {static_cast<float>(verts[1].x), static_cast<float>(verts[1].y)};
-                Vector2 v3 = {static_cast<float>(verts[2].x), static_cast<float>(verts[2].y)};
-
-                DrawTriangle(v1, v2, v3, COLOR_RAMPA);
-                DrawTriangleLines(v1, v2, v3, COLOR_RAMPA_BORDE);
-            }
-        }
+    if (e) {
+        e->dibujar(modo_debug);
     }
 }
 

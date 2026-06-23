@@ -185,6 +185,24 @@ public:
             amortiguar_columpio(ent_b, extremo_b.tipo, dir_b);
         }
     }
+
+    // --- Métodos polimórficos ---
+    TipoEntidadJuego get_tipo_entidad() const override {
+        return TipoEntidadJuego::CUERDA;
+    }
+
+    std::string serializar() const override {
+        std::stringstream ss;
+        ss << "ent CUERDA id=" << get_id()
+           << " aid=" << extremo_a.entidad_id << " at=" << static_cast<int>(extremo_a.tipo)
+           << " bid=" << extremo_b.entidad_id << " bt=" << static_cast<int>(extremo_b.tipo)
+           << " len=" << longitud_inicial << " sop=";
+        for (size_t i = 0; i < soportes_id.size(); ++i) {
+            if (i > 0) ss << ",";
+            ss << soportes_id[i];
+        }
+        return ss.str();
+    }
 };
 
 // TIM_MENU_SPAWN id=CUERDA etiqueta="Cuerda" tab=0 categoria=0

@@ -16,8 +16,10 @@
 // ============================================================================
 
 #include "obstaculo_estatico.h"
+#include "../sistema/assets_extern.h"
 #include <vector>
 #include <cmath>
+#include <algorithm>
 
 class PlanoInclinado : public ObstaculoEstatico {
 protected:
@@ -93,6 +95,70 @@ public:
             set_dimensiones(160.0, 120.0);
         }
     }
-};
 
+    // --- Métodos polimórficos ---
+    TipoEntidadJuego get_tipo_entidad() const override {
+        return TipoEntidadJuego::RAMPA;
+    }
+
+    std::string serializar() const override {
+        std::stringstream ss;
+        ss << "ent RAMPA id=" << get_id()
+           << " x=" << posicion.x << " y=" << posicion.y
+           << " b=" << base_ancho << " h=" << altura_alto
+           << " inv=" << (es_invertido ? 1 : 0);
+        return ss.str();
+    }
+
+    bool contiene_punto(const Vector2D& p) const override {
+        if (vertices.size() < 3) return false;
+        double min_x = std::min({vertices[0].x, vertices[1].x, vertices[2].x});
+        double max_x = std::max({vertices[0].x, vertices[1].x, vertices[2].x});
+        double min_y = std::min({vertices[0].y, vertices[1].y, vertices[2].y});
+        double max_y = std::max({vertices[0].y, vertices[1].y, vertices[2].y});
+        return p.x >= min_x - 10 && p.x <= max_x + 10 &&
+               p.y >= min_y - 10 && p.y <= max_y + 10;
+    }
+
+    void dibujar(bool debug) const override {
+        float px = static_cast<float>(posicion.x);
+        float py = static_cast<float>(posicion.y);
+        float pw = static_cast<float>(base_ancho);
+        float ph = static_cast<float>(altura_alto);
+
+        bool texturizado = false;
+        if (!es_invertido && tex_plata_rampa_der.id > 0) {
+            DrawTexturePro(
+                tex_plata_rampa_der,
+                { 0 , 0, static_cast<float>(tex_plata_rampa_der.width), static_cast<float>(tex_plata_rampa_der.height) },
+                { px, py, pw, ph },
+                { 0, 0 },
+                0.0f,
+                WHITE
+            );
+            texturizado = true;
+        } else if (es_invertido && tex_plata_rampa_izq.id > 0) {
+            DrawTexturePro(
+                tex_plata_rampa_izq,
+                { 0, 0, (float)tex_plata_rampa_izq.width, (float)tex_plata_rampa_izq.height },
+                { px, py, pw, ph },
+                { 0, 0 },
+                0.0f,
+                WHITE
+            );
+            texturizado = true;
+        }
+
+        if (!texturizado) {
+            if (vertices.size() >= 3) {
+                Vector2 v1 = {static_cast<float>(vertices[0].x), static_cast<float>(vertices[0].y)};
+                Vector2 v2 = {static_cast<float>(vertices[1].x), static_cast<float>(vertices[1].y)};
+                Vector2 v3 = {static_cast<float>(vertices[2].x), static_cast<float>(vertices[2].y)};
+
+                DrawTriangle(v1, v2, v3, COLOR_RAMPA);
+                DrawTriangleLines(v1, v2, v3, COLOR_RAMPA_BORDE);
+            }
+        }
+    }
+};
 // TIM_MENU_SPAWN id=RAMPA etiqueta="Rampa" tab=0 categoria=0

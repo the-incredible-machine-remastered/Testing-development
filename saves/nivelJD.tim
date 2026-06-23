@@ -1,0 +1,20 @@
+tim_save 1
+nombre nivelJD
+ancho 1920
+alto 1080
+gravedad_y 500
+contador_bolas 1
+siguiente_id 15
+ent PARED id=5 x=30 y=784 w=1652 h=20
+ent BALANCIN id=6 x=1065 y=739 vx=0 vy=0 ang=0 omega=0 largo=200 esp=6
+ent BARRIL id=7 x=856 y=662 w=90 h=120
+ent VENTILADOR id=8 x=1000 y=441 w=84 h=108 der=1
+ent BALANCIN id=9 x=1046 y=265 vx=0 vy=0 ang=0 omega=0 largo=200 esp=6
+ent CUBETA id=10 x=930 y=399.968 vx=0 vy=119.397 ang=0 omega=0 w=58 h=52
+ent BOLA id=11 x=1377 y=430.622 vx=0 vy=136.816 ang=0 omega=0 r=35 m=12.25 ci=0 ti=0
+ent CUERDA id=12 aid=10 at=0 bid=9 bt=1 len=337.664 sop=
+ent SOPORTE id=13 x=1270 y=285 r=16
+ent CUERDA id=14 aid=10 at=0 bid=9 bt=2 len=463.519 sop=13
+eventos_count 0
+siguiente_id_evento 1
+logica_victoria CUALQUIERA
