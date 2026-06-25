@@ -103,7 +103,9 @@ public:
         : EntidadFisica(id, Vector2D(), 0.0, TipoForma::NINGUNA, true),
           extremo_a(a), extremo_b(b), soportes_id(soportes),
           longitud_inicial(longitud_total), ultima_tension(0.0),
-          estabilizar_columpio(true) {}
+          estabilizar_columpio(true) {
+        tipo_menu = TipoObjetoMenu::CUERDA;
+    }
 
     const AnclajeCuerda& get_extremo_a() const { return extremo_a; }
     const AnclajeCuerda& get_extremo_b() const { return extremo_b; }
@@ -117,7 +119,7 @@ public:
                         std::vector<Vector2D>& puntos) const {
         EntidadFisica* ent_a = buscar_entidad(entidades, extremo_a.entidad_id);
         EntidadFisica* ent_b = buscar_entidad(entidades, extremo_b.entidad_id);
-        if (!ent_a || !ent_b || soportes_id.empty()) return false;
+        if (!ent_a || !ent_b) return false;
 
         puntos.clear();
         puntos.push_back(posicion_anclaje(ent_a, extremo_a.tipo));
@@ -134,7 +136,7 @@ public:
         EntidadFisica* ent_a = buscar_entidad(entidades, extremo_a.entidad_id);
         EntidadFisica* ent_b = buscar_entidad(entidades, extremo_b.entidad_id);
         std::vector<Vector2D> puntos;
-        if (!ent_a || !ent_b || !obtener_puntos(entidades, puntos) || puntos.size() < 3) {
+        if (!ent_a || !ent_b || !obtener_puntos(entidades, puntos) || puntos.size() < 2) {
             ultima_tension = 0.0;
             return;
         }
@@ -184,6 +186,31 @@ public:
             amortiguar_columpio(ent_a, extremo_a.tipo, dir_a);
             amortiguar_columpio(ent_b, extremo_b.tipo, dir_b);
         }
+    }
+
+    // --- Métodos polimórficos ---
+    TipoEntidadJuego get_tipo_entidad() const override {
+        return TipoEntidadJuego::CUERDA;
+    }
+
+    void set_extremo_a(AnclajeCuerda a) { extremo_a = a; }
+    void set_extremo_b(AnclajeCuerda b) { extremo_b = b; }
+    void set_soportes(std::vector<int> s) { soportes_id = s; }
+    void set_longitud_inicial(double len) { longitud_inicial = len; }
+
+    std::string serializar() const override {
+        std::stringstream ss;
+        ss << "ent CUERDA id=" << get_id()
+           << " aid=" << extremo_a.entidad_id << " at=" << static_cast<int>(extremo_a.tipo)
+           << " bid=" << extremo_b.entidad_id << " bt=" << static_cast<int>(extremo_b.tipo)
+           << " len=" << longitud_inicial << " sop=";
+        for (size_t i = 0; i < soportes_id.size(); ++i) {
+            if (i > 0) ss << ",";
+            ss << soportes_id[i];
+        }
+        ss << " fijo=" << (es_fijo ? 1 : 0)
+           << " tipo_menu=" << static_cast<int>(tipo_menu);
+        return ss.str();
     }
 };
 

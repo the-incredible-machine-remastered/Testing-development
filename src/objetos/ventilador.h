@@ -6,6 +6,9 @@
 // ============================================================================
 
 #include "obstaculo_estatico.h"
+#include "../sistema/assets_extern.h"
+#include <cmath>
+#include <algorithm>
 
 class Ventilador : public ObstaculoEstatico {
 protected:
@@ -24,6 +27,7 @@ public:
           potencia(1800.0), direccion(1.0, 0.0), fase_aspas(0.0) {
         set_restitucion(0.2);
         set_friccion(0.5);
+        tipo_menu = TipoObjetoMenu::VENTILADOR;
     }
 
     // --- Getters ---
@@ -35,8 +39,8 @@ public:
     Vector2D get_direccion() const { return direccion; }
     double get_fase_aspas() const { return fase_aspas; }
 
-    Vector2D get_min() const { return posicion; }
-    Vector2D get_max() const { return Vector2D(posicion.x + ancho, posicion.y + alto); }
+    Vector2D get_min() const override { return posicion; }
+    Vector2D get_max() const override { return Vector2D(posicion.x + ancho, posicion.y + alto); }
     Vector2D get_centro_salida() const {
         if (direccion.x < 0.0) {
             return Vector2D(posicion.x, posicion.y + alto / 2.0);
@@ -63,6 +67,102 @@ public:
     void actualizar_fisica(double dt) override {
         fase_aspas += dt * 18.0;
     }
-};
 
+    // --- Métodos polimórficos ---
+    TipoEntidadJuego get_tipo_entidad() const override {
+        return TipoEntidadJuego::VENTILADOR;
+    }
+
+    std::string serializar() const override {
+        std::stringstream ss;
+        ss << "ent VENTILADOR id=" << get_id()
+           << " x=" << posicion.x << " y=" << posicion.y
+           << " w=" << ancho << " h=" << alto
+           << " der=" << (mira_derecha() ? 1 : 0)
+           << " fijo=" << (es_fijo ? 1 : 0)
+           << " tipo_menu=" << static_cast<int>(tipo_menu);
+        return ss.str();
+    }
+
+    bool contiene_punto(const Vector2D& p) const override {
+        return p.x >= posicion.x - 10 && p.x <= posicion.x + ancho + 10 &&
+               p.y >= posicion.y - 10 && p.y <= posicion.y + alto + 10;
+    }
+
+    void dibujar(bool debug) const override {
+        float px = static_cast<float>(posicion.x);
+        float py = static_cast<float>(posicion.y);
+        float w = static_cast<float>(ancho);
+        float h = static_cast<float>(alto);
+        float cx = px + w / 2.0f;
+        float cy = py + h / 2.0f;
+        float fase = static_cast<float>(fase_aspas);
+
+        // 1. Cuerpo del ventilador
+        if (tex_ventilador_cuerpo.id > 0) {
+            Rectangle src = {0.0f, 0.0f, (float)tex_ventilador_cuerpo.width, (float)tex_ventilador_cuerpo.height};
+            Rectangle dst = {px, py, w, h};
+            DrawTexturePro(tex_ventilador_cuerpo, src, dst, {0,0}, 0.0f, WHITE);
+        } else {
+            DrawRectangleRec({px, py, w, h}, Color{70, 84, 96, 255});
+            DrawRectangleLinesEx({px, py, w, h}, 1.5f, Color{170, 190, 205, 255});
+        }
+
+        // 2. Rejilla frontal y aspas giratorias
+        if (tex_ventilador_aspa.id > 0) {
+            float aspa_w = h * 0.5f + 20.0f;
+            float aspa_h = h * 0.3f - 20.0f;
+            for (int i = 0; i < 4; ++i) {
+                float ang = fase + i * MathUtils::TIM_PI / 2.0f;
+                float ang_deg = ang * 180.0f / MathUtils::TIM_PI;
+                Rectangle src = {0.0f, 0.0f, (float)tex_ventilador_aspa.width, (float)tex_ventilador_aspa.height};
+                Rectangle dst = {cx - aspa_w/2.0f + 37.0f, cy - aspa_h/2.0f + 6, aspa_w, aspa_h};
+                Vector2 origin = {aspa_w/2.0f, aspa_h/2.0f};
+                DrawTexturePro(tex_ventilador_aspa, src, dst, origin, ang_deg, WHITE);
+            }
+            DrawCircle(static_cast<int>(cx), static_cast<int>(cy), 4.0f, Color{210, 230, 240, 255});
+        } else {
+            DrawCircleLines(static_cast<int>(cx), static_cast<int>(cy), h * 0.32f, Color{190, 210, 220, 255});
+            for (int i = 0; i < 4; ++i) {
+                float ang = fase + i * MathUtils::TIM_PI / 2.0f;
+                Vector2 p1 = {cx, cy};
+                Vector2 p2 = {
+                    cx + std::cos(ang) * h * 0.26f,
+                    cy + std::sin(ang) * h * 0.26f
+                };
+                DrawLineEx(p1, p2, 3.0f, Color{135, 205, 255, 255});
+            }
+            DrawCircle(static_cast<int>(cx), static_cast<int>(cy), 4.0f, Color{210, 230, 240, 255});
+        }
+
+        // 3. Corriente de aire animada en la dirección actual
+        bool der = mira_derecha();
+        for (int i = 0; i < 4; ++i) {
+            float y = cy - 24.0f + i * 16.0f;
+            float offset = std::sin(fase + i * 0.5f) * 15.0f;  // Desplazamiento según fase
+            float longitud = 70.0f + std::sin(fase + i * 0.3f) * 25.0f;  // Varía la longitud
+            float opacidad = 90 + std::sin(fase + i * 0.4f) * 50;  // Varía transparencia
+            
+            if (der) {
+                DrawLineEx({px + w + 8.0f + offset, y}, {px + w + 8.0f + longitud, y}, 1.5f,
+                          Color{120, 200, 255, static_cast<unsigned char>(opacidad)});
+            } else {
+                DrawLineEx({px - 8.0f - offset, y}, {px - 8.0f - longitud, y}, 1.5f,
+                          Color{120, 200, 255, static_cast<unsigned char>(opacidad)});
+            }
+        }
+
+        if (debug) {
+            DrawRectangleLines(static_cast<int>(px), static_cast<int>(py),
+                               static_cast<int>(w), static_cast<int>(h), GREEN);
+            if (der) {
+                DrawRectangleLines(static_cast<int>(px + w), static_cast<int>(cy - ancho_corriente / 2.0),
+                                   static_cast<int>(rango), static_cast<int>(ancho_corriente), GREEN);
+            } else {
+                DrawRectangleLines(static_cast<int>(px - rango), static_cast<int>(cy - ancho_corriente / 2.0),
+                                   static_cast<int>(rango), static_cast<int>(ancho_corriente), GREEN);
+            }
+        }
+    }
+};
 // TIM_MENU_SPAWN etiqueta="Ventilador" tab=0 categoria=1

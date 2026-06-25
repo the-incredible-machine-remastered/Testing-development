@@ -18,6 +18,8 @@
 #include "../objetos/zona_meta.h"
 #include "eventos.h"
 #include "rutas_datos.h"
+#include "../objetos/catalogo_menu.gen.h"
+#include "../core/tipo_entidad.h"
 
 #include <algorithm>
 #include <cctype>
@@ -28,6 +30,9 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <unordered_map>
+#include <functional>
+#include <memory>
 
 namespace fs = std::filesystem;
 
@@ -35,6 +40,40 @@ bool es_borde_nivel(const EntidadFisica* e);
 void resetear_punteros_borde();
 void crear_bordes_nivel(MotorFisica& motor);
 void limpiar_estado_tras_cargar_partida();
+
+extern std::unordered_map<TipoObjetoMenu, int> inventario_maximo;
+extern std::unordered_map<TipoObjetoMenu, int> inventario_actual;
+extern std::unordered_map<TipoObjetoMenu, std::vector<std::unique_ptr<EntidadFisica>>> inventario_entidades;
+extern EstadoJuego estado_actual;
+
+inline TipoObjetoMenu mapear_tipo_entidad_a_menu(TipoEntidadJuego t, const EntidadFisica* e) {
+    switch (t) {
+        case TipoEntidadJuego::BOLA: return TipoObjetoMenu::BOLA;
+        case TipoEntidadJuego::BOLA_REBOTADORA: return TipoObjetoMenu::BOLA_REBOTADORA;
+        case TipoEntidadJuego::TRAMPOLIN: return TipoObjetoMenu::TRAMPOLIN;
+        case TipoEntidadJuego::BALANCIN: return TipoObjetoMenu::BALANCIN;
+        case TipoEntidadJuego::RAMPA: return TipoObjetoMenu::RAMPA;
+        case TipoEntidadJuego::VENTILADOR: return TipoObjetoMenu::VENTILADOR;
+        case TipoEntidadJuego::SEGUIDOR: return TipoObjetoMenu::SEGUIDOR_BOOSTER;
+        case TipoEntidadJuego::BARRIL: return TipoObjetoMenu::BARRIL_CHAVO;
+        case TipoEntidadJuego::CUBETA: return TipoObjetoMenu::CUBETA;
+        case TipoEntidadJuego::SOPORTE: return TipoObjetoMenu::SOPORTE_TORQUE;
+        case TipoEntidadJuego::ZONA_META: return TipoObjetoMenu::ZONA_META;
+        case TipoEntidadJuego::CUERDA: return TipoObjetoMenu::CUERDA;
+        case TipoEntidadJuego::PARED: {
+            const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
+            if (p) {
+                double w = p->get_ancho();
+                double h = p->get_alto();
+                if (std::abs(w - 150.0) < 10.0 && std::abs(h - 15.0) < 5.0) return TipoObjetoMenu::PLATAFORMA;
+                if (std::abs(w - 80.0) < 10.0 && std::abs(h - 120.0) < 10.0) return TipoObjetoMenu::PARED_LARGA;
+                if (std::abs(w - 120.0) < 10.0 && std::abs(h - 20.0) < 5.0) return TipoObjetoMenu::PLATAFORMA_DECOR;
+            }
+            return TipoObjetoMenu::PLATAFORMA;
+        }
+        default: return TipoObjetoMenu::NINGUNO;
+    }
+}
 
 enum class ModoPanelGuardado {
     CERRADO,
@@ -150,86 +189,14 @@ inline bool guardar_partida(const MotorFisica& motor, GestorEventos& gestor, con
     for (const auto* e : motor.get_entidades()) {
         if (!e || es_borde_nivel(e)) continue;
 
-        if (const auto* b = dynamic_cast<const Bola*>(e)) {
-            out << "ent BOLA id=" << b->get_id();
-            escribir_dinamica(out, b);
-            out << " r=" << b->get_radio() << " m=" << b->get_masa()
-                << " ci=" << b->get_color_idx()
-                << " ti=" << b->get_texture_idx() << "\n";
-        } else if (const auto* br = dynamic_cast<const BolaRebotadora*>(e)) {
-            out << "ent BOLA_REBOTADORA id=" << br->get_id();
-            escribir_dinamica(out, br);
-            out << " r=" << br->get_radio() << "\n";
-        } else if (const auto* t = dynamic_cast<const Trampolin*>(e)) {
-            Vector2D p = t->get_posicion();
-            out << "ent TRAMPOLIN id=" << t->get_id()
-                << " x=" << p.x << " y=" << p.y
-                << " w=" << t->get_ancho() << " h=" << t->get_alto() << "\n";
-        } else if (const auto* bal = dynamic_cast<const Balancin*>(e)) {
-            out << "ent BALANCIN id=" << bal->get_id();
-            escribir_dinamica(out, bal);
-            out << " largo=" << bal->get_largo() << " esp=" << bal->get_espesor() << "\n";
-        } else if (const auto* p = dynamic_cast<const ParedRectangular*>(e)) {
-            Vector2D pos = p->get_posicion();
-            out << "ent PARED id=" << p->get_id()
-                << " x=" << pos.x << " y=" << pos.y
-                << " w=" << p->get_ancho() << " h=" << p->get_alto() << "\n";
-        } else if (const auto* ramp = dynamic_cast<const PlanoInclinado*>(e)) {
-            Vector2D pos = ramp->get_posicion();
-            out << "ent RAMPA id=" << ramp->get_id()
-                << " x=" << pos.x << " y=" << pos.y
-                << " b=" << ramp->get_base() << " h=" << ramp->get_altura()
-                << " inv=" << (ramp->get_invertido() ? 1 : 0) << "\n";
-        } else if (const auto* v = dynamic_cast<const Ventilador*>(e)) {
-            Vector2D pos = v->get_posicion();
-            out << "ent VENTILADOR id=" << v->get_id()
-                << " x=" << pos.x << " y=" << pos.y
-                << " w=" << v->get_ancho() << " h=" << v->get_alto()
-                << " der=" << (v->mira_derecha() ? 1 : 0) << "\n";
-        } else if (const auto* s = dynamic_cast<const SeguidorBooster*>(e)) {
-            out << "ent SEGUIDOR id=" << s->get_id();
-            escribir_dinamica(out, s);
-            out << " w=" << s->get_ancho() << " h=" << s->get_alto() << "\n";
-        } else if (const auto* bar = dynamic_cast<const BarrilChavo*>(e)) {
-            Vector2D pos = bar->get_posicion();
-            out << "ent BARRIL id=" << bar->get_id()
-                << " x=" << pos.x << " y=" << pos.y
-                << " w=" << bar->get_ancho() << " h=" << bar->get_alto() << "\n";
-        } else if (const auto* c = dynamic_cast<const Cubeta*>(e)) {
-            out << "ent CUBETA id=" << c->get_id();
-            escribir_dinamica(out, c);
-            out << " w=" << c->get_ancho() << " h=" << c->get_alto() << "\n";
-        } else if (const auto* st = dynamic_cast<const SoporteTorque*>(e)) {
-            Vector2D pos = st->get_posicion();
-            out << "ent SOPORTE id=" << st->get_id()
-                << " x=" << pos.x << " y=" << pos.y
-                << " r=" << st->get_radio() << "\n";
-        } else if (const auto* cuerda = dynamic_cast<const Cuerda*>(e)) {
-            const auto& a = cuerda->get_extremo_a();
-            const auto& b = cuerda->get_extremo_b();
-            out << "ent CUERDA id=" << cuerda->get_id()
-                << " aid=" << a.entidad_id << " at=" << tipo_anclaje_a_int(a.tipo)
-                << " bid=" << b.entidad_id << " bt=" << tipo_anclaje_a_int(b.tipo)
-                << " len=" << cuerda->get_longitud_inicial() << " sop=";
-            const auto& sops = cuerda->get_soportes_id();
-            for (size_t i = 0; i < sops.size(); ++i) {
-                if (i > 0) out << ",";
-                out << sops[i];
-            }
-        } else if (const auto* zm = dynamic_cast<const ZonaMeta*>(e)) {
-            Vector2D pos = zm->get_posicion();
-            out << "ent ZONA_META id=" << zm->get_id()
-                << " x=" << pos.x << " y=" << pos.y
-                << " w=" << zm->ancho << " h=" << zm->alto << "\n";
+        std::string s = e->serializar();
+        if (!s.empty()) {
+            out << s << "\n";
         }
     }
 
-    out << "eventos_count " << gestor.eventos.size() << "\n";
-    for (const auto& ev : gestor.eventos) {
-        out << serializar_evento(ev) << "\n";
-    }
     out << "siguiente_id_evento " << gestor.siguiente_id_evento << "\n";
-    out << "logica_victoria " << (gestor.logica_victoria == TipoLogicaVictoria::TODAS ? "TODAS" : "CUALQUIERA") << "\n";
+    serializar_nodo_recursivo(gestor.raiz, out);
 
     mensaje_guardado = "Partida guardada: " + sanitizar_nombre_partida(nombre);
     mensaje_guardado_timer = 3.0f;
@@ -257,7 +224,104 @@ inline void refrescar_lista_partidas() {
         });
 }
 
-inline void instanciar_desde_linea(MotorFisica& motor, const std::string& linea, int& max_id) {
+using CreadorEntidad = std::function<std::unique_ptr<EntidadFisica>(int id, const std::string& linea)>;
+
+inline const std::unordered_map<std::string, CreadorEntidad>& obtener_registro_fabrica() {
+    static const std::unordered_map<std::string, CreadorEntidad> registro = {
+        {"BOLA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            auto b = std::make_unique<Bola>(id, Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "r=", 12), leer_valor(linea, "m=", 1));
+            b->set_velocidad(Vector2D(leer_valor(linea, "vx=", 0), leer_valor(linea, "vy=", 0)));
+            b->set_velocidad_angular(leer_valor(linea, "omega=", 0));
+            b->set_color_idx(leer_valor_i(linea, "ci=", 0));
+            b->set_texture_idx(leer_valor_i(linea, "ti=", 0));
+            return b;
+        }},
+        {"BOLA_REBOTADORA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<BolaRebotadora>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "r=", 48));
+        }},
+        {"TRAMPOLIN", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Trampolin>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 80), leer_valor(linea, "h=", 20));
+        }},
+        {"BALANCIN", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            auto bal = std::make_unique<Balancin>(id, Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "largo=", 200), leer_valor(linea, "esp=", 6));
+            bal->set_velocidad(Vector2D(leer_valor(linea, "vx=", 0), leer_valor(linea, "vy=", 0)));
+            bal->set_velocidad_angular(leer_valor(linea, "omega=", 0));
+            return bal;
+        }},
+        {"PARED", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<ParedRectangular>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 100), leer_valor(linea, "h=", 15));
+        }},
+        {"RAMPA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<PlanoInclinado>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "b=", 160), leer_valor(linea, "h=", 120),
+                leer_valor_i(linea, "inv=", 0) != 0);
+        }},
+        {"VENTILADOR", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            auto v = std::make_unique<Ventilador>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 42), leer_valor(linea, "h=", 54));
+            if (leer_valor_i(linea, "der=", 1) == 0) v->invertir_direccion();
+            return v;
+        }},
+        {"SEGUIDOR", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<SeguidorBooster>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 24), leer_valor(linea, "h=", 48));
+        }},
+        {"BARRIL", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<BarrilChavo>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 60), leer_valor(linea, "h=", 80));
+        }},
+        {"CUBETA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            auto c = std::make_unique<Cubeta>(id, Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 58), leer_valor(linea, "h=", 52));
+            c->set_velocidad(Vector2D(leer_valor(linea, "vx=", 0), leer_valor(linea, "vy=", 0)));
+            return c;
+        }},
+        {"SOPORTE", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<SoporteTorque>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "r=", 16));
+        }},
+        {"CUERDA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            AnclajeCuerda a{leer_valor_i(linea, "aid=", 0), tipo_anclaje_desde_int(leer_valor_i(linea, "at=", 0))};
+            AnclajeCuerda b{leer_valor_i(linea, "bid=", 0), tipo_anclaje_desde_int(leer_valor_i(linea, "bt=", 0))};
+            std::vector<int> soportes;
+            size_t ps = linea.find("sop=");
+            if (ps != std::string::npos) {
+                std::string lista = linea.substr(ps + 4);
+                std::stringstream ls(lista);
+                std::string item;
+                while (std::getline(ls, item, ',')) {
+                    if (!item.empty()) {
+                        try {
+                            soportes.push_back(std::stoi(item));
+                        } catch (...) {}
+                    }
+                }
+            }
+            return std::make_unique<Cuerda>(id, a, soportes, b, leer_valor(linea, "len=", 200));
+        }},
+        {"ZONA_META", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<ZonaMeta>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 80), leer_valor(linea, "h=", 80));
+        }}
+    };
+    return registro;
+}
+
+inline void instanciar_desde_linea(MotorFisica& motor, const std::string& linea, int& max_id, bool es_snapshot = false) {
     if (linea.rfind("ent ", 0) != 0) return;
 
     std::string tipo;
@@ -269,87 +333,43 @@ inline void instanciar_desde_linea(MotorFisica& motor, const std::string& linea,
     int id = leer_valor_i(linea, "id=", 0);
     max_id = std::max(max_id, id);
 
-    if (tipo == "BOLA") {
-        auto* b = new Bola(id, Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
-            leer_valor(linea, "r=", 12), leer_valor(linea, "m=", 1));
-        b->set_velocidad(Vector2D(leer_valor(linea, "vx=", 0), leer_valor(linea, "vy=", 0)));
-        b->set_velocidad_angular(leer_valor(linea, "omega=", 0));
-        b->set_color_idx(leer_valor_i(linea, "ci=", 0));
-        b->set_texture_idx(leer_valor_i(linea, "ti=", 0));
-        motor.agregar_entidad(b);
-    } else if (tipo == "BOLA_REBOTADORA") {
-        motor.agregar_entidad(new BolaRebotadora(id,
-            Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
-            leer_valor(linea, "r=", 48)));
-    } else if (tipo == "TRAMPOLIN") {
-        motor.agregar_entidad(new Trampolin(id,
-            Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
-            leer_valor(linea, "w=", 80), leer_valor(linea, "h=", 20)));
-    } else if (tipo == "BALANCIN") {
-        auto* bal = new Balancin(id, Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
-            leer_valor(linea, "largo=", 200), leer_valor(linea, "esp=", 6));
-        bal->set_velocidad(Vector2D(leer_valor(linea, "vx=", 0), leer_valor(linea, "vy=", 0)));
-        bal->set_velocidad_angular(leer_valor(linea, "omega=", 0));
-        motor.agregar_entidad(bal);
-    } else if (tipo == "PARED") {
-        motor.agregar_entidad(new ParedRectangular(id,
-            Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
-            leer_valor(linea, "w=", 100), leer_valor(linea, "h=", 15)));
-    } else if (tipo == "RAMPA") {
-        motor.agregar_entidad(new PlanoInclinado(id,
-            Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
-            leer_valor(linea, "b=", 160), leer_valor(linea, "h=", 120),
-            leer_valor_i(linea, "inv=", 0) != 0));
-    } else if (tipo == "VENTILADOR") {
-        auto* v = new Ventilador(id,
-            Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
-            leer_valor(linea, "w=", 42), leer_valor(linea, "h=", 54));
-        if (leer_valor_i(linea, "der=", 1) == 0) v->invertir_direccion();
-        motor.agregar_entidad(v);
-    } else if (tipo == "SEGUIDOR") {
-        motor.agregar_entidad(new SeguidorBooster(id,
-            Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
-            leer_valor(linea, "w=", 24), leer_valor(linea, "h=", 48)));
-    } else if (tipo == "BARRIL") {
-        motor.agregar_entidad(new BarrilChavo(id,
-            Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
-            leer_valor(linea, "w=", 60), leer_valor(linea, "h=", 80)));
-    } else if (tipo == "CUBETA") {
-        auto* c = new Cubeta(id, Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
-            leer_valor(linea, "w=", 58), leer_valor(linea, "h=", 52));
-        c->set_velocidad(Vector2D(leer_valor(linea, "vx=", 0), leer_valor(linea, "vy=", 0)));
-        motor.agregar_entidad(c);
-    } else if (tipo == "SOPORTE") {
-        motor.agregar_entidad(new SoporteTorque(id,
-            Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
-            leer_valor(linea, "r=", 16)));
-    } else if (tipo == "CUERDA") {
-        AnclajeCuerda a{leer_valor_i(linea, "aid=", 0), tipo_anclaje_desde_int(leer_valor_i(linea, "at=", 0))};
-        AnclajeCuerda b{leer_valor_i(linea, "bid=", 0), tipo_anclaje_desde_int(leer_valor_i(linea, "bt=", 0))};
-        std::vector<int> soportes;
-        size_t ps = linea.find("sop=");
-        if (ps != std::string::npos) {
-            std::string lista = linea.substr(ps + 4);
-            std::stringstream ls(lista);
-            std::string item;
-            while (std::getline(ls, item, ',')) {
-                if (!item.empty()) {
-                    try {
-                        soportes.push_back(std::stoi(item));
-                    } catch (...) {}
+    const auto& registro = obtener_registro_fabrica();
+    auto it = registro.find(tipo);
+    if (it != registro.end()) {
+        auto e = it->second(id, linea);
+        if (e) {
+            bool fijo = (leer_valor_i(linea, "fijo=", 1) != 0);
+            e->set_es_fijo(fijo);
+            
+            int tm = leer_valor_i(linea, "tipo_menu=", -1);
+            TipoObjetoMenu tipo_menu = TipoObjetoMenu::NINGUNO;
+            if (tm >= 0 && tm < static_cast<int>(TipoObjetoMenu::COUNT)) {
+                tipo_menu = static_cast<TipoObjetoMenu>(tm);
+            } else {
+                tipo_menu = mapear_tipo_entidad_a_menu(e->get_tipo_entidad(), e.get());
+            }
+            e->set_tipo_menu(tipo_menu);
+
+            if (!fijo && !es_snapshot) {
+                inventario_maximo[tipo_menu]++;
+                inventario_actual[tipo_menu]++;
+                if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
+                    inventario_entidades[tipo_menu].push_back(std::move(e));
+                    return;
                 }
             }
+
+            motor.agregar_entidad(std::move(e));
         }
-        motor.agregar_entidad(new Cuerda(id, a, soportes, b, leer_valor(linea, "len=", 200)));
-    } else if (tipo == "ZONA_META") {
-        motor.agregar_entidad(new ZonaMeta(id,
-            Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
-            leer_valor(linea, "w=", 80), leer_valor(linea, "h=", 80)));
+    } else {
+        TraceLog(LOG_WARNING, "Tipo de entidad desconocido al cargar partida: '%s'", tipo.c_str());
     }
 }
 
 inline bool cargar_partida(MotorFisica& motor, GestorEventos& gestor, const std::string& ruta_archivo,
                            int& ancho, int& alto, int& contador_bolas) {
+    limpiar_estado_tras_cargar_partida();
+
     std::ifstream in(ruta_archivo);
     if (!in) {
         mensaje_guardado = "No se pudo abrir la partida";
@@ -365,6 +385,11 @@ inline bool cargar_partida(MotorFisica& motor, GestorEventos& gestor, const std:
     double gravedad_y = 500.0;
     int max_id = 0;
     std::string linea;
+
+    std::vector<CondicionEvento> old_condiciones;
+    TipoLogicaVictoria old_logica = TipoLogicaVictoria::CUALQUIERA;
+    bool arbol_nuevo_cargado = false;
+    std::vector<NodoEvento> stack_nodos;
 
     while (std::getline(in, linea)) {
         if (linea.empty()) continue;
@@ -382,28 +407,256 @@ inline bool cargar_partida(MotorFisica& motor, GestorEventos& gestor, const std:
             } else if (linea.rfind("alto", 0) == 0) {
                 alto = std::stoi(linea.substr(5));
             } else if (linea.rfind("ent ", 0) == 0) {
-                instanciar_desde_linea(motor, linea, max_id);
+                instanciar_desde_linea(motor, linea, max_id, false);
             } else if (linea.rfind("evt ", 0) == 0) {
-                EventoJuego ev = deserializar_evento(linea);
-                gestor.eventos.push_back(ev);
+                CondicionEvento cond = deserializar_condicion_desde_linea(linea);
+                old_condiciones.push_back(cond);
             } else if (linea.rfind("logica_victoria", 0) == 0) {
                 if (linea.find("TODAS") != std::string::npos) {
-                    gestor.logica_victoria = TipoLogicaVictoria::TODAS;
+                    old_logica = TipoLogicaVictoria::TODAS;
                 } else {
-                    gestor.logica_victoria = TipoLogicaVictoria::CUALQUIERA;
+                    old_logica = TipoLogicaVictoria::CUALQUIERA;
                 }
+            } else if (linea.find("evt_grupo id=") != std::string::npos) {
+                auto extraer_str = [&](const std::string& clave) -> std::string {
+                    std::string buscar = clave + "=";
+                    size_t pos = linea.find(buscar);
+                    if (pos == std::string::npos) return "";
+                    pos += buscar.length();
+                    size_t fin = linea.find(' ', pos);
+                    if (fin == std::string::npos) fin = linea.length();
+                    return linea.substr(pos, fin - pos);
+                };
+                int node_id = -1;
+                try { node_id = std::stoi(extraer_str("id")); } catch(...) {}
+                std::string op_str = extraer_str("op");
+                TipoNodo tn = (op_str == "OR") ? TipoNodo::OPERADOR_OR : TipoNodo::OPERADOR_AND;
+                
+                NodoEvento nuevo_grupo;
+                nuevo_grupo.id = node_id;
+                nuevo_grupo.tipo = tn;
+                nuevo_grupo.cumplido = false;
+                
+                stack_nodos.push_back(nuevo_grupo);
+                arbol_nuevo_cargado = true;
+            } else if (linea.find("evt_cond ") != std::string::npos) {
+                auto extraer_str = [&](const std::string& clave) -> std::string {
+                    std::string buscar = clave + "=";
+                    size_t pos = linea.find(buscar);
+                    if (pos == std::string::npos) return "";
+                    pos += buscar.length();
+                    size_t fin = linea.find(' ', pos);
+                    if (fin == std::string::npos) fin = linea.length();
+                    return linea.substr(pos, fin - pos);
+                };
+                int node_id = -1;
+                try { node_id = std::stoi(extraer_str("id")); } catch(...) {}
+                CondicionEvento cond = deserializar_condicion_desde_linea(linea);
+                
+                NodoEvento nodo_cond;
+                nodo_cond.id = node_id;
+                nodo_cond.tipo = TipoNodo::CONDICION;
+                nodo_cond.condicion = cond;
+                nodo_cond.cumplido = false;
+                
+                if (!stack_nodos.empty()) {
+                    stack_nodos.back().hijos.push_back(nodo_cond);
+                } else {
+                    gestor.raiz = nodo_cond;
+                }
+                arbol_nuevo_cargado = true;
+            } else if (linea.find("evt_grupo_fin") != std::string::npos) {
+                if (stack_nodos.size() > 1) {
+                    NodoEvento hijo = stack_nodos.back();
+                    stack_nodos.pop_back();
+                    stack_nodos.back().hijos.push_back(hijo);
+                } else if (stack_nodos.size() == 1) {
+                    gestor.raiz = stack_nodos.back();
+                    stack_nodos.pop_back();
+                }
+                arbol_nuevo_cargado = true;
             }
         } catch (...) {
             TraceLog(LOG_WARNING, "Linea de guardado malformada ignorada de forma segura: '%s'", linea.c_str());
         }
     }
 
+    if (!arbol_nuevo_cargado) {
+        gestor.limpiar();
+        gestor.raiz.tipo = (old_logica == TipoLogicaVictoria::TODAS) ? TipoNodo::OPERADOR_AND : TipoNodo::OPERADOR_OR;
+        gestor.raiz.id = -1;
+        for (const auto& cond : old_condiciones) {
+            gestor.agregar_condicion(gestor.raiz.id, cond);
+        }
+    }
+
+    motor.set_gravedad(Vector2D(0, gravedad_y));
+    motor.set_siguiente_id(max_id + 1);
+    
+    // Asegurar que todos los objetos comiencen completamente en reposo
+    for (auto* e : motor.get_entidades()) {
+        e->set_velocidad(Vector2D(0.0, 0.0));
+        e->set_velocidad_angular(0.0);
+    }
+    
+    mensaje_guardado = "Partida cargada";
+    mensaje_guardado_timer = 3.0f;
+    motor.set_pausado(true);
+    return true;
+}
+
+inline std::string snapshot_simulacion = "";
+
+inline void guardar_snapshot_simulacion(const MotorFisica& motor, GestorEventos& gestor) {
+    std::stringstream out;
+    out << "tim_save 1\n";
+    out << "gravedad_y " << motor.get_gravedad().y << "\n";
+    out << "siguiente_id " << motor.get_siguiente_id() << "\n";
+    
+    for (const auto& pair : inventario_actual) {
+        out << "inv_item " << static_cast<int>(pair.first) << " " << pair.second << "\n";
+    }
+
+    for (const auto* e : motor.get_entidades()) {
+        if (!e || es_borde_nivel(e)) continue;
+
+        std::string s = e->serializar();
+        if (!s.empty()) {
+            out << s << "\n";
+        }
+    }
+
+    out << "siguiente_id_evento " << gestor.siguiente_id_evento << "\n";
+    serializar_nodo_recursivo(gestor.raiz, out);
+    snapshot_simulacion = out.str();
+    TraceLog(LOG_INFO, "Snapshot de simulación guardado (tamaño: %d bytes)", static_cast<int>(snapshot_simulacion.size()));
+}
+
+inline void restaurar_snapshot_simulacion(MotorFisica& motor, GestorEventos& gestor) {
+    if (snapshot_simulacion.empty()) return;
+
+    resetear_punteros_borde();
+    motor.limpiar();
+    gestor.limpiar();
+    crear_bordes_nivel(motor);
+
+    for (auto& pair : inventario_actual) {
+        pair.second = 0;
+    }
+
+    std::stringstream in(snapshot_simulacion);
+    double gravedad_y = 500.0;
+    int max_id = 0;
+    std::string linea;
+
+    std::vector<CondicionEvento> old_condiciones;
+    TipoLogicaVictoria old_logica = TipoLogicaVictoria::CUALQUIERA;
+    bool arbol_nuevo_cargado = false;
+    std::vector<NodoEvento> stack_nodos;
+
+    while (std::getline(in, linea)) {
+        if (linea.empty()) continue;
+        try {
+            if (linea.rfind("gravedad_y", 0) == 0) {
+                gravedad_y = std::stod(linea.substr(11));
+            } else if (linea.rfind("siguiente_id_evento", 0) == 0) {
+                gestor.siguiente_id_evento = std::stoi(linea.substr(20));
+            } else if (linea.rfind("siguiente_id", 0) == 0) {
+                max_id = std::stoi(linea.substr(13));
+            } else if (linea.rfind("inv_item ", 0) == 0) {
+                std::stringstream ss(linea.substr(9));
+                int tipo_val, cant_val;
+                if (ss >> tipo_val >> cant_val) {
+                    inventario_actual[static_cast<TipoObjetoMenu>(tipo_val)] = cant_val;
+                }
+            } else if (linea.rfind("ent ", 0) == 0) {
+                instanciar_desde_linea(motor, linea, max_id, true);
+            } else if (linea.rfind("evt ", 0) == 0) {
+                CondicionEvento cond = deserializar_condicion_desde_linea(linea);
+                old_condiciones.push_back(cond);
+            } else if (linea.rfind("logica_victoria", 0) == 0) {
+                if (linea.find("TODAS") != std::string::npos) {
+                    old_logica = TipoLogicaVictoria::TODAS;
+                } else {
+                    old_logica = TipoLogicaVictoria::CUALQUIERA;
+                }
+            } else if (linea.find("evt_grupo id=") != std::string::npos) {
+                auto extraer_str = [&](const std::string& clave) -> std::string {
+                    std::string buscar = clave + "=";
+                    size_t pos = linea.find(buscar);
+                    if (pos == std::string::npos) return "";
+                    pos += buscar.length();
+                    size_t fin = linea.find(' ', pos);
+                    if (fin == std::string::npos) fin = linea.length();
+                    return linea.substr(pos, fin - pos);
+                };
+                int node_id = -1;
+                try { node_id = std::stoi(extraer_str("id")); } catch(...) {}
+                std::string op_str = extraer_str("op");
+                TipoNodo tn = (op_str == "OR") ? TipoNodo::OPERADOR_OR : TipoNodo::OPERADOR_AND;
+                
+                NodoEvento nuevo_grupo;
+                nuevo_grupo.id = node_id;
+                nuevo_grupo.tipo = tn;
+                nuevo_grupo.cumplido = false;
+                
+                stack_nodos.push_back(nuevo_grupo);
+                arbol_nuevo_cargado = true;
+            } else if (linea.find("evt_cond ") != std::string::npos) {
+                auto extraer_str = [&](const std::string& clave) -> std::string {
+                    std::string buscar = clave + "=";
+                    size_t pos = linea.find(buscar);
+                    if (pos == std::string::npos) return "";
+                    pos += buscar.length();
+                    size_t fin = linea.find(' ', pos);
+                    if (fin == std::string::npos) fin = linea.length();
+                    return linea.substr(pos, fin - pos);
+                };
+                int node_id = -1;
+                try { node_id = std::stoi(extraer_str("id")); } catch(...) {}
+                CondicionEvento cond = deserializar_condicion_desde_linea(linea);
+                
+                NodoEvento nodo_cond;
+                nodo_cond.id = node_id;
+                nodo_cond.tipo = TipoNodo::CONDICION;
+                nodo_cond.condicion = cond;
+                nodo_cond.cumplido = false;
+                
+                if (!stack_nodos.empty()) {
+                    stack_nodos.back().hijos.push_back(nodo_cond);
+                } else {
+                    gestor.raiz = nodo_cond;
+                }
+                arbol_nuevo_cargado = true;
+            } else if (linea.find("evt_grupo_fin") != std::string::npos) {
+                if (stack_nodos.size() > 1) {
+                    NodoEvento hijo = stack_nodos.back();
+                    stack_nodos.pop_back();
+                    stack_nodos.back().hijos.push_back(hijo);
+                } else if (stack_nodos.size() == 1) {
+                    gestor.raiz = stack_nodos.back();
+                    stack_nodos.pop_back();
+                }
+                arbol_nuevo_cargado = true;
+            }
+        } catch (...) {
+            TraceLog(LOG_WARNING, "Error al procesar línea de snapshot: %s", linea.c_str());
+        }
+    }
+
+    if (!arbol_nuevo_cargado) {
+        gestor.limpiar();
+        gestor.raiz.tipo = (old_logica == TipoLogicaVictoria::TODAS) ? TipoNodo::OPERADOR_AND : TipoNodo::OPERADOR_OR;
+        gestor.raiz.id = -1;
+        for (const auto& cond : old_condiciones) {
+            gestor.agregar_condicion(gestor.raiz.id, cond);
+        }
+    }
+
     motor.set_gravedad(Vector2D(0, gravedad_y));
     motor.set_siguiente_id(max_id + 1);
     limpiar_estado_tras_cargar_partida();
-    mensaje_guardado = "Partida cargada";
-    mensaje_guardado_timer = 3.0f;
-    return true;
+    TraceLog(LOG_INFO, "Snapshot de simulación restaurado.");
 }
 
 inline void actualizar_mensaje_guardado(float dt) {
@@ -492,17 +745,32 @@ inline bool manejar_click_panel_guardado(int mx, int my, MotorFisica& motor, Ges
                                          int& ancho, int& alto, int& contador_bolas) {
     Vector2 p_click = {static_cast<float>(mx), static_cast<float>(my)};
 
+    // Calcular las mismas dimensiones de panel y botones que en dibujar_panel_guardado
+    int px = ancho - 300; // MENU_ANCHO = 300
+    int py_base = alto - 50 - 180 - 215; // MENU_PAGINACION_ALTO = 50, MENU_PAGINACION_ALTO - 180 - 215
+    const int alto_panel = 200;
+    Rectangle panel = {static_cast<float>(px + 8), static_cast<float>(py_base),
+                       static_cast<float>(300 - 16), static_cast<float>(alto_panel)};
+    
+    Rectangle btn_guardar = {panel.x + 10, panel.y + 10, panel.width - 20, 32};
+    Rectangle btn_ver = {panel.x + 10, panel.y + 50, panel.width - 20, 32};
+
+    // Sincronizar variables globales por consistencia
+    rect_panel_guardado = panel;
+    rect_btn_guardar_partida = btn_guardar;
+    rect_btn_ver_partidas = btn_ver;
+
     if (modo_panel_guardado == ModoPanelGuardado::PEDIR_NOMBRE_GUARDAR) {
-        if (CheckCollisionPointRec(p_click, rect_panel_guardado)) {
+        if (CheckCollisionPointRec(p_click, panel)) {
             return true;
         }
         return false;
     }
 
     if (modo_panel_guardado == ModoPanelGuardado::LISTA_PARTIDAS) {
-        float ly = rect_btn_ver_partidas.y + 62;
+        float ly = btn_ver.y + 62;
         for (size_t i = 0; i < partidas_guardadas.size() && i < 4; ++i) {
-            Rectangle fila = {rect_btn_ver_partidas.x, ly, rect_btn_ver_partidas.width, 22};
+            Rectangle fila = {btn_ver.x, ly, btn_ver.width, 22};
             if (CheckCollisionPointRec(p_click, fila)) {
                 cargar_partida(motor, gestor, partidas_guardadas[i].ruta_archivo, ancho, alto, contador_bolas);
                 modo_panel_guardado = ModoPanelGuardado::CERRADO;
@@ -510,17 +778,20 @@ inline bool manejar_click_panel_guardado(int mx, int my, MotorFisica& motor, Ges
             }
             ly += 24;
         }
+        if (CheckCollisionPointRec(p_click, panel)) {
+            return true; // Consumir click para que no actúe sobre el canvas
+        }
         return false;
     }
 
     if (modo_panel_guardado != ModoPanelGuardado::CERRADO) return false;
 
-    if (CheckCollisionPointRec(p_click, rect_btn_guardar_partida)) {
+    if (CheckCollisionPointRec(p_click, btn_guardar)) {
         buffer_nombre_partida[0] = '\0';
         modo_panel_guardado = ModoPanelGuardado::PEDIR_NOMBRE_GUARDAR;
         return true;
     }
-    if (CheckCollisionPointRec(p_click, rect_btn_ver_partidas)) {
+    if (CheckCollisionPointRec(p_click, btn_ver)) {
         refrescar_lista_partidas();
         indice_partida_lista = -1;
         modo_panel_guardado = ModoPanelGuardado::LISTA_PARTIDAS;

@@ -6,6 +6,14 @@
 
 #include "vector2d.h"
 #include "math_utils.h"
+#include "tipo_entidad.h"
+#include "registro_eventos.h"
+#include "../objetos/catalogo_menu.gen.h"
+#include <string>
+#include <vector>
+#include <sstream>
+
+struct InfoColision;
 
 // Tipo de forma para dispatch de colisiones en el motor
 enum class TipoForma {
@@ -18,6 +26,8 @@ enum class TipoForma {
 class EntidadFisica {
 protected:
     int id_objeto;
+    bool es_fijo = true;
+    TipoObjetoMenu tipo_menu = TipoObjetoMenu::NINGUNO;
 
     // ---- Cinemática lineal ----
     Vector2D posicion;
@@ -178,4 +188,42 @@ public:
     void set_friccion(double f) { coef_friccion = f; }
     void set_amortiguamiento(double d) { amortiguamiento_lineal = d; }
     void set_inercia(double i) { inercia = i; }
+
+    bool get_es_fijo() const { return es_fijo; }
+    void set_es_fijo(bool f) { es_fijo = f; }
+    TipoObjetoMenu get_tipo_menu() const { return tipo_menu; }
+    void set_tipo_menu(TipoObjetoMenu t) { tipo_menu = t; }
+
+    // ---- Métodos polimórficos ----
+    virtual void dibujar(bool modo_debug) const {}
+    virtual bool contiene_punto(const Vector2D& p) const { return false; }
+    virtual Vector2D get_min() const { return posicion; }
+    virtual Vector2D get_max() const { return posicion; }
+    virtual TipoEntidadJuego get_tipo_entidad() const = 0;
+    virtual std::string serializar() const { return ""; }
+    std::string serializar_base() const {
+        std::stringstream ss;
+        ss << " x=" << posicion.x << " y=" << posicion.y
+           << " vx=" << velocidad.x << " vy=" << velocidad.y
+           << " ang=" << angulo
+           << " omega=" << velocidad_angular
+           << " fijo=" << (es_fijo ? 1 : 0)
+           << " tipo_menu=" << static_cast<int>(tipo_menu);
+        return ss.str();
+    }
+    virtual void on_collision(EntidadFisica* otro, const InfoColision& info) {}
+
+protected:
+    std::vector<RegistroEventoEspecial> eventos_pendientes;
+
+public:
+    void registrar_evento_especial(const RegistroEventoEspecial& ev) {
+        eventos_pendientes.push_back(ev);
+    }
+    std::vector<RegistroEventoEspecial>& get_eventos_pendientes() {
+        return eventos_pendientes;
+    }
+    void limpiar_eventos_pendientes() {
+        eventos_pendientes.clear();
+    }
 };

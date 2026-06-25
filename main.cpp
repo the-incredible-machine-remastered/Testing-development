@@ -77,21 +77,16 @@ const int NUM_COLORES = 7;
 
 // Colores del escenario
 const Color COLOR_FONDO       = {22,  22,  42,  255};   // Navy oscuro
-const Color COLOR_PARED       = {40,  42,  68,  255};   // Azul-gris oscuro
-const Color COLOR_PARED_BORDE = {70,  75,  110, 255};   // Azul-gris claro
-const Color COLOR_RAMPA       = {35,  75,  58,  255};   // Verde bosque oscuro
-const Color COLOR_RAMPA_BORDE = {65,  140, 100, 255};   // Verde bosque claro
+// COLOR_PARED, COLOR_PARED_BORDE, COLOR_RAMPA, COLOR_RAMPA_BORDE son definidos en assets_extern.h
 const Color COLOR_HUD         = {200, 200, 220, 255};   // Texto claro
 const Color COLOR_CONTROLES   = {130, 130, 160, 200};   // Texto controles
 
 // Estado del prototipo
-enum class EstadoJuego {
-    MENU_PRINCIPAL,
-    MENU_OPCIONES,
-    SELECCION_NIVELES,
-    JUEGO_CREATIVO,
-    JUEGO_NIVEL
-};
+std::unordered_map<TipoObjetoMenu, int> inventario_maximo;
+std::unordered_map<TipoObjetoMenu, int> inventario_actual;
+std::unordered_map<TipoObjetoMenu, std::vector<std::unique_ptr<EntidadFisica>>> inventario_entidades;
+int nivel_campana_actual = -1;
+std::string nivel_usuario_actual_path = "";
 
 EstadoJuego estado_actual = EstadoJuego::MENU_PRINCIPAL;
 EstadoJuego estado_previo = EstadoJuego::MENU_PRINCIPAL;
@@ -136,6 +131,18 @@ Vector2D offset_arrastre;
 
 // Estado de selección (para eliminar objetos)
 EntidadFisica* entidad_seleccionada = nullptr;
+
+enum class HandleResize {
+    NINGUNO,
+    TOP_LEFT, TOP_CENTER, TOP_RIGHT,
+    MID_LEFT,             MID_RIGHT,
+    BOT_LEFT, BOT_CENTER, BOT_RIGHT
+};
+HandleResize handle_activo = HandleResize::NINGUNO;
+Vector2D     handle_pos_inicial_mouse;
+double       handle_w_inicial = 0;
+double       handle_h_inicial = 0;
+Vector2D     handle_pos_inicial_ent;
 
 bool es_borde_nivel(const EntidadFisica* e);
 
@@ -194,7 +201,7 @@ const EntidadFisica* buscar_entidad_por_id(const MotorFisica& motor, int id) {
 
 bool detectar_anclaje_cuerda(const MotorFisica& motor, Vector2D mouse_pos,
                              AnclajeCuerda& out, Vector2D& punto_out) {
-    const double radio_hit = 18.0;
+    const double radio_hit = 30.0;
     double mejor_dist2 = radio_hit * radio_hit;
     bool encontrado = false;
 
@@ -241,7 +248,7 @@ bool detectar_anclaje_cuerda(const MotorFisica& motor, Vector2D mouse_pos,
 
 bool detectar_soporte_torque(const MotorFisica& motor, Vector2D mouse_pos,
                              int& soporte_id_out, Vector2D& punto_out) {
-    const double radio_extra = 8.0;
+    const double radio_extra = 16.0;
     for (const auto* e : motor.get_entidades()) {
         const SoporteTorque* soporte = dynamic_cast<const SoporteTorque*>(e);
         if (!soporte) continue;
@@ -301,8 +308,6 @@ bool manejar_click_colocacion_cuerda(MotorFisica& motor, Vector2D mouse_pos) {
             cuerda_extremo_a = anclaje;
             cuerda_punto_a_preview = punto;
             estado_cuerda = EstadoColocacionCuerda::ESPERANDO_SOPORTE;
-        } else {
-            cancelar_colocacion_cuerda();
         }
         return true;
     }
@@ -314,8 +319,24 @@ bool manejar_click_colocacion_cuerda(MotorFisica& motor, Vector2D mouse_pos) {
             cuerda_soportes_id.push_back(soporte_id);
             cuerda_soportes_preview.push_back(punto_soporte);
             estado_cuerda = EstadoColocacionCuerda::ESPERANDO_EXTREMO_B;
-        } else {
+            return true;
+        }
+
+        AnclajeCuerda extremo_b;
+        Vector2D punto_b;
+        if (detectar_anclaje_cuerda(motor, mouse_pos, extremo_b, punto_b)) {
+            if (extremo_b.entidad_id == cuerda_extremo_a.entidad_id && extremo_b.tipo == cuerda_extremo_a.tipo) {
+                return true; // Evitar anclar al mismo punto
+            }
+            const EntidadFisica* ent_a = buscar_entidad_por_id(motor, cuerda_extremo_a.entidad_id);
+            if (ent_a) {
+                Vector2D punto_a = posicion_anclaje_cuerda(ent_a, cuerda_extremo_a.tipo);
+                double longitud = calcular_longitud_ruta_cuerda(punto_a, cuerda_soportes_preview, punto_b);
+                motor.agregar_entidad(new Cuerda(
+                    motor.generar_id(), cuerda_extremo_a, cuerda_soportes_id, extremo_b, longitud));
+            }
             cancelar_colocacion_cuerda();
+            return true;
         }
         return true;
     }
@@ -333,22 +354,20 @@ bool manejar_click_colocacion_cuerda(MotorFisica& motor, Vector2D mouse_pos) {
 
         AnclajeCuerda extremo_b;
         Vector2D punto_b;
-        if (!detectar_anclaje_cuerda(motor, mouse_pos, extremo_b, punto_b)) {
+        if (detectar_anclaje_cuerda(motor, mouse_pos, extremo_b, punto_b)) {
+            if (extremo_b.entidad_id == cuerda_extremo_a.entidad_id && extremo_b.tipo == cuerda_extremo_a.tipo) {
+                return true; // Evitar anclar al mismo punto
+            }
+            const EntidadFisica* ent_a = buscar_entidad_por_id(motor, cuerda_extremo_a.entidad_id);
+            if (ent_a) {
+                Vector2D punto_a = posicion_anclaje_cuerda(ent_a, cuerda_extremo_a.tipo);
+                double longitud = calcular_longitud_ruta_cuerda(punto_a, cuerda_soportes_preview, punto_b);
+                motor.agregar_entidad(new Cuerda(
+                    motor.generar_id(), cuerda_extremo_a, cuerda_soportes_id, extremo_b, longitud));
+            }
             cancelar_colocacion_cuerda();
             return true;
         }
-
-        const EntidadFisica* ent_a = buscar_entidad_por_id(motor, cuerda_extremo_a.entidad_id);
-        if (!ent_a) {
-            cancelar_colocacion_cuerda();
-            return true;
-        }
-
-        Vector2D punto_a = posicion_anclaje_cuerda(ent_a, cuerda_extremo_a.tipo);
-        double longitud = calcular_longitud_ruta_cuerda(punto_a, cuerda_soportes_preview, punto_b);
-        motor.agregar_entidad(new Cuerda(
-            motor.generar_id(), cuerda_extremo_a, cuerda_soportes_id, extremo_b, longitud));
-        cancelar_colocacion_cuerda();
         return true;
     }
 
@@ -411,6 +430,9 @@ Texture2D tex_hud_opciones;
 Texture2D tex_hud_opciones_hover;
 Texture2D tex_hud_ayuda;
 Texture2D tex_hud_salir;
+Texture2D tex_hud_play;
+Texture2D tex_hud_reset;
+Texture2D tex_hud_reset_hover;
 Texture2D tex_menu_fondo;
 Texture2D tex_menu_box;
 Texture2D tex_btn_jugar1;
@@ -437,7 +459,7 @@ int ancho_area_juego() {
 bool punto_en_menu(int mx, int my) {
     // Siempre incluir el área del botón de abrir/cerrar
     int px = ANCHO - MENU_ANCHO;
-    int bx = px - 28;
+    int bx = menu_visible ? (px - 28) : (ANCHO - 26);
     
     // Área del botón de abrir/cerrar
     if (mx >= bx && mx < bx + 24 && my >= ALTO / 2 - 40 && my < ALTO / 2 + 40) {
@@ -449,6 +471,19 @@ bool punto_en_menu(int mx, int my) {
     return mx >= px && mx < ANCHO && my >= 0 && my < ALTO;
 }
 
+bool punto_en_panel_izquierdo(int mx, int my) {
+    int w = 260;
+    int bx = panel_izquierdo_visible ? w : 0;
+    
+    // Área del botón de abrir/cerrar del panel izquierdo
+    if (mx >= bx && mx < bx + 24 && my >= ALTO / 2 - 40 && my < ALTO / 2 + 40) {
+        return true;
+    }
+    
+    if (!panel_izquierdo_visible) return false;
+    return mx >= 0 && mx < w && my >= 0 && my < ALTO;
+}
+
 bool punto_en_area_juego(int mx, int my) {
     return mx >= 0 && mx < ancho_area_juego() && my >= 0 && my < ALTO;
 }
@@ -458,164 +493,35 @@ bool es_borde_nivel(const EntidadFisica* e) {
     return e == borde_suelo || e == borde_izquierda || e == borde_derecha || e == borde_techo;
 }
 
+struct InfoHandles {
+    Rectangle rects[8];
+    HandleResize tipos[8];
+};
+InfoHandles calcular_handles(const ParedRectangular* p) {
+    const float S = 10.0f;
+    float x = (float)p->get_posicion().x;
+    float y = (float)p->get_posicion().y;
+    float w = (float)p->get_ancho();
+    float h = (float)p->get_alto();
+    float hs = S / 2.0f;
+    InfoHandles out;
+    out.tipos[0] = HandleResize::TOP_LEFT;    out.rects[0] = {x-hs,       y-hs,       S,S};
+    out.tipos[1] = HandleResize::TOP_CENTER;  out.rects[1] = {x+w/2-hs,   y-hs,       S,S};
+    out.tipos[2] = HandleResize::TOP_RIGHT;   out.rects[2] = {x+w-hs,     y-hs,       S,S};
+    out.tipos[3] = HandleResize::MID_LEFT;    out.rects[3] = {x-hs,       y+h/2-hs,   S,S};
+    out.tipos[4] = HandleResize::MID_RIGHT;   out.rects[4] = {x+w-hs,     y+h/2-hs,   S,S};
+    out.tipos[5] = HandleResize::BOT_LEFT;    out.rects[5] = {x-hs,       y+h-hs,     S,S};
+    out.tipos[6] = HandleResize::BOT_CENTER;  out.rects[6] = {x+w/2-hs,   y+h-hs,     S,S};
+    out.tipos[7] = HandleResize::BOT_RIGHT;   out.rects[7] = {x+w-hs,     y+h-hs,     S,S};
+    return out;
+}
+
 // Obtener qué objeto está debajo del cursor del mouse (incluye estáticos)
 EntidadFisica* obtener_entidad_bajo_mouse(const MotorFisica& motor, Vector2D mouse_pos) {
     for (auto* e : motor.get_entidades()) {
-        // Excluir bordes del nivel del arrastre/selección
         if (es_borde_nivel(e)) continue;
-
-        const SoporteTorque* soporte = dynamic_cast<const SoporteTorque*>(e);
-        if (soporte) {
-            double dist = (soporte->get_punto_cuerda() - mouse_pos).magnitud();
-            if (dist < soporte->get_radio() + 10.0) {
-                return const_cast<SoporteTorque*>(soporte);
-            }
-        }
-
-        TipoForma forma = e->get_tipo_forma();
-        if (forma == TipoForma::CIRCULO) {
-            const BolaRebotadora* rebotadora = dynamic_cast<const BolaRebotadora*>(e);
-            if (rebotadora) {
-                double dist = (rebotadora->get_posicion() - mouse_pos).magnitud();
-                if (dist < rebotadora->get_radio() + 15.0) {
-                    return const_cast<BolaRebotadora*>(rebotadora);
-                }
-            }
-
-            const Bola* b = dynamic_cast<const Bola*>(e);
-            if (b) {
-                double dist = (b->get_posicion() - mouse_pos).magnitud();
-                if (dist < b->get_radio() + 15.0) {
-                    return const_cast<Bola*>(b);
-                }
-            }
-        }
-        else if (forma == TipoForma::AABB) {
-            const Trampolin* t = dynamic_cast<const Trampolin*>(e);
-            if (t) {
-                Vector2D pos = t->get_posicion();
-                double w = t->get_ancho();
-                double h = t->get_alto();
-                if (mouse_pos.x >= pos.x - 10 && mouse_pos.x <= pos.x + w + 10 &&
-                    mouse_pos.y >= pos.y - 10 && mouse_pos.y <= pos.y + h + 10) {
-                    return const_cast<Trampolin*>(t);
-                }
-            }
-            const SeguidorBooster* seg = dynamic_cast<const SeguidorBooster*>(e);
-            if (seg) {
-                Vector2D pos = seg->get_posicion();
-                double w = seg->get_ancho();
-                double h = seg->get_alto();
-                if (mouse_pos.x >= pos.x - w/2 - 10 && mouse_pos.x <= pos.x + w/2 + 10 &&
-                    mouse_pos.y >= pos.y - h/2 - 10 && mouse_pos.y <= pos.y + h/2 + 10) {
-                    return const_cast<SeguidorBooster*>(seg);
-                }
-            }
-            const BarrilChavo* bar = dynamic_cast<const BarrilChavo*>(e);
-            if (bar) {
-                Vector2D pos = bar->get_posicion();
-                double w = bar->get_ancho();
-                double h = bar->get_alto();
-                if (mouse_pos.x >= pos.x - 10 && mouse_pos.x <= pos.x + w + 10 &&
-                    mouse_pos.y >= pos.y - 10 && mouse_pos.y <= pos.y + h + 10) {
-                    return const_cast<BarrilChavo*>(bar);
-                }
-            }
-            const Ventilador* vent = dynamic_cast<const Ventilador*>(e);
-            if (vent) {
-                Vector2D pos = vent->get_posicion();
-                double w = vent->get_ancho();
-                double h = vent->get_alto();
-                if (mouse_pos.x >= pos.x - 10 && mouse_pos.x <= pos.x + w + 10 &&
-                    mouse_pos.y >= pos.y - 10 && mouse_pos.y <= pos.y + h + 10) {
-                    return const_cast<Ventilador*>(vent);
-                }
-            }
-            const Cubeta* cubeta = dynamic_cast<const Cubeta*>(e);
-            if (cubeta) {
-                Vector2D pos = cubeta->get_posicion();
-                double w = cubeta->get_ancho();
-                double h = cubeta->get_alto();
-                if (mouse_pos.x >= pos.x - 10 && mouse_pos.x <= pos.x + w + 10 &&
-                    mouse_pos.y >= pos.y - 10 && mouse_pos.y <= pos.y + h + 10) {
-                    return const_cast<Cubeta*>(cubeta);
-                }
-            }
-            // ParedRectangular (plataformas, paredes colocadas por el usuario)
-            const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
-            if (p) {
-                Vector2D pos = p->get_posicion();
-                double w = p->get_ancho();
-                double h = p->get_alto();
-                if (mouse_pos.x >= pos.x - 10 && mouse_pos.x <= pos.x + w + 10 &&
-                    mouse_pos.y >= pos.y - 10 && mouse_pos.y <= pos.y + h + 10) {
-                    return const_cast<ParedRectangular*>(p);
-                }
-            }
-        }
-        else if (forma == TipoForma::NINGUNA) {
-            const ZonaMeta* zm = dynamic_cast<const ZonaMeta*>(e);
-            if (zm) {
-                Vector2D pos = zm->get_posicion();
-                double w = zm->ancho;
-                double h = zm->alto;
-                // posicion es el CENTRO de la zona meta
-                if (mouse_pos.x >= pos.x - w / 2.0 - 15 && mouse_pos.x <= pos.x + w / 2.0 + 15 &&
-                    mouse_pos.y >= pos.y - h / 2.0 - 15 && mouse_pos.y <= pos.y + h / 2.0 + 15) {
-                    return const_cast<ZonaMeta*>(zm);
-                }
-            }
-            const SoporteTorque* st = dynamic_cast<const SoporteTorque*>(e);
-            if (st) {
-                Vector2D pos = st->get_punto_cuerda();
-                double r = st->get_radio();
-                double dist = (pos - mouse_pos).magnitud();
-                if (dist < r + 15.0) {
-                    return const_cast<SoporteTorque*>(st);
-                }
-            }
-        }
-        else if (forma == TipoForma::POLIGONO) {
-            const Balancin* bal = dynamic_cast<const Balancin*>(e);
-            if (bal) {
-                Vector2D pos = bal->get_posicion();
-                double ang = bal->get_angulo();
-                double half_l = bal->get_largo() / 2.0;
-                Vector2D dir(std::cos(ang), std::sin(ang));
-                Vector2D A = pos - dir * half_l;
-                Vector2D B = pos + dir * half_l;
-                
-                Vector2D v = B - A;
-                Vector2D w = mouse_pos - A;
-                double dot = w.x * v.x + w.y * v.y;
-                double len_sq = v.x * v.x + v.y * v.y;
-                double t = (len_sq > 0.0) ? std::max(0.0, std::min(1.0, dot / len_sq)) : 0.0;
-                Vector2D C = A + v * t;
-                double dist = (mouse_pos - C).magnitud();
-                if (dist < bal->get_espesor() / 2.0 + 15.0) {
-                    return const_cast<Balancin*>(bal);
-                }
-            }
-            // PlanoInclinado (rampas)
-            const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
-            if (ramp) {
-                const auto& verts = ramp->get_vertices();
-                if (verts.size() >= 3) {
-                    // Bounding box de los vértices con margen
-                    double min_x = verts[0].x, max_x = verts[0].x;
-                    double min_y = verts[0].y, max_y = verts[0].y;
-                    for (const auto& v : verts) {
-                        if (v.x < min_x) min_x = v.x;
-                        if (v.x > max_x) max_x = v.x;
-                        if (v.y < min_y) min_y = v.y;
-                        if (v.y > max_y) max_y = v.y;
-                    }
-                    if (mouse_pos.x >= min_x - 10 && mouse_pos.x <= max_x + 10 &&
-                        mouse_pos.y >= min_y - 10 && mouse_pos.y <= max_y + 10) {
-                        return const_cast<PlanoInclinado*>(ramp);
-                    }
-                }
-            }
+        if (e->contiene_punto(mouse_pos)) {
+            return e;
         }
     }
     return nullptr;
@@ -663,6 +569,13 @@ void limpiar_estado_tras_cargar_partida() {
     entidad_seleccionada = nullptr;
     arrastrando_spawn = TipoObjetoMenu::NINGUNO;
     cancelar_colocacion_cuerda();
+    handle_activo = HandleResize::NINGUNO;
+    inventario_maximo.clear();
+    inventario_actual.clear();
+    inventario_entidades.clear();
+    snapshot_simulacion = "";
+    menu_tab = 0;
+    menu_pagina = 0;
 }
 
 void crear_bordes_nivel(MotorFisica& motor) {
@@ -691,101 +604,71 @@ void crear_escena(MotorFisica& motor) {
 // ============================================================================
 // Validación de spawn — no crear objetos dentro de otros
 // ============================================================================
-bool posicion_valida_para_bola(const MotorFisica& motor, Vector2D pos, double radio) {
+bool posicion_valida_para_spawn(const MotorFisica& motor, Vector2D pos, TipoForma forma, double w_r, double h) {
     for (const auto* e : motor.get_entidades()) {
-        TipoForma forma = e->get_tipo_forma();
+        TipoForma forma_e = e->get_tipo_forma();
 
         if (forma == TipoForma::CIRCULO) {
-            Vector2D pos_circ;
-            double radio_circ = 0.0;
-            if (obtener_datos_circulo(e, pos_circ, radio_circ)) {
-                InfoColision info = Colisiones::circulo_vs_circulo(
-                    pos, radio, pos_circ, radio_circ);
+            double radio = w_r;
+            if (forma_e == TipoForma::CIRCULO) {
+                Vector2D pos_circ;
+                double radio_circ = 0.0;
+                if (obtener_datos_circulo(e, pos_circ, radio_circ)) {
+                    InfoColision info = Colisiones::circulo_vs_circulo(pos, radio, pos_circ, radio_circ);
+                    if (info.hay_colision) return false;
+                }
+            }
+            else if (forma_e == TipoForma::AABB) {
+                InfoColision info = Colisiones::circulo_vs_aabb(pos, radio, e->get_min(), e->get_max());
                 if (info.hay_colision) return false;
+            }
+            else if (forma_e == TipoForma::POLIGONO) {
+                const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
+                if (ramp) {
+                    InfoColision info = Colisiones::circulo_vs_poligono(pos, radio, ramp->get_vertices());
+                    if (info.hay_colision) return false;
+                }
+                const Balancin* bal = dynamic_cast<const Balancin*>(e);
+                if (bal) {
+                    InfoColision info = Colisiones::circulo_vs_balancin(
+                        pos, radio, bal->get_posicion(), bal->get_angulo(),
+                        bal->get_largo(), bal->get_espesor());
+                    if (info.hay_colision) return false;
+                }
             }
         }
         else if (forma == TipoForma::AABB) {
-            const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
-            if (p) {
-                InfoColision info = Colisiones::circulo_vs_aabb(
-                    pos, radio, p->get_min(), p->get_max());
-                if (info.hay_colision) return false;
+            double w = w_r;
+            if (forma_e == TipoForma::CIRCULO) {
+                Vector2D pos_circ;
+                double radio_circ = 0.0;
+                if (obtener_datos_circulo(e, pos_circ, radio_circ)) {
+                    InfoColision info = Colisiones::circulo_vs_aabb(pos_circ, radio_circ, pos, Vector2D(pos.x + w, pos.y + h));
+                    if (info.hay_colision) return false;
+                }
             }
-            const Trampolin* t = dynamic_cast<const Trampolin*>(e);
-            if (t) {
-                InfoColision info = Colisiones::circulo_vs_aabb(
-                    pos, radio, t->get_min(), t->get_max());
-                if (info.hay_colision) return false;
-            }
-            const BarrilChavo* bar = dynamic_cast<const BarrilChavo*>(e);
-            if (bar) {
-                InfoColision info = Colisiones::circulo_vs_aabb(
-                    pos, radio, bar->get_min(), bar->get_max());
-                if (info.hay_colision) return false;
-            }
-        }
-        else if (forma == TipoForma::POLIGONO) {
-            const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
-            if (ramp) {
-                InfoColision info = Colisiones::circulo_vs_poligono(
-                    pos, radio, ramp->get_vertices());
-                if (info.hay_colision) return false;
-            }
-            const Balancin* bal = dynamic_cast<const Balancin*>(e);
-            if (bal) {
-                InfoColision info = Colisiones::circulo_vs_balancin(
-                    pos, radio, bal->get_posicion(), bal->get_angulo(),
-                    bal->get_largo(), bal->get_espesor());
-                if (info.hay_colision) return false;
-            }
-        }
-    }
-    return true;
-}
-
-// Validación para crear balancín
-bool posicion_valida_para_balancin(const MotorFisica& motor, Vector2D pos, double w, double h) {
-    for (const auto* e : motor.get_entidades()) {
-        TipoForma forma = e->get_tipo_forma();
-
-        if (forma == TipoForma::CIRCULO) {
-            Vector2D pos_circ;
-            double radio_circ = 0.0;
-            if (obtener_datos_circulo(e, pos_circ, radio_circ)) {
-                InfoColision info = Colisiones::circulo_vs_aabb(
-                    pos_circ, radio_circ,
-                    pos, Vector2D(pos.x + w, pos.y + h));
-                if (info.hay_colision) return false;
-            }
-        }
-        else if (forma == TipoForma::AABB) {
-            const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
-            const Trampolin* t = dynamic_cast<const Trampolin*>(e);
-            const BarrilChavo* bar = dynamic_cast<const BarrilChavo*>(e);
-            Vector2D min_b = p ? p->get_min() : (t ? t->get_min() : (bar ? bar->get_min() : pos));
-            Vector2D max_b = p ? p->get_max() : (t ? t->get_max() : (bar ? bar->get_max() : pos));
-
-            if (p || t || bar) {
+            else if (forma_e == TipoForma::AABB) {
+                Vector2D min_b = e->get_min();
+                Vector2D max_b = e->get_max();
                 bool overlap = (pos.x < max_b.x && pos.x + w > min_b.x &&
                                 pos.y < max_b.y && pos.y + h > min_b.y);
                 if (overlap) return false;
             }
-        }
-        else if (forma == TipoForma::POLIGONO) {
-            const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
-            const Balancin* bal = dynamic_cast<const Balancin*>(e);
-            if (ramp) {
-                for (const auto& v : ramp->get_vertices()) {
-                    if (v.x >= pos.x && v.x <= pos.x + w &&
-                        v.y >= pos.y && v.y <= pos.y + h) {
-                        return false;
+            else if (forma_e == TipoForma::POLIGONO) {
+                const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
+                if (ramp) {
+                    for (const auto& v : ramp->get_vertices()) {
+                        if (v.x >= pos.x && v.x <= pos.x + w &&
+                            v.y >= pos.y && v.y <= pos.y + h) {
+                            return false;
+                        }
                     }
                 }
-            }
-            if (bal) {
-                // Evitar superponer pivotes demasiado cerca
-                Vector2D diff = (pos + Vector2D(w/2.0, h/2.0)) - bal->get_posicion();
-                if (diff.magnitud() < 40.0) return false;
+                const Balancin* bal = dynamic_cast<const Balancin*>(e);
+                if (bal) {
+                    Vector2D diff = (pos + Vector2D(w / 2.0, h / 2.0)) - bal->get_posicion();
+                    if (diff.magnitud() < 40.0) return false;
+                }
             }
         }
     }
@@ -801,7 +684,7 @@ bool crear_balancin(MotorFisica& motor, Vector2D pos) {
     Vector2D pivot_pos = pos;
     Vector2D spawn_min(pos.x - w / 2.0, pos.y - h / 2.0);
 
-    if (!posicion_valida_para_balancin(motor, spawn_min, w, h)) {
+    if (!posicion_valida_para_spawn(motor, spawn_min, TipoForma::AABB, w, h)) {
         spawn_error_timer = 0.5f;
         spawn_error_pos = pos;
         return false;
@@ -809,51 +692,6 @@ bool crear_balancin(MotorFisica& motor, Vector2D pos) {
 
     Balancin* b = new Balancin(motor.generar_id(), pivot_pos, w, h);
     motor.agregar_entidad(b);
-    return true;
-}
-
-// Validación para crear trampolín (evita colisiones con paredes, otras rampas, bolas)
-bool posicion_valida_para_trampolin(const MotorFisica& motor, Vector2D pos, double w, double h) {
-    for (const auto* e : motor.get_entidades()) {
-        TipoForma forma = e->get_tipo_forma();
-
-        if (forma == TipoForma::CIRCULO) {
-            Vector2D pos_circ;
-            double radio_circ = 0.0;
-            if (obtener_datos_circulo(e, pos_circ, radio_circ)) {
-                InfoColision info = Colisiones::circulo_vs_aabb(
-                    pos_circ, radio_circ,
-                    pos, Vector2D(pos.x + w, pos.y + h));
-                if (info.hay_colision) return false;
-            }
-        }
-        else if (forma == TipoForma::AABB) {
-            const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
-            const Trampolin* t = dynamic_cast<const Trampolin*>(e);
-            const BarrilChavo* bar = dynamic_cast<const BarrilChavo*>(e);
-            Vector2D min_b = p ? p->get_min() : (t ? t->get_min() : (bar ? bar->get_min() : pos));
-            Vector2D max_b = p ? p->get_max() : (t ? t->get_max() : (bar ? bar->get_max() : pos));
-
-            if (p || t || bar) {
-                // Intersección AABB vs AABB
-                bool overlap = (pos.x < max_b.x && pos.x + w > min_b.x &&
-                                pos.y < max_b.y && pos.y + h > min_b.y);
-                if (overlap) return false;
-            }
-        }
-        else if (forma == TipoForma::POLIGONO) {
-            const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
-            if (ramp) {
-                // Verificación simple para evitar spawn encima de vértices de la rampa
-                for (const auto& v : ramp->get_vertices()) {
-                    if (v.x >= pos.x && v.x <= pos.x + w &&
-                        v.y >= pos.y && v.y <= pos.y + h) {
-                        return false;
-                    }
-                }
-            }
-        }
-    }
     return true;
 }
 
@@ -866,7 +704,7 @@ bool crear_trampolin(MotorFisica& motor, Vector2D pos) {
     // Centrar en el mouse
     Vector2D spawn_pos(pos.x - w / 2.0, pos.y - h / 2.0);
 
-    if (!posicion_valida_para_trampolin(motor, spawn_pos, w, h)) {
+    if (!posicion_valida_para_spawn(motor, spawn_pos, TipoForma::AABB, w, h)) {
         spawn_error_timer = 0.5f;
         spawn_error_pos = pos;
         return false;
@@ -884,7 +722,7 @@ bool crear_bola(MotorFisica& motor, Vector2D pos) {
     double radio = 35.0 + GetRandomValue(0, 8);   // Radio entre 8-16 px
 
     // Verificar que no colisiona con nada existente
-    if (!posicion_valida_para_bola(motor, pos, radio)) {
+    if (!posicion_valida_para_spawn(motor, pos, TipoForma::CIRCULO, radio, 0.0)) {
         spawn_error_timer = 0.5f;  // Flash rojo de 0.5s
         spawn_error_pos = pos;
         return false;
@@ -907,9 +745,9 @@ bool crear_rampa(MotorFisica& motor, Vector2D pos, bool invertido) {
     return true;
 }
 
-bool crear_plataforma(MotorFisica& motor, Vector2D pos, double w, double h) {
+bool crear_plataforma(MotorFisica& motor, Vector2D pos, double w, double h, TipoObjetoMenu t_menu = TipoObjetoMenu::PLATAFORMA) {
     Vector2D spawn(pos.x - w / 2.0, pos.y - h / 2.0);
-    motor.agregar_entidad(new ParedRectangular(motor.generar_id(), spawn, w, h));
+    motor.agregar_entidad(new ParedRectangular(motor.generar_id(), spawn, w, h, t_menu));
     return true;
 }
 
@@ -932,9 +770,9 @@ bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
         case TipoObjetoMenu::TRAMPOLIN:         return crear_trampolin(motor, pos);
         case TipoObjetoMenu::BALANCIN:          return crear_balancin(motor, pos);
         case TipoObjetoMenu::RAMPA:             return crear_rampa(motor, pos, false);
-        case TipoObjetoMenu::PLATAFORMA:        return crear_plataforma(motor, pos, 150.0, 15.0);
-        case TipoObjetoMenu::PARED_LARGA:       return crear_plataforma(motor, pos, 80.0, 120.0);
-        case TipoObjetoMenu::PLATAFORMA_DECOR:   return crear_plataforma(motor, pos, 120.0, 20.0);
+        case TipoObjetoMenu::PLATAFORMA:        return crear_plataforma(motor, pos, 150.0, 15.0, TipoObjetoMenu::PLATAFORMA);
+        case TipoObjetoMenu::PARED_LARGA:       return crear_plataforma(motor, pos, 80.0, 120.0, TipoObjetoMenu::PARED_LARGA);
+        case TipoObjetoMenu::PLATAFORMA_DECOR:   return crear_plataforma(motor, pos, 120.0, 20.0, TipoObjetoMenu::PLATAFORMA_DECOR);
         case TipoObjetoMenu::SEGUIDOR_BOOSTER:  return crear_seguidor_booster(motor, pos);
         case TipoObjetoMenu::BARRIL_CHAVO:      return crear_barril_chavo(motor, pos);
         case TipoObjetoMenu::VENTILADOR:        return crear_ventilador(motor, pos);
@@ -1183,14 +1021,29 @@ static std::vector<RectCeldaMenu> celdas_menu_cache;
 void recolectar_items_visibles(int tab, int pagina, int categoria,
                                std::vector<const ItemCatalogo*>& out) {
     out.clear();
-    for (int i = 0; i < CATALOGO_MENU_COUNT; ++i) {
-        const ItemCatalogo& it = CATALOGO_MENU[i];
-        if (it.tab == tab && it.pagina == pagina && it.categoria == categoria)
-            out.push_back(&it);
+    if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
+        if (pagina != 0) return;
+        for (int i = 0; i < CATALOGO_MENU_COUNT; ++i) {
+            const ItemCatalogo& it = CATALOGO_MENU[i];
+            if (it.tab == tab && it.categoria == categoria) {
+                if (inventario_maximo[it.tipo] > 0) {
+                    out.push_back(&it);
+                }
+            }
+        }
+    } else {
+        for (int i = 0; i < CATALOGO_MENU_COUNT; ++i) {
+            const ItemCatalogo& it = CATALOGO_MENU[i];
+            if (it.tab == tab && it.pagina == pagina && it.categoria == categoria)
+                out.push_back(&it);
+        }
     }
 }
 
 int contar_paginas_tab(int tab) {
+    if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
+        return 1;
+    }
     int max_pag = 0;
     for (int i = 0; i < CATALOGO_MENU_COUNT; ++i) {
         if (CATALOGO_MENU[i].tab == tab)
@@ -1234,9 +1087,17 @@ TipoObjetoMenu tipo_en_celda(int mx, int my, const std::vector<RectCeldaMenu>& c
 }
 
 void dibujar_celda_menu(const RectCeldaMenu& celda, bool resaltada){
+    int cant = 1;
+    bool disp = celda.disponible;
+    if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
+        cant = inventario_actual[celda.tipo];
+        if (cant <= 0) {
+            disp = false;
+        }
+    }
 
     Color fondo = resaltada ? MENU_AZUL_CLARO : MENU_CELDA_FONDO;
-    if (!celda.disponible) fondo = ColorAlpha(MENU_CELDA_FONDO, 0.5f);
+    if (!disp) fondo = ColorAlpha(MENU_CELDA_FONDO, 0.5f);
 
     // Dibujar asset de celda si está cargado
     if (tex_celda_menu.id > 0) {
@@ -1249,21 +1110,23 @@ void dibujar_celda_menu(const RectCeldaMenu& celda, bool resaltada){
         DrawRectangleRounded(celda.rect, 0.08f, 6, fondo);
     }
     DrawRectangleRoundedLinesEx(celda.rect, 0.08f, 6, 1.0f,
-        celda.disponible ? MENU_BORDE : MENU_INACTIVO);
+        disp ? MENU_BORDE : MENU_INACTIVO);
 
     float cx = celda.rect.x + celda.rect.width / 2.0f;
     float cy = celda.rect.y + celda.rect.height / 2.0f - 4.0f;
-    unsigned char alpha = celda.disponible ? 255 : 120;
+    unsigned char alpha = disp ? 255 : 120;
 
     if (celda.tipo != TipoObjetoMenu::NINGUNO)
         dibujar_icono_objeto(celda.tipo, cx, cy, 1.0f, alpha);
     else
         dibujar_icono_objeto(TipoObjetoMenu::NINGUNO, cx, cy, 1.0f, alpha);
 
-    DrawText("1",
-        static_cast<int>(celda.rect.x + celda.rect.width / 2 - 4),
+    std::string cant_str = (estado_actual == EstadoJuego::JUEGO_CREATIVO) ? "inf" : "x" + std::to_string(cant);
+    
+    DrawText(cant_str.c_str(),
+        static_cast<int>(celda.rect.x + celda.rect.width / 2 - MeasureText(cant_str.c_str(), 12) / 2),
         static_cast<int>(celda.rect.y + celda.rect.height - 18),
-        12, celda.disponible ? MENU_AZUL : MENU_INACTIVO);
+        12, disp ? MENU_AZUL : MENU_INACTIVO);
 }
 
 void dibujar_encabezado_categoria(int panel_x, int y, const char* titulo, bool abierta, int& out_alto) {
@@ -1273,15 +1136,21 @@ void dibujar_encabezado_categoria(int panel_x, int y, const char* titulo, bool a
         static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN)-25,
         static_cast<float>(MENU_CATEGORIA_ALTO)
     };
+    
+    Vector2 mouse = GetMousePosition();
+    bool hover = CheckCollisionPointRec(mouse, hdr);
+    Color tint_color = hover ? Color{230, 235, 245, 255} : WHITE;
+    Color fallback_color = hover ? Color{165, 170, 182, 255} : MENU_FONDO_OSCURO;
+
     // Dibujar asset de encabezado si está cargado
     if (tex_barra_encabezado.id > 0) {
         DrawTexturePro(tex_barra_encabezado, 
                       {0, 0, (float)tex_barra_encabezado.width, (float)tex_barra_encabezado.height},
                       hdr,
-                      {0, 0}, 0.0f, WHITE);
+                      {0, 0}, 0.0f, tint_color);
     } else {
         // Fallback si no se carga la textura
-        DrawRectangleRounded(hdr, 0.06f, 4, MENU_FONDO_OSCURO);
+        DrawRectangleRounded(hdr, 0.06f, 4, fallback_color);
     }
 
 
@@ -1338,11 +1207,13 @@ void reconstruir_celdas_menu() {
 }
 
 void dibujar_menu_lateral() {
+    Vector2 mouse = GetMousePosition();
     if (!menu_visible) {
         int bx = ANCHO - 26;
-        DrawRectangle(bx, ALTO / 2 - 40, 24, 80, MENU_FONDO_OSCURO);
+        bool hover = CheckCollisionPointRec(mouse, Rectangle{static_cast<float>(bx), static_cast<float>(ALTO / 2 - 40), 24, 80});
+        DrawRectangle(bx, ALTO / 2 - 40, 24, 80, hover ? Color{165, 170, 182, 255} : MENU_FONDO_OSCURO);
         DrawRectangleLines(bx, ALTO / 2 - 40, 24, 80, MENU_BORDE);
-        DrawText("<", bx + 7, ALTO / 2 - 8, 18, MENU_AZUL);
+        DrawText("<", bx + 7, ALTO / 2 - 8, 18, hover ? MENU_AZUL_CLARO : MENU_AZUL);
         return;
     }
 
@@ -1366,8 +1237,11 @@ void dibujar_menu_lateral() {
                           static_cast<float>(tab_w)-15, static_cast<float>(MENU_PESTANA_ALTO - 8) };
     Rectangle tab_dec = { tab_obj.x + tab_w, tab_obj.y, tab_obj.width, tab_obj.height };
 
-    DrawRectangleRec(tab_obj, menu_tab == 0 ? WHITE : ColorAlpha(WHITE, 0.4f));
-    DrawRectangleRec(tab_dec, menu_tab == 1 ? WHITE : ColorAlpha(WHITE, 0.4f));
+    bool hover_obj = CheckCollisionPointRec(mouse, tab_obj);
+    bool hover_dec = CheckCollisionPointRec(mouse, tab_dec);
+
+    DrawRectangleRec(tab_obj, menu_tab == 0 ? WHITE : (hover_obj ? ColorAlpha(WHITE, 0.7f) : ColorAlpha(WHITE, 0.4f)));
+    DrawRectangleRec(tab_dec, menu_tab == 1 ? WHITE : (hover_dec ? ColorAlpha(WHITE, 0.7f) : ColorAlpha(WHITE, 0.4f)));
     
     // Centrar texto OBJETOS
     Vector2 obj_size = MeasureTextEx(fuente_menu, "OBJETOS", 14, 1);
@@ -1387,9 +1261,10 @@ void dibujar_menu_lateral() {
 
     // Botón cerrar a la izquierda del menú
     int bx = px - 28;
-    DrawRectangle(bx, ALTO / 2 - 40, 24, 80, MENU_FONDO_OSCURO);
+    bool hover_cerrar = CheckCollisionPointRec(mouse, Rectangle{static_cast<float>(bx), static_cast<float>(ALTO / 2 - 40), 24, 80});
+    DrawRectangle(bx, ALTO / 2 - 40, 24, 80, hover_cerrar ? Color{165, 170, 182, 255} : MENU_FONDO_OSCURO);
     DrawRectangleLines(bx, ALTO / 2 - 40, 24, 80, MENU_BORDE);
-    DrawText(">", bx + 7, ALTO / 2 - 8, 18, MENU_AZUL);
+    DrawText(">", bx + 7, ALTO / 2 - 8, 18, hover_cerrar ? MENU_AZUL_CLARO : MENU_AZUL);
 
     int y = MENU_PESTANA_ALTO + 36;
     int hdr_h = 0;
@@ -1409,16 +1284,17 @@ void dibujar_menu_lateral() {
     }
 
     reconstruir_celdas_menu();
-    Vector2 mouse = GetMousePosition();
     for (const auto& c : celdas_menu_cache) {
-        bool hot = (arrastrando_spawn == c.tipo &&
-            CheckCollisionPointRec(mouse, c.rect));
+        bool hover_cell = CheckCollisionPointRec(mouse, c.rect);
+        bool hot = hover_cell || (arrastrando_spawn == c.tipo);
         dibujar_celda_menu(c, hot);
     }
 
     // Guardado / carga de partidas
-    int py_guardado = ALTO - MENU_PAGINACION_ALTO - 180 - 215;
-    dibujar_panel_guardado(px, py_guardado, MENU_ANCHO, fuente_menu);
+    if (estado_actual != EstadoJuego::JUEGO_NIVEL) {
+        int py_guardado = ALTO - MENU_PAGINACION_ALTO - 180 - 215;
+        dibujar_panel_guardado(px, py_guardado, MENU_ANCHO, fuente_menu);
+    }
 
     // Paginación
     int paginas = contar_paginas_tab(menu_tab);
@@ -1443,16 +1319,63 @@ void dibujar_menu_lateral() {
         {static_cast<float>(px + MENU_ANCHO - MENU_MARGEN - flecha_w), static_cast<float>(py), static_cast<float>(flecha_w), static_cast<float>(flecha_h)},
         0.15f, 4, hover_next ? Color{110, 125, 145, 230} : Color{80, 90, 105, 180});
     DrawText(">", px + MENU_ANCHO - MENU_MARGEN - flecha_w / 2 - 6, py + flecha_h / 2 - 9, 20, hover_next ? MENU_AZUL_CLARO : MENU_AZUL);
+
+    // ==================== RENDERING DE DEBUG DE HITBOXES ====================
+    if (modo_debug) {
+        // Pestañas (Rojo)
+        DrawRectangleLinesEx(tab_obj, 1.5f, RED);
+        DrawRectangleLinesEx(tab_dec, 1.5f, RED);
+
+        // Botón de cerrar
+        DrawRectangleLinesEx(Rectangle{static_cast<float>(bx), static_cast<float>(ALTO / 2 - 40), 24, 80}, 1.5f, RED);
+
+        // Categorías
+        int y_debug = MENU_PESTANA_ALTO + 36;
+        if (menu_tab == 0) {
+            Rectangle h1 = { static_cast<float>(px + MENU_MARGEN) + 10, static_cast<float>(y_debug),
+                static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN) - 25, static_cast<float>(MENU_CATEGORIA_ALTO) };
+            DrawRectangleLinesEx(h1, 1.5f, RED);
+            y_debug += MENU_CATEGORIA_ALTO + 4;
+            if (cat_mecanicas_abierta) {
+                std::vector<RectCeldaMenu> temp_celdas;
+                layout_celdas_categoria(px, y_debug, 0, temp_celdas);
+                int filas = (static_cast<int>(temp_celdas.size()) + MENU_COLS - 1) / MENU_COLS;
+                y_debug += filas * (MENU_CELDA + 6) + 8;
+            }
+            Rectangle h2 = { static_cast<float>(px + MENU_MARGEN) + 10, static_cast<float>(y_debug),
+                static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN) - 25, static_cast<float>(MENU_CATEGORIA_ALTO) };
+            DrawRectangleLinesEx(h2, 1.5f, RED);
+        } else {
+            Rectangle h1 = { static_cast<float>(px + MENU_MARGEN) + 10, static_cast<float>(y_debug),
+                static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN) - 25, static_cast<float>(MENU_CATEGORIA_ALTO) };
+            DrawRectangleLinesEx(h1, 1.5f, RED);
+        }
+
+        // Celdas de items (Verde)
+        for (const auto& c : celdas_menu_cache) {
+            DrawRectangleLinesEx(c.rect, 1.5f, GREEN);
+        }
+
+        // Botones de página (Rojo)
+        DrawRectangleLinesEx(Rectangle{static_cast<float>(px + MENU_MARGEN), static_cast<float>(py), static_cast<float>(flecha_w), static_cast<float>(flecha_h)}, 1.5f, RED);
+        DrawRectangleLinesEx(Rectangle{static_cast<float>(px + MENU_ANCHO - MENU_MARGEN - flecha_w), static_cast<float>(py), static_cast<float>(flecha_w), static_cast<float>(flecha_h)}, 1.5f, RED);
+
+        // Panel de guardado y sus botones (Rojo)
+        DrawRectangleLinesEx(rect_panel_guardado, 2.0f, RED);
+        DrawRectangleLinesEx(rect_btn_guardar_partida, 1.5f, RED);
+        DrawRectangleLinesEx(rect_btn_ver_partidas, 1.5f, RED);
+    }
 }
 
 bool manejar_click_menu(int mx, int my, MotorFisica& motor) {
-    if (manejar_click_panel_guardado(mx, my, motor, gestor_eventos, ANCHO, ALTO, contador_bolas)) {
-        return true;
+    if (estado_actual != EstadoJuego::JUEGO_NIVEL) {
+        if (manejar_click_panel_guardado(mx, my, motor, gestor_eventos, ANCHO, ALTO, contador_bolas)) {
+            return true;
+        }
     }
 
     if (!menu_visible) {
-        int px = ANCHO - MENU_ANCHO;
-        int bx = px - 28;
+        int bx = ANCHO - 26;
         Rectangle btn_abrir = { static_cast<float>(bx), static_cast<float>(ALTO / 2 - 40), 24, 80 };
         if (click_en_rect(mx, my, btn_abrir)) {
             menu_visible = true;
@@ -1464,8 +1387,8 @@ bool manejar_click_menu(int mx, int my, MotorFisica& motor) {
     int px = ANCHO - MENU_ANCHO;
     int tab_w = (MENU_ANCHO - 2 * MENU_MARGEN) / 2;
 
-    Rectangle tab_obj = { static_cast<float>(px + MENU_MARGEN), 8.0f,
-                          static_cast<float>(tab_w)+10, static_cast<float>(MENU_PESTANA_ALTO - 8)+10 };
+    Rectangle tab_obj = { static_cast<float>(px + MENU_MARGEN) + 10, 30.0f,
+                          static_cast<float>(tab_w) - 15, static_cast<float>(MENU_PESTANA_ALTO - 8) };
     Rectangle tab_dec = { tab_obj.x + tab_w, tab_obj.y, tab_obj.width, tab_obj.height };
     if (click_en_rect(mx, my, tab_obj)) { menu_tab = 0; menu_pagina = 0; return true; }
     if (click_en_rect(mx, my, tab_dec)) { menu_tab = 1; menu_pagina = 0; return true; }
@@ -1477,8 +1400,8 @@ bool manejar_click_menu(int mx, int my, MotorFisica& motor) {
 
     int y = MENU_PESTANA_ALTO + 36;
     if (menu_tab == 0) {
-        Rectangle hdr_mec = { static_cast<float>(px + MENU_MARGEN), static_cast<float>(y),
-            static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN), static_cast<float>(MENU_CATEGORIA_ALTO) };
+        Rectangle hdr_mec = { static_cast<float>(px + MENU_MARGEN) + 10, static_cast<float>(y),
+            static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN) - 25, static_cast<float>(MENU_CATEGORIA_ALTO) };
         if (click_en_rect(mx, my, hdr_mec)) { cat_mecanicas_abierta = !cat_mecanicas_abierta; return true; }
         y += MENU_CATEGORIA_ALTO + 4;
         if (cat_mecanicas_abierta) {
@@ -1487,12 +1410,12 @@ bool manejar_click_menu(int mx, int my, MotorFisica& motor) {
             int filas = (static_cast<int>(celdas.size()) + MENU_COLS - 1) / MENU_COLS;
             y += filas * (MENU_CELDA + 6) + 8;
         }
-        Rectangle hdr_int = { static_cast<float>(px + MENU_MARGEN), static_cast<float>(y),
-            static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN), static_cast<float>(MENU_CATEGORIA_ALTO) };
+        Rectangle hdr_int = { static_cast<float>(px + MENU_MARGEN) + 10, static_cast<float>(y),
+            static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN) - 25, static_cast<float>(MENU_CATEGORIA_ALTO) };
         if (click_en_rect(mx, my, hdr_int)) { cat_interactivos_abierta = !cat_interactivos_abierta; return true; }
     } else {
-        Rectangle hdr_dec = { static_cast<float>(px + MENU_MARGEN), static_cast<float>(y),
-            static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN), static_cast<float>(MENU_CATEGORIA_ALTO) };
+        Rectangle hdr_dec = { static_cast<float>(px + MENU_MARGEN) + 10, static_cast<float>(y),
+            static_cast<float>(MENU_ANCHO - 2 * MENU_MARGEN) - 25, static_cast<float>(MENU_CATEGORIA_ALTO) };
         if (click_en_rect(mx, my, hdr_dec)) { cat_decor_abierta = !cat_decor_abierta; return true; }
     }
 
@@ -1617,7 +1540,7 @@ bool crear_bola_rebotadora(MotorFisica& motor, Vector2D pos) {
     double radio = 48.0;
 
     // Verificar que no nace encima de paredes, rampas u otros mecanismos
-    if (!posicion_valida_para_bola(motor, pos, radio)) {
+    if (!posicion_valida_para_spawn(motor, pos, TipoForma::CIRCULO, radio, 0.0)) {
         spawn_error_timer = 0.5f;
         spawn_error_pos = pos;
         return false;
@@ -1651,39 +1574,6 @@ bool crear_seguidor_booster(MotorFisica& motor, Vector2D pos) {
 }
 
 // ============================================================================
-// Validación para crear barril (evita colisiones con paredes, trampolines, bolas, etc.)
-// ============================================================================
-bool posicion_valida_para_barril(const MotorFisica& motor, Vector2D pos, double w, double h) {
-    for (const auto* e : motor.get_entidades()) {
-        TipoForma forma = e->get_tipo_forma();
-
-        if (forma == TipoForma::CIRCULO) {
-            Vector2D pos_circ;
-            double radio_circ = 0.0;
-            if (obtener_datos_circulo(e, pos_circ, radio_circ)) {
-                InfoColision info = Colisiones::circulo_vs_aabb(
-                    pos_circ, radio_circ,
-                    pos, Vector2D(pos.x + w, pos.y + h));
-                if (info.hay_colision) return false;
-            }
-        }
-        else if (forma == TipoForma::AABB) {
-            const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
-            const Trampolin* t = dynamic_cast<const Trampolin*>(e);
-            const BarrilChavo* bar = dynamic_cast<const BarrilChavo*>(e);
-            Vector2D min_b = p ? p->get_min() : (t ? t->get_min() : (bar ? bar->get_min() : pos));
-            Vector2D max_b = p ? p->get_max() : (t ? t->get_max() : (bar ? bar->get_max() : pos));
-
-            if (p || t || bar) {
-                bool overlap = (pos.x < max_b.x && pos.x + w > min_b.x &&
-                                pos.y < max_b.y && pos.y + h > min_b.y);
-                if (overlap) return false;
-            }
-        }
-    }
-    return true;
-}
-
 // ============================================================================
 // Crear Barril Chavo en posición del mouse (con validación)
 // ============================================================================
@@ -1694,7 +1584,7 @@ bool crear_barril_chavo(MotorFisica& motor, Vector2D pos) {
     // Centrar en el mouse
     Vector2D spawn_pos(pos.x - w / 2.0, pos.y - h / 2.0);
 
-    if (!posicion_valida_para_barril(motor, spawn_pos, w, h)) {
+    if (!posicion_valida_para_spawn(motor, spawn_pos, TipoForma::AABB, w, h)) {
         spawn_error_timer = 0.5f;
         spawn_error_pos = pos;
         return false;
@@ -1761,680 +1651,8 @@ void dibuja_seguidor_geometrico(Vector2D pos, float w, float h, float draw_y,
 // Renderizado de entidades
 // ============================================================================
 void dibujar_entidad(const EntidadFisica* e) {
-    if (const auto* zm = dynamic_cast<const ZonaMeta*>(e)) {
-        Vector2D min_p = zm->get_posicion() - Vector2D(zm->ancho / 2.0, zm->alto / 2.0);
-        DrawRectangle(min_p.x, min_p.y, zm->ancho, zm->alto, zm->color_editor);
-        DrawRectangleLines(min_p.x, min_p.y, zm->ancho, zm->alto, GREEN);
-        return;
-    }
-    const SoporteTorque* soporte = dynamic_cast<const SoporteTorque*>(e);
-    if (soporte) {
-        Vector2D pos = soporte->get_punto_cuerda();
-        float r = static_cast<float>(soporte->get_radio());
-        DrawCircle(static_cast<int>(pos.x), static_cast<int>(pos.y), r,
-                   Color{135, 140, 145, 255});
-        DrawCircleLines(static_cast<int>(pos.x), static_cast<int>(pos.y), r,
-                        Color{65, 70, 78, 255});
-        DrawCircle(static_cast<int>(pos.x), static_cast<int>(pos.y), 5.0f,
-                   Color{35, 38, 42, 255});
-        return;
-    }
-
-    TipoForma forma = e->get_tipo_forma();
-
-    if (forma == TipoForma::CIRCULO) {
-        const BolaRebotadora* rebotadora = dynamic_cast<const BolaRebotadora*>(e);
-        if (rebotadora) {
-            Vector2D pos = rebotadora->get_posicion();
-            float r = static_cast<float>(rebotadora->get_radio());
-            float def = static_cast<float>(rebotadora->get_deformacion());
-            float wobble_x = static_cast<float>(rebotadora->get_offset_vibracion());
-            float escala_x = 1.0f + def / (r * 5.0f);
-            float escala_y = 1.0f - def / (r * 4.0f);
-            float draw_x = static_cast<float>(pos.x) + wobble_x;
-            float draw_y = static_cast<float>(pos.y) + def * 0.25f;
-            float rx = r * escala_x;
-            float ry = r * escala_y;
-            float base_top = static_cast<float>(pos.y + r * 0.72f);
-            float base_w = r * 1.35f;
-            float base_h = r * 0.58f;
-
-            // Dibujar soporte (proto-2)
-            if (tex_robote_soporte.id > 0) {
-                float scale_support = base_w / tex_robote_soporte.width;
-                DrawTextureEx(tex_robote_soporte, 
-                             {draw_x - base_w / 2.0f, base_top-25}, 
-                             0.0f, scale_support, WHITE);
-            } else {
-                // Fallback geométrico
-                Color col_base = Color{218, 48, 42, 255};
-                DrawRectangleRec({draw_x - base_w / 2.0f, base_top, base_w, base_h}, col_base);
-            }
-
-            // Dibujar pelota (proto-1)
-            if (tex_robote_pelota.id > 0) {
-                float scale_ball = (r * 2.0f) / tex_robote_pelota.width;
-                DrawTextureEx(tex_robote_pelota, 
-                             {draw_x - r, draw_y - r}, 
-                             0.0f, scale_ball * escala_x, WHITE);
-            } else {
-                // Fallback geométrico
-                float rx = r * escala_x;
-                float ry = r * escala_y;
-                Color col_base = Color{218, 48, 42, 255};
-                DrawEllipse(static_cast<int>(draw_x), static_cast<int>(draw_y), rx, ry, col_base);
-            }
-
-            if (modo_debug) {
-                DrawCircleLines(static_cast<int>(pos.x), static_cast<int>(pos.y), r, GREEN);
-            }
-            return;
-        }
-
-        const Bola* b = dynamic_cast<const Bola*>(e);
-        if (!b) return;
-
-        Vector2D pos = b->get_posicion();
-        float r = static_cast<float>(b->get_radio());
-        double ang = b->get_angulo();
-
-        // Dibujar sprite de la bola con rotación correcta alrededor del centro
-        int tex_idx = b->get_texture_idx();
-        if (tex_idx >= 0 && tex_idx < 3 && tex_bola[tex_idx].id > 0) {
-            DrawTexturePro(
-                tex_bola[tex_idx],
-                {0, 0, (float)tex_bola[tex_idx].width, (float)tex_bola[tex_idx].height},
-                {static_cast<float>(pos.x), static_cast<float>(pos.y), 2.0f * r, 2.0f * r},
-                {r, r},
-                static_cast<float>(ang * 180.0 / MathUtils::TIM_PI),
-                WHITE
-            );
-        } else {
-            // Fallback a círculo si la textura no se cargó
-            Color col = PALETA_BOLAS[b->get_color_idx()];
-            DrawCircle(static_cast<int>(pos.x), static_cast<int>(pos.y), r, col);
-            DrawCircleLines(static_cast<int>(pos.x), static_cast<int>(pos.y), r,
-                            ColorBrightness(col, -0.3f));
-        }
-
-        // Indicador de rotación (dos puntos en lados opuestos)
-        float dot_dist = r * 0.55f;
-        float dot_r = std::max(r * 0.2f, 2.0f);
-        Color dot_col = {100, 100, 100, 150};
-
-        int dx1 = static_cast<int>(pos.x + std::cos(ang) * dot_dist);
-        int dy1 = static_cast<int>(pos.y + std::sin(ang) * dot_dist);
-        DrawCircle(dx1, dy1, dot_r, dot_col);
-
-        int dx2 = static_cast<int>(pos.x - std::cos(ang) * dot_dist);
-        int dy2 = static_cast<int>(pos.y - std::sin(ang) * dot_dist);
-        DrawCircle(dx2, dy2, dot_r, dot_col);
-
-        // Debug extra: línea de velocidad angular
-        if (modo_debug) {
-            Vector2D dir(std::cos(ang) * r, std::sin(ang) * r);
-            DrawLine(static_cast<int>(pos.x), static_cast<int>(pos.y),
-                     static_cast<int>(pos.x + dir.x),
-                     static_cast<int>(pos.y + dir.y), WHITE);
-        }
-    }
-    else if (forma == TipoForma::AABB) {
-        const Ventilador* vent = dynamic_cast<const Ventilador*>(e);
-        if (vent) {
-            Vector2D pos = vent->get_posicion();
-            float px = static_cast<float>(pos.x);
-            float py = static_cast<float>(pos.y);
-            float w = static_cast<float>(vent->get_ancho());
-            float h = static_cast<float>(vent->get_alto());
-            float cx = px + w / 2.0f;
-            float cy = py + h / 2.0f;
-            float fase = static_cast<float>(vent->get_fase_aspas());
-
-            // 1. Cuerpo del ventilador
-            if (tex_ventilador_cuerpo.id > 0) {
-                Rectangle src = {0.0f, 0.0f, (float)tex_ventilador_cuerpo.width, (float)tex_ventilador_cuerpo.height};
-                Rectangle dst = {px, py, w, h};
-                DrawTexturePro(tex_ventilador_cuerpo, src, dst, {0,0}, 0.0f, WHITE);
-            } else {
-                DrawRectangleRec({px, py, w, h}, Color{70, 84, 96, 255});
-                DrawRectangleLinesEx({px, py, w, h}, 1.5f, Color{170, 190, 205, 255});
-            }
-
-            // 2. Rejilla frontal y aspas giratorias
-            if (tex_ventilador_aspa.id > 0) {
-                float aspa_w = h * 0.5f + 20.0f;
-                float aspa_h = h * 0.3f - 20.0f;
-                for (int i = 0; i < 4; ++i) {
-                    float ang = fase + i * MathUtils::TIM_PI / 2.0f;
-                    float ang_deg = ang * 180.0f / MathUtils::TIM_PI;
-                    Rectangle src = {0.0f, 0.0f, (float)tex_ventilador_aspa.width, (float)tex_ventilador_aspa.height};
-                    Rectangle dst = {cx - aspa_w/2.0f + 37.0f, cy - aspa_h/2.0f + 6, aspa_w, aspa_h};
-                    Vector2 origin = {aspa_w/2.0f, aspa_h/2.0f};
-                    DrawTexturePro(tex_ventilador_aspa, src, dst, origin, ang_deg, WHITE);
-                }
-                DrawCircle(static_cast<int>(cx), static_cast<int>(cy), 4.0f, Color{210, 230, 240, 255});
-            } else {
-                DrawCircleLines(static_cast<int>(cx), static_cast<int>(cy), h * 0.32f, Color{190, 210, 220, 255});
-                for (int i = 0; i < 4; ++i) {
-                    float ang = fase + i * MathUtils::TIM_PI / 2.0f;
-                    Vector2 p1 = {cx, cy};
-                    Vector2 p2 = {
-                        cx + std::cos(ang) * h * 0.26f,
-                        cy + std::sin(ang) * h * 0.26f
-                    };
-                    DrawLineEx(p1, p2, 3.0f, Color{135, 205, 255, 255});
-                }
-                DrawCircle(static_cast<int>(cx), static_cast<int>(cy), 4.0f, Color{210, 230, 240, 255});
-            }
-
-            // 3. Corriente de aire animada en la dirección actual
-            bool der = vent->mira_derecha();
-            for (int i = 0; i < 4; ++i) {
-                float y = cy - 24.0f + i * 16.0f;
-                float offset = std::sin(fase + i * 0.5f) * 15.0f;  // Desplazamiento según fase
-                float longitud = 70.0f + std::sin(fase + i * 0.3f) * 25.0f;  // Varía la longitud
-                float opacidad = 90 + std::sin(fase + i * 0.4f) * 50;  // Varía transparencia
-                
-                if (der) {
-                    DrawLineEx({px + w + 8.0f + offset, y}, {px + w + 8.0f + longitud, y}, 1.5f,
-                              Color{120, 200, 255, static_cast<unsigned char>(opacidad)});
-                } else {
-                    DrawLineEx({px - 8.0f - offset, y}, {px - 8.0f - longitud, y}, 1.5f,
-                              Color{120, 200, 255, static_cast<unsigned char>(opacidad)});
-                }
-            }
-
-            if (modo_debug) {
-                DrawRectangleLines(static_cast<int>(px), static_cast<int>(py),
-                                   static_cast<int>(w), static_cast<int>(h), GREEN);
-                if (der) {
-                    DrawRectangleLines(static_cast<int>(px + w), static_cast<int>(cy - vent->get_ancho_corriente() / 2.0),
-                                       static_cast<int>(vent->get_rango()), static_cast<int>(vent->get_ancho_corriente()), GREEN);
-                } else {
-                    DrawRectangleLines(static_cast<int>(px - vent->get_rango()), static_cast<int>(cy - vent->get_ancho_corriente() / 2.0),
-                                       static_cast<int>(vent->get_rango()), static_cast<int>(vent->get_ancho_corriente()), GREEN);
-                }
-            }
-            return;
-        }
-
-        const SeguidorBooster* seg = dynamic_cast<const SeguidorBooster*>(e);
-        if (seg) {
-            Vector2D pos = seg->get_posicion();
-            float w = static_cast<float>(seg->get_ancho());
-            float h = static_cast<float>(seg->get_alto());
-            EstadoSeguidor estado = seg->get_estado();
-            Vector2D pos_init = seg->get_posicion_inicial();
-            double dir_carr = seg->get_direccion_carrera();
-
-            float draw_y = pos.y - 6.0f; // Subir el sprite 6 píxeles para que no se hundan los pies en el suelo
-
-            // 1. Dibujar sombra sutil en el suelo
-            DrawEllipse(static_cast<int>(pos.x), static_cast<int>(pos.y + h / 2.0f - 2.0f), w * 0.8f, 3.0f, Color{0, 0, 0, 80});
-
-            // 2. Línea de anclaje (hilo elástico de retorno)
-            if (estado != EstadoSeguidor::ESPERANDO) {
-                DrawLineEx({(float)pos_init.x, (float)pos_init.y}, {(float)pos.x, (float)draw_y}, 1.5f, Color{100, 150, 255, 100});
-            }
-
-            // 3. Dibujar sprite del personaje
-            float sprite_w = w * 1.5f;
-            float sprite_h = h * 1.2f;
-            Vector2 pos_draw = {static_cast<float>(pos.x), draw_y};
-
-            if (seg->get_cabezazo_activo()) {
-                // Dibujar cabezazo
-                if (tex_seguidor_cabezazo.id > 0) {
-                    float flip_dir = (dir_carr < 0.0) ? -1.0f : 1.0f;
-                    Rectangle source = {0, 0, (float)tex_seguidor_cabezazo.width * flip_dir, (float)tex_seguidor_cabezazo.height};
-                    Rectangle dest = {pos_draw.x - sprite_w/2, pos_draw.y - sprite_h/2, sprite_w, sprite_h};
-                    DrawTexturePro(tex_seguidor_cabezazo, source, dest, {0, 0}, 0.0f, WHITE);
-                } else {
-                    dibuja_seguidor_geometrico(pos, w, h, draw_y, estado, pos_init, seg);
-                }
-            } else if (estado == EstadoSeguidor::ESPERANDO) {
-                // Personaje quieto: imagen estática sin animación
-                if (tex_seguidor_quieto.id > 0) {
-                    Rectangle source = {0, 0, (float)tex_seguidor_quieto.width, (float)tex_seguidor_quieto.height};
-                    Rectangle dest = {pos_draw.x - sprite_w/2, pos_draw.y - sprite_h/2, sprite_w, sprite_h};
-                    DrawTexturePro(tex_seguidor_quieto, source, dest, {0, 0}, 0.0f, WHITE);
-                } else {
-                    dibuja_seguidor_geometrico(pos, w, h, draw_y, estado, pos_init, seg);
-                }
-            } else if (anim_seguidor_corriendo) {
-                // Personaje corriendo: animación de sprite sheet
-                if (dir_carr > 0) {
-                    anim_seguidor_corriendo->dibujar(pos_draw, sprite_w, sprite_h);
-                } else {
-                    anim_seguidor_corriendo->dibujar_volteado(pos_draw, sprite_w, sprite_h);
-                }
-            } else if (tex_seguidor_corriendo.id > 0) {
-                // Fallback a sprite estático de correr si no hay animación
-                Rectangle source = {0, 0, (float)tex_seguidor_corriendo.width, (float)tex_seguidor_corriendo.height};
-                Rectangle dest = {pos_draw.x - sprite_w/2, pos_draw.y - sprite_h/2, sprite_w, sprite_h};
-                DrawTexturePro(tex_seguidor_corriendo, source, dest, {0, 0}, 0.0f, WHITE);
-            } else {
-                // Fallback: geometría original si no hay texturas/animaciones
-                dibuja_seguidor_geometrico(pos, w, h, draw_y, estado, pos_init, seg);
-            }
-
-            if (modo_debug) {
-                float rx = static_cast<float>(seg->get_rango_deteccion());
-                // Círculo de rango de detección dinámico
-                DrawCircleLines(static_cast<int>(pos.x), static_cast<int>(pos.y), rx, Color{0, 255, 0, 80});
-                
-                // Zona de detección en Y (corredor de altura +/- 120px)
-                DrawRectangleRec({(float)(pos.x - rx), (float)(pos.y - 120.0f), rx * 2.0f, 240.0f}, Color{0, 255, 0, 15});
-                DrawRectangleLinesEx({(float)(pos.x - rx), (float)(pos.y - 120.0f), rx * 2.0f, 240.0f}, 1.0f, Color{0, 255, 0, 45});
-
-                DrawRectangleLines(static_cast<int>(pos.x - w/2), static_cast<int>(pos.y - h/2), static_cast<int>(w), static_cast<int>(h), GREEN);
-            }
-            return;
-        }
-
-        // Primero verificamos si es un Trampolin
-        const Trampolin* tramp = dynamic_cast<const Trampolin*>(e);
-        if (tramp) {
-            Vector2D pos = tramp->get_posicion();
-            float px = static_cast<float>(pos.x);
-            float py = static_cast<float>(pos.y);
-            float pw = static_cast<float>(tramp->get_ancho());
-            float ph = static_cast<float>(tramp->get_alto());
-            float def = static_cast<float>(tramp->get_deformacion());
-
-            if (tex_trampolin.id > 0) {
-                int num_frames = 4;
-                float frame_w = 0.0f;
-                float frame_h = 0.0f;
-                Rectangle source;
-                int frame_idx = 0;
-                if (def > 12.0f) frame_idx = 3;
-                else if (def > 7.0f) frame_idx = 2;
-                else if (def > 2.0f) frame_idx = 1;
-
-                if (tex_trampolin.width > tex_trampolin.height) {
-                    frame_w = (float)tex_trampolin.width / num_frames;
-                    frame_h = (float)tex_trampolin.height;
-                    source = { frame_idx * frame_w, 0, frame_w, frame_h };
-                } else {
-                    frame_w = (float)tex_trampolin.width;
-                    frame_h = (float)tex_trampolin.height / num_frames;
-                    source = { 0, frame_idx * frame_h, frame_w, frame_h };
-                }
-
-                Rectangle dest = { px - 4.0f, py - 4.0f, pw + 8.0f, ph + 8.0f };
-                DrawTexturePro(tex_trampolin, source, dest, {0, 0}, 0.0f, WHITE);
-            } else {
-                // 1. Dibujar patas de soporte de acero cromado (estructura triangular estable)
-                DrawLineEx({px + 6, py + ph}, {px + 12, py + 8}, 3.0f, DARKGRAY);
-                DrawLineEx({px + 18, py + ph}, {px + 12, py + 8}, 3.0f, DARKGRAY);
-                DrawLineEx({px + pw - 6, py + ph}, {px + pw - 12, py + 8}, 3.0f, DARKGRAY);
-                DrawLineEx({px + pw - 18, py + ph}, {px + pw - 12, py + 8}, 3.0f, DARKGRAY);
-
-                // Barra inferior metálica horizontal de unión
-                DrawLineEx({px + 18, py + ph - 2}, {px + pw - 18, py + ph - 2}, 2.5f, GRAY);
-
-                // 2. Dibujar marcos rígidos laterales en los extremos (donde se anclan los resortes)
-                DrawRectangleRec({px, py, 6.0f, 10.0f}, GRAY);
-                DrawRectangleLinesEx({px, py, 6.0f, 10.0f}, 1.0f, DARKGRAY);
-                DrawRectangleRec({px + pw - 6.0f, py, 6.0f, 10.0f}, GRAY);
-                DrawRectangleLinesEx({px + pw - 6.0f, py, 6.0f, 10.0f}, 1.0f, DARKGRAY);
-
-                // 3. Dibujar resortes elásticos dorados estirándose hacia la lona curvada
-                int num_resortes = 6;
-                for (int i = 0; i < num_resortes; ++i) {
-                    // Anclaje en marco izquierdo
-                    float lx_start = px + 6.0f;
-                    float ly_start = py + 3.0f + i * 1.2f;
-                    
-                    // Fin en lona izquierda (interpolación hasta el centro)
-                    float t = static_cast<float>(i) / (num_resortes - 1);
-                    float lx_end = px + 6.0f + (pw / 2.0f - 14.0f) * t;
-                    float ly_end = py + 4.0f + def * t;
-                    
-                    // Dibujar resorte como zigzag dorado
-                    float mx = (lx_start + lx_end) / 2.0f;
-                    float my = (ly_start + ly_end) / 2.0f + 2.5f; // zigzag wave
-                    DrawLineEx({lx_start, ly_start}, {mx, my}, 1.5f, GOLD);
-                    DrawLineEx({mx, my}, {lx_end, ly_end}, 1.5f, GOLD);
-
-                    // Anclaje en marco derecho
-                    float rx_start = px + pw - 6.0f;
-                    float ry_start = py + 3.0f + i * 1.2f;
-                    
-                    // Fin en lona derecha
-                    float rx_end = px + pw - 6.0f - (pw / 2.0f - 14.0f) * t;
-                    float ry_end = py + 4.0f + def * t;
-
-                    float rmx = (rx_start + rx_end) / 2.0f;
-                    float rmy = (ry_start + ry_end) / 2.0f + 2.5f;
-                    DrawLineEx({rx_start, ry_start}, {rmx, rmy}, 1.5f, GOLD);
-                    DrawLineEx({rmx, rmy}, {rx_end, ry_end}, 1.5f, GOLD);
-                }
-
-                // 4. Dibujar la lona elástica central curvada por la deformación (rojo intenso con contorno naranja)
-                Vector2 p_left = { px + 10.0f, py + 4.0f };
-                Vector2 p_center = { px + pw / 2.0f, py + 4.0f + def };
-                Vector2 p_right = { px + pw - 10.0f, py + 4.0f };
-
-                // Lona elástica gruesa
-                DrawLineEx(p_left, p_center, 6.0f, RED);
-                DrawLineEx(p_center, p_right, 6.0f, RED);
-
-                // Borde brillante superior
-                DrawLineEx({p_left.x, p_left.y - 2.0f}, {p_center.x, p_center.y - 2.0f}, 1.5f, ORANGE);
-                DrawLineEx({p_center.x, p_center.y - 2.0f}, {p_right.x, p_right.y - 2.0f}, 1.5f, ORANGE);
-            }
-            return;
-        }
-
-        // Primero verificamos si es un BarrilChavo
-        const BarrilChavo* barril = dynamic_cast<const BarrilChavo*>(e);
-        if (barril) {
-            Vector2D pos = barril->get_posicion();
-            float px = static_cast<float>(pos.x);
-            float py = static_cast<float>(pos.y);
-            float pw = static_cast<float>(barril->get_ancho());
-            float ph = static_cast<float>(barril->get_alto());
-            float pop = static_cast<float>(barril->get_pop_factor());
-
-            // 1. Dibujar sombra del barril
-            DrawEllipse(static_cast<int>(px + pw / 2.0f), static_cast<int>(py + ph - 2.0f), pw * 0.7f, 4.0f, Color{0, 0, 0, 90});
-
-            // 2. Dibujar al "Chavo" saliendo si pop > 0.0
-            if (pop > 0.0f) {
-                // Si la textura está disponible, usarla; si no, usar geometría
-                if (tex_chavo.id > 0) {
-                    // Usar textura: El Chavo se desplaza verticalmente según pop
-                    float chavo_y = py + 15.0f - pop * 35.0f;
-                    float chavo_x = px + pw / 2.0f;
-                    float chavo_w = 70.0f;
-                    float chavo_h = 70.0f;
-                    
-                    DrawTexturePro(
-                        tex_chavo,
-                        {0, 0, (float)tex_chavo.width, (float)tex_chavo.height},
-                        {chavo_x - chavo_w / 2.0f, chavo_y - chavo_h / 2.0f, chavo_w, chavo_h},
-                        {0, 0},
-                        0.0f,
-                        WHITE
-                    );
-                } else {
-                    // Fallback: Geometría original de El Chavo
-                    float chavo_y = py + 15.0f - pop * 35.0f;
-                    float chavo_x = px + pw / 2.0f;
-                    float head_r = 15.0f;
-
-                    DrawRectangleRec({chavo_x - 8.0f, chavo_y + 10.0f, 16.0f, 15.0f}, Color{220, 220, 200, 255});
-                    DrawCircle(static_cast<int>(chavo_x), static_cast<int>(chavo_y), head_r, Color{253, 214, 185, 255});
-                    DrawCircleLines(static_cast<int>(chavo_x), static_cast<int>(chavo_y), head_r, Color{160, 110, 80, 255});
-                    DrawCircleSector({chavo_x, chavo_y}, head_r + 1.0f, 180.0f, 360.0f, 0, Color{84, 137, 101, 255});
-                    DrawCircle(static_cast<int>(chavo_x - 5.0f), static_cast<int>(chavo_y - 1.0f), 2.0f, BLACK);
-                    DrawCircle(static_cast<int>(chavo_x + 5.0f), static_cast<int>(chavo_y - 1.0f), 2.0f, BLACK);
-                    DrawCircleSector({chavo_x, chavo_y + 3.0f}, 4.0f, 0.0f, 180.0f, 0, Color{200, 80, 80, 255});
-                    DrawCircle(static_cast<int>(chavo_x - 5.0f), static_cast<int>(chavo_y + 2.0f), 2.0f, Color{253, 180, 160, 255});
-                    DrawCircle(static_cast<int>(chavo_x + 5.0f), static_cast<int>(chavo_y + 2.0f), 2.0f, Color{253, 180, 160, 255});
-                }
-            }
-
-            // 3. Dibujar el Barril
-            if (tex_barril.id > 0) {
-                // Usar textura del barril
-                DrawTexturePro(
-                    tex_barril,
-                    {0, 0, (float)tex_barril.width, (float)tex_barril.height},
-                    {px, py, pw, ph},
-                    {0, 0},
-                    0.0f,
-                    WHITE
-                );
-            } else {
-                // Fallback: Geometría original del barril (duelas de madera + aros metálicos)
-                Color col_madera = Color{139, 90, 43, 255};
-                Color col_borde = Color{90, 50, 20, 255};
-
-                int num_duelas = 5;
-                float duela_w = pw / num_duelas;
-                for (int i = 0; i < num_duelas; ++i) {
-                    float dx = px + i * duela_w;
-                    Color col_duela = col_madera;
-                    if (i % 2 == 0) col_duela = ColorBrightness(col_madera, -0.08f);
-                    DrawRectangleRec({dx, py, duela_w, ph}, col_duela);
-                    DrawLineEx({dx, py}, {dx, py + ph}, 1.0f, col_borde);
-                }
-                DrawRectangleLinesEx({px, py, pw, ph}, 1.5f, col_borde);
-
-                // Aros metálicos
-                Color col_metal = Color{160, 170, 180, 255};
-                Color col_metal_borde = Color{90, 100, 110, 255};
-                
-                DrawRectangleRec({px - 2.0f, py + 12.0f, pw + 4.0f, 6.0f}, col_metal);
-                DrawRectangleLinesEx({px - 2.0f, py + 12.0f, pw + 4.0f, 6.0f}, 1.0f, col_metal_borde);
-
-                DrawRectangleRec({px - 3.0f, py + ph / 2.0f - 3.0f, pw + 6.0f, 6.0f}, col_metal);
-                DrawRectangleLinesEx({px - 3.0f, py + ph / 2.0f - 3.0f, pw + 6.0f, 6.0f}, 1.0f, col_metal_borde);
-
-                DrawRectangleRec({px - 2.0f, py + ph - 18.0f, pw + 4.0f, 6.0f}, col_metal);
-                DrawRectangleLinesEx({px - 2.0f, py + ph - 18.0f, pw + 4.0f, 6.0f}, 1.0f, col_metal_borde);
-
-                DrawEllipse(static_cast<int>(px + pw / 2.0f), static_cast<int>(py + 2.0f), pw * 0.45f, 4.0f, BLACK);
-            }
-
-            if (modo_debug) {
-                DrawRectangleLines(static_cast<int>(px), static_cast<int>(py), static_cast<int>(pw), static_cast<int>(ph), GREEN);
-            }
-            return;
-        }
-
-        const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
-        const Cubeta* cubeta = dynamic_cast<const Cubeta*>(e);
-        if (cubeta) {
-            Vector2D pos = cubeta->get_posicion();
-            float px = static_cast<float>(pos.x);
-            float py = static_cast<float>(pos.y);
-            float pw = static_cast<float>(cubeta->get_ancho());
-            float ph = static_cast<float>(cubeta->get_alto());
-
-            DrawRectangleRec({px + 5.0f, py + 12.0f, pw - 10.0f, ph - 12.0f},
-                             Color{112, 140, 155, 255});
-            DrawRectangleLinesEx({px + 5.0f, py + 12.0f, pw - 10.0f, ph - 12.0f},
-                                 2.0f, Color{45, 55, 65, 255});
-            DrawLineEx({px + 9.0f, py + 14.0f}, {px + pw * 0.5f, py + 4.0f},
-                       2.5f, Color{215, 225, 230, 255});
-            DrawLineEx({px + pw - 9.0f, py + 14.0f}, {px + pw * 0.5f, py + 4.0f},
-                       2.5f, Color{215, 225, 230, 255});
-            DrawCircle(static_cast<int>(px + pw * 0.5f), static_cast<int>(py + 4.0f),
-                       5.0f, Color{35, 40, 45, 255});
-
-            if (modo_debug) {
-                DrawRectangleLines(static_cast<int>(px), static_cast<int>(py),
-                                   static_cast<int>(pw), static_cast<int>(ph), GREEN);
-            }
-            return;
-        }
-
-        if (!p) return;
-
-        Vector2D pos = p->get_posicion();
-        float px = static_cast<float>(pos.x);
-        float py = static_cast<float>(pos.y);
-        float pw = static_cast<float>(p->get_ancho());
-        float ph = static_cast<float>(p->get_alto());
-
-        bool texturizado = false;
-        if (!es_borde_nivel(p)) {
-            if (pw > ph) {
-                if (tex_plata_larga.id > 0) {
-                    DrawTexturePro(
-                        tex_plata_larga,
-                        { 0, 0, (float)tex_plata_larga.width, (float)tex_plata_larga.height },
-                        { px, py, pw, ph },
-                        { 0, 0 },
-                        0.0f,
-                        WHITE
-                    );
-                    texturizado = true;
-                }
-            } else {
-                if (tex_plata_peque.id > 0) {
-                    DrawTexturePro(
-                        tex_plata_peque,
-                        { 0, 0, (float)tex_plata_peque.width, (float)tex_plata_peque.height },
-                        { px, py, pw, ph },
-                        { 0, 0 },
-                        0.0f,
-                        WHITE
-                    );
-                    texturizado = true;
-                }
-            }
-        }
-
-        if (!texturizado) {
-            DrawRectangle(static_cast<int>(px), static_cast<int>(py), static_cast<int>(pw), static_cast<int>(ph), COLOR_PARED);
-            DrawRectangleLines(static_cast<int>(px), static_cast<int>(py), static_cast<int>(pw), static_cast<int>(ph), COLOR_PARED_BORDE);
-        }
-    }
-    else if (forma == TipoForma::POLIGONO) {
-        const Balancin* bal = dynamic_cast<const Balancin*>(e);
-        if (bal) {
-            Vector2D pos = bal->get_posicion();
-            int px = static_cast<int>(pos.x);
-            int py = static_cast<int>(pos.y);
-            int largo = static_cast<int>(bal->get_largo());
-            int espesor = static_cast<int>(bal->get_espesor());
-            float rot_deg = static_cast<float>(bal->get_angulo() * 180.0 / MathUtils::TIM_PI);
-            double cos_a = std::cos(bal->get_angulo());
-            double sin_a = std::sin(bal->get_angulo());
-
-            // 1. Dibujar soporte del pivot
-            if (tex_balancin_base.id > 0) {
-                float base_w = 34.0f;
-                float base_h = 44.0f;
-                DrawTexturePro(
-                    tex_balancin_base,
-                    { 0, 0, (float)tex_balancin_base.width, (float)tex_balancin_base.height },
-                    { (float)px - base_w / 2.0f, (float)py - 2.0f, base_w, base_h },
-                    { 0, 0 },
-                    0.0f,
-                    WHITE
-                );
-            } else {
-                DrawTriangle(
-                    {static_cast<float>(px), static_cast<float>(py)},
-                    {static_cast<float>(px - 16), static_cast<float>(py + 40)},
-                    {static_cast<float>(px + 16), static_cast<float>(py + 40)},
-                    DARKGRAY
-                );
-                DrawTriangleLines(
-                    {static_cast<float>(px), static_cast<float>(py)},
-                    {static_cast<float>(px - 16), static_cast<float>(py + 40)},
-                    {static_cast<float>(px + 16), static_cast<float>(py + 40)},
-                    GRAY
-                );
-            }
-
-            // 2. Dibujar la tabla giratoria (plank)
-            if (tex_balancin_tabla.id > 0) {
-                float board_h = espesor * 3.5f;
-                Rectangle rec = { static_cast<float>(px), static_cast<float>(py), static_cast<float>(largo), board_h };
-                Vector2 origin = { static_cast<float>(largo / 2.0), board_h / 2.0f };
-                DrawTexturePro(
-                    tex_balancin_tabla,
-                    { 0, 0, (float)tex_balancin_tabla.width, (float)tex_balancin_tabla.height },
-                    rec,
-                    origin,
-                    rot_deg,
-                    WHITE
-                );
-            } else {
-                Rectangle rec = { static_cast<float>(px), static_cast<float>(py), static_cast<float>(largo), static_cast<float>(espesor) };
-                Vector2 origin = { static_cast<float>(largo / 2.0), static_cast<float>(espesor / 2.0) };
-                DrawRectanglePro(rec, origin, rot_deg, Color{190, 110, 50, 255});
-                
-                // Dibujar contorno ocre rotado usando las 4 esquinas del tablón
-                double hl = largo / 2.0;
-                double ht = espesor / 2.0;
-                Vector2D dir_x(cos_a, sin_a);
-                Vector2D dir_y(-sin_a, cos_a);
-                Vector2D c1 = pos - dir_x * hl - dir_y * ht;
-                Vector2D c2 = pos + dir_x * hl - dir_y * ht;
-                Vector2D c3 = pos + dir_x * hl + dir_y * ht;
-                Vector2D c4 = pos - dir_x * hl + dir_y * ht;
-
-                Color color_borde = Color{220, 140, 70, 255};
-                DrawLineEx({(float)c1.x, (float)c1.y}, {(float)c2.x, (float)c2.y}, 1.5f, color_borde);
-                DrawLineEx({(float)c2.x, (float)c2.y}, {(float)c3.x, (float)c3.y}, 1.5f, color_borde);
-                DrawLineEx({(float)c3.x, (float)c3.y}, {(float)c4.x, (float)c4.y}, 1.5f, color_borde);
-                DrawLineEx({(float)c4.x, (float)c4.y}, {(float)c1.x, (float)c1.y}, 1.5f, color_borde);
-            }
-
-            // 3. Asientos rojos en los extremos (siempre dibujados encima para mayor detalle)
-            Vector2 seat_l = {
-                static_cast<float>(px - (largo / 2.0 - 5.0) * cos_a),
-                static_cast<float>(py - (largo / 2.0 - 5.0) * sin_a)
-            };
-            DrawCircle(static_cast<int>(seat_l.x), static_cast<int>(seat_l.y), 6.0f, RED);
-            DrawCircleLines(static_cast<int>(seat_l.x), static_cast<int>(seat_l.y), 6.0f, MAROON);
-
-            Vector2 seat_r = {
-                static_cast<float>(px + (largo / 2.0 - 5.0) * cos_a),
-                static_cast<float>(py + (largo / 2.0 - 5.0) * sin_a)
-            };
-            DrawCircle(static_cast<int>(seat_r.x), static_cast<int>(seat_r.y), 6.0f, RED);
-            DrawCircleLines(static_cast<int>(seat_r.x), static_cast<int>(seat_r.y), 6.0f, MAROON);
-
-            // 4. Perno central negro/gris
-            DrawCircle(px, py, 6, BLACK);
-            DrawCircle(px, py, 4, LIGHTGRAY);
-            return;
-        }
-
-        const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
-        if (!ramp) return;
-
-        Vector2D pos = ramp->get_posicion();
-        float px = static_cast<float>(pos.x);
-        float py = static_cast<float>(pos.y);
-        float pw = static_cast<float>(ramp->get_base());
-        float ph = static_cast<float>(ramp->get_altura());
-        bool invertido = ramp->get_invertido();
-
-        bool texturizado = false;
-        if (!invertido && tex_plata_rampa_der.id > 0) {
-            DrawTexturePro(
-                tex_plata_rampa_der,
-                { 0 , 0, static_cast<float>(tex_plata_rampa_der.width), static_cast<float>(tex_plata_rampa_der.height) },
-                { px, py, pw, ph },
-                { 0, 0 },
-                0.0f,
-                WHITE
-            );
-            texturizado = true;
-        } else if (invertido && tex_plata_rampa_izq.id > 0) {
-            // Usar asset diferente cuando está invertido
-            DrawTexturePro(
-                tex_plata_rampa_izq,
-                { 0, 0, (float)tex_plata_rampa_izq.width, (float)tex_plata_rampa_izq.height },
-                { px, py, pw, ph },
-                { 0, 0 },
-                0.0f,
-                WHITE
-            );
-            texturizado = true;
-        }
-
-        if (!texturizado) {
-            const auto& verts = ramp->get_vertices();
-            if (verts.size() >= 3) {
-                Vector2 v1 = {static_cast<float>(verts[0].x), static_cast<float>(verts[0].y)};
-                Vector2 v2 = {static_cast<float>(verts[1].x), static_cast<float>(verts[1].y)};
-                Vector2 v3 = {static_cast<float>(verts[2].x), static_cast<float>(verts[2].y)};
-
-                DrawTriangle(v1, v2, v3, COLOR_RAMPA);
-                DrawTriangleLines(v1, v2, v3, COLOR_RAMPA_BORDE);
-            }
-        }
+    if (e) {
+        e->dibujar(modo_debug);
     }
 }
 
@@ -2507,13 +1725,31 @@ void dibujar_hud(const MotorFisica& motor) {
     if (entidad_seleccionada) {
         bool rotable = dynamic_cast<Ventilador*>(entidad_seleccionada) != nullptr ||
                        dynamic_cast<PlanoInclinado*>(entidad_seleccionada) != nullptr;
-        const char* rotar_txt = rotable ? "  [F] Rotar" : "";
-        DrawText(TextFormat("Seleccionado: Entidad #%d  [DEL] Eliminar%s", entidad_seleccionada->get_id(), rotar_txt),
-                 margin, y + 88, 14, Color{255, 200, 80, 255});
+        bool redimensionable = dynamic_cast<ParedRectangular*>(entidad_seleccionada) != nullptr &&
+                               !es_borde_nivel(entidad_seleccionada);
+        const char* rotar_txt = (rotable && (!entidad_seleccionada->get_es_fijo() || estado_actual == EstadoJuego::JUEGO_CREATIVO)) ? "  [F] Rotar" : "";
+        const char* resize_txt = (redimensionable && estado_actual == EstadoJuego::JUEGO_CREATIVO) ? "  [Flechas] Resize" : "";
+        
+        std::string info_txt;
+        if (estado_actual == EstadoJuego::JUEGO_CREATIVO) {
+            const char* fijo_str = entidad_seleccionada->get_es_fijo() ? "Fijo" : "Inventario del Jugador";
+            const char* toggle_fijo_txt = !es_borde_nivel(entidad_seleccionada) ? "  [P/G] Cambiar Tipo (Fijo/Inventario)" : "";
+            info_txt = TextFormat("Seleccionado: %s #%d (%s)%s%s%s  [DEL] Eliminar  [Click Der/ESC] Deseleccionar",
+                                  nombre_tipo_entidad(entidad_seleccionada->get_tipo_entidad()),
+                                  entidad_seleccionada->get_id(), fijo_str, toggle_fijo_txt, rotar_txt, resize_txt);
+        } else {
+            const char* fijo_str = entidad_seleccionada->get_es_fijo() ? "Fijo (Bloqueado)" : "Colocado por ti";
+            const char* del_txt = entidad_seleccionada->get_es_fijo() ? "" : "  [DEL] Eliminar";
+            info_txt = TextFormat("Seleccionado: %s #%d (%s)%s%s  [Click Der/ESC] Deseleccionar",
+                                  nombre_tipo_entidad(entidad_seleccionada->get_tipo_entidad()),
+                                  entidad_seleccionada->get_id(), fijo_str, del_txt, rotar_txt);
+        }
+        
+        DrawText(info_txt.c_str(), margin, y + 88, 14, Color{255, 200, 80, 255});
     }
 
     // Controles
-    DrawText("[TAB] Menu  [Arrastrar] Crear/Mover  [CLICK] Seleccionar  [DEL] Eliminar  [F] Rotar  [SPACE] Pausa  [D] Debug  [R] Reset",
+    DrawText("[TAB] Menu  [Arrastrar] Crear/Mover  [CLICK] Seleccionar  [Click Der/ESC] Deseleccionar  [DEL] Eliminar  [Flechas] Resize  [SPACE] Pausa  [D] Debug",
              margin, ALTO - 30, 14, COLOR_CONTROLES);
 }
 
@@ -2570,6 +1806,9 @@ void cargandoTexturas() {
     tex_hud_opciones_hover = cargar_textura_datos("Assets/hud/opciones2.png");
     tex_hud_ayuda = cargar_textura_datos("Assets/hud/nose.png");
     tex_hud_salir = cargar_textura_datos("Assets/hud/ver.png");
+    tex_hud_play = cargar_textura_datos("Assets/hud/inicio.png");
+    tex_hud_reset = cargar_textura_datos("Assets/hud/deshacer.png");
+    tex_hud_reset_hover = cargar_textura_datos("Assets/hud/deshacer2.png");
     
     tex_menu_fondo = cargar_textura_datos("Assets/menu/fondo.png");
     if (tex_menu_fondo.id == 0) {
@@ -2871,6 +2110,7 @@ void dibujar_menu_principal(MotorFisica& motor) {
         gestor_eventos.limpiar();
         modo_evento_ui = ModoEventoUI::INACTIVO;
         estado_actual = EstadoJuego::JUEGO_CREATIVO;
+        motor.set_pausado(true);
     }
     
     if (dibujar_boton_imagen_interactivo(rect_opciones, tex_btn_opciones1, tex_btn_opciones2)) {
@@ -3008,7 +2248,7 @@ void dibujar_menu_opciones() {
         dibujar_linea_opcion("[TAB]", "Mostrar u ocultar el menu lateral de herramientas", content_y + dy * 2);
         dibujar_linea_opcion("[ESPACIO]", "Pausar / Reanudar la simulacion fisica", content_y + dy * 3);
         dibujar_linea_opcion("[D]", "Activar / Desactivar modo debug (wireframes y vectores)", content_y + dy * 4);
-        dibujar_linea_opcion("[F]", "Rotar o invertir direccion (Ventilador y Rampas)", content_y + dy * 5);
+        dibujar_linea_opcion("[F / T]", "Rotar (F) / Alternar tamano (T) (Rampas y Ventilador)", content_y + dy * 5);
         dibujar_linea_opcion("[R]", "Reiniciar escena (borra todo y recarga inicial)", content_y + dy * 6);
         dibujar_linea_opcion("[+/-]", "Aumentar / Disminuir gravedad", content_y + dy * 7);
         dibujar_linea_opcion("[SUPR/X]", "Eliminar el objeto seleccionado", content_y + dy * 8);
@@ -3038,6 +2278,9 @@ void actualizar_seleccion_niveles(MotorFisica& motor) {
 
 // Inicializa un nivel de campaña oficial en memoria
 void cargar_nivel_campana(MotorFisica& motor, int lvl_idx) {
+    nivel_campana_actual = lvl_idx;
+    nivel_usuario_actual_path = "";
+
     motor.limpiar();
     resetear_punteros_borde();
     limpiar_estado_tras_cargar_partida();
@@ -3048,18 +2291,19 @@ void cargar_nivel_campana(MotorFisica& motor, int lvl_idx) {
     if (lvl_idx == 0) path = "Assets/campaign/1_primer_impacto.tim";
     else if (lvl_idx == 1) path = "Assets/campaign/2_rebote_perfecto.tim";
     else if (lvl_idx == 2) path = "Assets/campaign/3_el_soplido.tim";
-    else path = "Assets/campaign/4_reaccion_fisica.tim";
+    else path = "Assets/campaign/4_messi_gol_gol_gol.tim";
 
     if (FileExists(path.c_str())) {
         int w = ANCHO;
         int h = ALTO;
         int cont = contador_bolas;
+        estado_actual = EstadoJuego::JUEGO_NIVEL;
         if (cargar_partida(motor, gestor_eventos, path, w, h, cont)) {
             ANCHO = w;
             ALTO = h;
             contador_bolas = cont;
-            estado_actual = EstadoJuego::JUEGO_NIVEL;
         } else {
+            estado_actual = EstadoJuego::SELECCION_NIVELES;
             TraceLog(LOG_WARNING, "Error al cargar archivo de campana: %s", path.c_str());
         }
     } else {
@@ -3171,7 +2415,7 @@ void dibujar_seleccion_niveles(MotorFisica& motor) {
             { "1. Primer Impacto", "Entiende la gravedad haciendo caer", "una pelota dentro de la cubeta.", "FACIL", GREEN },
             { "2. Rebote Perfecto", "Utiliza el trampolin para desviar", "la trayectoria de la bola.", "FACIL", GREEN },
             { "3. El Soplido", "Usa la corriente de viento del", "ventilador para empujar objetos.", "MEDIO", ORANGE },
-            { "4. Reaccion Fisica", "Activa el balancin para catapultar", "la bola hasta la meta.", "DIFICIL", RED }
+            { "4. Messi gol gol gol", "Ayuda a Messi a meter un golazo", "usando los trampolines.", "DIFICIL", RED }
         };
         
         for (int i = 0; i < 4; ++i) {
@@ -3249,10 +2493,15 @@ void dibujar_seleccion_niveles(MotorFisica& motor) {
             if (hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 int ancho_cargado = ANCHO;
                 int alto_cargado = ALTO;
-                cargar_partida(motor, gestor_eventos, partidas_guardadas[i].ruta_archivo, ancho_cargado, alto_cargado, contador_bolas);
-                ANCHO = ancho_cargado;
-                ALTO = alto_cargado;
+                nivel_campana_actual = -1;
+                nivel_usuario_actual_path = partidas_guardadas[i].ruta_archivo;
                 estado_actual = EstadoJuego::JUEGO_NIVEL;
+                if (cargar_partida(motor, gestor_eventos, partidas_guardadas[i].ruta_archivo, ancho_cargado, alto_cargado, contador_bolas)) {
+                    ANCHO = ancho_cargado;
+                    ALTO = alto_cargado;
+                } else {
+                    estado_actual = EstadoJuego::SELECCION_NIVELES;
+                }
             }
         }
         
@@ -3294,6 +2543,8 @@ void dibujar_seleccion_niveles(MotorFisica& motor) {
 }
 
 struct BotonesHUD {
+    Rectangle rect_play;
+    Rectangle rect_reset;
     Rectangle rect_opciones;
     Rectangle rect_ayuda;
     Rectangle rect_salir;
@@ -3307,6 +2558,8 @@ BotonesHUD calcular_rectangulos_botones_hud() {
     float y_offset = ALTO - 150.0f;
     
     BotonesHUD btns;
+    btns.rect_play = { 20.0f + 1110.0f * escala + 35, y_offset + 20.0f * escala + 25 , 70.0f * escala - 20 , 70.0f * escala - 20 };
+    btns.rect_reset = { 20.0f + 1210.0f * escala + 35, y_offset + 20.0f * escala + 25 , 70.0f * escala - 20 , 70.0f * escala - 20 };
     btns.rect_opciones = { 20.0f + 1310.0f * escala+35, y_offset + 20.0f * escala + 25 , 70.0f * escala-20 , 70.0f * escala - 20 };
     btns.rect_ayuda = { 20.0f + 1410.0f * escala+26, y_offset + 20.0f * escala + 25 , 70.0f * escala-20 , 70.0f * escala - 20};
     btns.rect_salir = { 20.0f + 1510.0f * escala+26, y_offset + 20.0f * escala + 25 , 70.0f * escala-20 , 70.0f * escala - 20};
@@ -3365,12 +2618,30 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
         cancelar_colocacion_cuerda();
     }
 
-    manejar_teclas_panel_guardado(motor, gestor_eventos, ANCHO, ALTO, contador_bolas);
+    if (estado_actual != EstadoJuego::JUEGO_NIVEL) {
+        manejar_teclas_panel_guardado(motor, gestor_eventos, ANCHO, ALTO, contador_bolas);
+    }
 
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         // Interceptar clicks en los botones del HUD primero
         BotonesHUD btns = calcular_rectangulos_botones_hud();
         Vector2 mouse_pos = {(float)mx, (float)my};
+        if (CheckCollisionPointRec(mouse_pos, btns.rect_play)) {
+            if (motor.get_pausado()) {
+                guardar_snapshot_simulacion(motor, gestor_eventos);
+                motor.set_pausado(false);
+                cancelar_colocacion_cuerda();
+            } else {
+                spawn_error_timer = 0.5f;
+                spawn_error_pos = Vector2D(mx, my);
+            }
+            return;
+        }
+        if (CheckCollisionPointRec(mouse_pos, btns.rect_reset)) {
+            restaurar_snapshot_simulacion(motor, gestor_eventos);
+            motor.set_pausado(true);
+            return;
+        }
         if (CheckCollisionPointRec(mouse_pos, btns.rect_opciones)) {
             mostrar_pausa_overlay = true;
             return;
@@ -3384,40 +2655,91 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             return;
         }
 
-        if (mx < 260) {
-            // Click en panel eventos izquierdo
+        if (punto_en_panel_izquierdo(mx, my)) {
+            entidad_seleccionada = nullptr;  // Deseleccionar al interactuar con el panel de eventos
         } else if (punto_en_menu(mx, my)) {
+            entidad_seleccionada = nullptr;  // Deseleccionar al clickear en el menú
             if (manejar_click_menu(mx, my, motor)) {
                 // UI consumió el click
             } else {
                 TipoObjetoMenu tipo = tipo_en_celda(mx, my, celdas_menu_cache);
                 if (tipo == TipoObjetoMenu::CUERDA) {
                     if (motor.get_pausado()) {
-                        cancelar_colocacion_cuerda();
-                        estado_cuerda = EstadoColocacionCuerda::ESPERANDO_EXTREMO_A;
+                        if (estado_actual == EstadoJuego::JUEGO_NIVEL && inventario_actual[TipoObjetoMenu::CUERDA] <= 0) {
+                            spawn_error_timer = 0.5f;
+                            spawn_error_pos = Vector2D(mx, my);
+                        } else {
+                            cancelar_colocacion_cuerda();
+                            estado_cuerda = EstadoColocacionCuerda::ESPERANDO_EXTREMO_A;
+                        }
                     } else {
                         spawn_error_timer = 0.5f;
                         spawn_error_pos = Vector2D(mx, my);
                     }
                 } else if (tipo != TipoObjetoMenu::NINGUNO) {
-                    cancelar_colocacion_cuerda();
-                    arrastrando_spawn = tipo;
+                    if (!motor.get_pausado()) {
+                        spawn_error_timer = 0.5f;
+                        spawn_error_pos = Vector2D(mx, my);
+                    } else if (estado_actual == EstadoJuego::JUEGO_NIVEL && inventario_actual[tipo] <= 0) {
+                        spawn_error_timer = 0.5f;
+                        spawn_error_pos = Vector2D(mx, my);
+                    } else {
+                        cancelar_colocacion_cuerda();
+                        arrastrando_spawn = tipo;
+                    }
                 }
             }
         } else if (punto_en_area_juego(mx, my)) {
             Vector2D mouse_pos(mx, my);
-            if (manejar_click_colocacion_cuerda(motor, mouse_pos)) {
+            if (arrastrando_spawn != TipoObjetoMenu::NINGUNO) {
+                spawn_desde_menu(motor, arrastrando_spawn, mouse_pos);
+                arrastrando_spawn = TipoObjetoMenu::NINGUNO;
+            } else if (manejar_click_colocacion_cuerda(motor, mouse_pos)) {
                 entidad_arrastrada = nullptr;
             } else {
-                EntidadFisica* clicked = obtener_entidad_bajo_mouse(motor, mouse_pos);
-                if (clicked) {
-                    if (!manejar_click_evento_ui(gestor_eventos, clicked)) {
-                        entidad_arrastrada = clicked;
-                        entidad_seleccionada = clicked;
-                        offset_arrastre = clicked->get_posicion() - mouse_pos;
+                bool handle_click_detectado = false;
+                if (estado_actual == EstadoJuego::JUEGO_CREATIVO && entidad_seleccionada && motor.get_pausado()) {
+                    ParedRectangular* p = dynamic_cast<ParedRectangular*>(entidad_seleccionada);
+                    if (p && !es_borde_nivel(p)) {
+                        auto handles = calcular_handles(p);
+                        for (int i = 0; i < 8; ++i) {
+                            if (CheckCollisionPointRec({(float)mx, (float)my}, handles.rects[i])) {
+                                handle_activo = handles.tipos[i];
+                                handle_pos_inicial_mouse = Vector2D(mx, my);
+                                handle_w_inicial = p->get_ancho();
+                                handle_h_inicial = p->get_alto();
+                                handle_pos_inicial_ent = p->get_posicion();
+                                handle_click_detectado = true;
+                                break;
+                            }
+                        }
                     }
-                } else {
-                    entidad_seleccionada = nullptr;
+                }
+
+                if (!handle_click_detectado) {
+                    EntidadFisica* clicked = obtener_entidad_bajo_mouse(motor, mouse_pos);
+                    if (clicked) {
+                        if (estado_actual == EstadoJuego::JUEGO_NIVEL && clicked->get_es_fijo()) {
+                            entidad_seleccionada = clicked;
+                        } else {
+                            bool manejado_por_evento = false;
+                            if (estado_actual == EstadoJuego::JUEGO_CREATIVO) {
+                                manejado_por_evento = manejar_click_evento_ui(gestor_eventos, clicked);
+                            }
+                            if (!manejado_por_evento) {
+                                if (motor.get_pausado()) {
+                                    entidad_arrastrada = clicked;
+                                    offset_arrastre = clicked->get_posicion() - mouse_pos;
+                                } else {
+                                    spawn_error_timer = 0.5f;
+                                    spawn_error_pos = clicked->get_posicion();
+                                }
+                                entidad_seleccionada = clicked;
+                            }
+                        }
+                    } else {
+                        entidad_seleccionada = nullptr;
+                    }
                 }
             }
         }
@@ -3425,6 +2747,24 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
 
     if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && arrastrando_spawn != TipoObjetoMenu::NINGUNO) {
         // Ghost spawn
+    } else if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && handle_activo != HandleResize::NINGUNO && entidad_seleccionada) {
+        ParedRectangular* p = dynamic_cast<ParedRectangular*>(entidad_seleccionada);
+        if (p) {
+            double dx = mx - handle_pos_inicial_mouse.x;
+            double dy = my - handle_pos_inicial_mouse.y;
+            double nw = handle_w_inicial, nh = handle_h_inicial;
+            Vector2D npos = handle_pos_inicial_ent;
+            bool izq  = handle_activo==HandleResize::TOP_LEFT||handle_activo==HandleResize::MID_LEFT||handle_activo==HandleResize::BOT_LEFT;
+            bool der  = handle_activo==HandleResize::TOP_RIGHT||handle_activo==HandleResize::MID_RIGHT||handle_activo==HandleResize::BOT_RIGHT;
+            bool arr  = handle_activo==HandleResize::TOP_LEFT||handle_activo==HandleResize::TOP_CENTER||handle_activo==HandleResize::TOP_RIGHT;
+            bool abaj = handle_activo==HandleResize::BOT_LEFT||handle_activo==HandleResize::BOT_CENTER||handle_activo==HandleResize::BOT_RIGHT;
+            if (der)  nw = std::max(20.0, handle_w_inicial + dx);
+            if (izq)  { nw = std::max(20.0, handle_w_inicial - dx); npos.x = handle_pos_inicial_ent.x + (handle_w_inicial - nw); }
+            if (abaj) nh = std::max(8.0, handle_h_inicial + dy);
+            if (arr)  { nh = std::max(8.0, handle_h_inicial - dy); npos.y = handle_pos_inicial_ent.y + (handle_h_inicial - nh); }
+            p->set_posicion(npos);
+            p->set_dimensiones(nw, nh);
+        }
     } else if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && entidad_arrastrada != nullptr) {
         Vector2D mouse_pos(mx, my);
         Vector2D nueva_pos = mouse_pos + offset_arrastre;
@@ -3445,11 +2785,85 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
         if (arrastrando_spawn != TipoObjetoMenu::NINGUNO) {
             if (punto_en_area_juego(mx, my)) {
-                spawn_desde_menu(motor, arrastrando_spawn, Vector2D(mx, my));
+                bool spawn_exito = false;
+                if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
+                    if (!inventario_entidades[arrastrando_spawn].empty()) {
+                        auto e = std::move(inventario_entidades[arrastrando_spawn].back());
+                        inventario_entidades[arrastrando_spawn].pop_back();
+
+                        double w_or_r = 0.0, h_val = 0.0;
+                        TipoForma forma = e->get_tipo_forma();
+                        if (forma == TipoForma::CIRCULO) {
+                            auto* b = dynamic_cast<Bola*>(e.get());
+                            if (b) w_or_r = b->get_radio();
+                            auto* br = dynamic_cast<BolaRebotadora*>(e.get());
+                            if (br) w_or_r = br->get_radio();
+                        } else if (forma == TipoForma::AABB) {
+                            Vector2D size = e->get_max() - e->get_min();
+                            w_or_r = size.x;
+                            h_val = size.y;
+                        } else if (forma == TipoForma::POLIGONO) {
+                            auto* ramp = dynamic_cast<PlanoInclinado*>(e.get());
+                            if (ramp) {
+                                w_or_r = ramp->get_base();
+                                h_val = ramp->get_altura();
+                            }
+                            auto* bal = dynamic_cast<Balancin*>(e.get());
+                            if (bal) {
+                                w_or_r = bal->get_largo();
+                                h_val = bal->get_espesor();
+                            }
+                        }
+
+                        Vector2D pos_destino(mx, my);
+                        if (forma == TipoForma::AABB || forma == TipoForma::POLIGONO) {
+                            pos_destino.x = mx - w_or_r / 2.0;
+                            pos_destino.y = my - h_val / 2.0;
+                        }
+
+                        if (posicion_valida_para_spawn(motor, pos_destino, forma, w_or_r, h_val)) {
+                            e->set_posicion(pos_destino);
+                            e->set_velocidad(Vector2D(0, 0));
+                            e->set_velocidad_angular(0);
+                            
+                            auto* ramp = dynamic_cast<PlanoInclinado*>(e.get());
+                            if (ramp) ramp->recalcular_vertices();
+
+                            motor.agregar_entidad(std::move(e));
+                            inventario_actual[arrastrando_spawn]--;
+                            spawn_exito = true;
+                        } else {
+                            inventario_entidades[arrastrando_spawn].push_back(std::move(e));
+                            spawn_error_timer = 0.5f;
+                            spawn_error_pos = Vector2D(mx, my);
+                        }
+                    }
+                } else {
+                    spawn_exito = spawn_desde_menu(motor, arrastrando_spawn, Vector2D(mx, my));
+                }
+
+                if (spawn_exito) {
+                    arrastrando_spawn = TipoObjetoMenu::NINGUNO;
+                }
+            } else {
+                arrastrando_spawn = TipoObjetoMenu::NINGUNO;
             }
-            arrastrando_spawn = TipoObjetoMenu::NINGUNO;
         }
-        entidad_arrastrada = nullptr;
+        if (entidad_arrastrada != nullptr) {
+            if (estado_actual == EstadoJuego::JUEGO_CREATIVO && !es_borde_nivel(entidad_arrastrada)) {
+                int panel_x = 12;
+                int panel_y = ALTO - 390;
+                int panel_w = 236; // 260 - 24
+                int panel_h = 260;
+                Rectangle rect_panel = { (float)panel_x, (float)panel_y, (float)panel_w, (float)panel_h };
+                if (panel_izquierdo_visible && CheckCollisionPointRec(GetMousePosition(), rect_panel)) {
+                    entidad_arrastrada->set_es_fijo(false);
+                    TraceLog(LOG_INFO, "Entidad #%d arrastrada al inventario, es_fijo = false", entidad_arrastrada->get_id());
+                }
+            }
+            entidad_arrastrada = nullptr;
+        }
+        handle_activo = HandleResize::NINGUNO;
     }
 
     if (!menu_visible && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
@@ -3459,8 +2873,14 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     }
 
     if (IsKeyPressed(KEY_SPACE)) {
-        motor.set_pausado(!motor.get_pausado());
-        if (!motor.get_pausado()) cancelar_colocacion_cuerda();
+        if (motor.get_pausado()) {
+            guardar_snapshot_simulacion(motor, gestor_eventos);
+            motor.set_pausado(false);
+            cancelar_colocacion_cuerda();
+        } else {
+            restaurar_snapshot_simulacion(motor, gestor_eventos);
+            motor.set_pausado(true);
+        }
     }
 
     if (IsKeyPressed(KEY_D)) {
@@ -3468,34 +2888,127 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     }
 
     if ((IsKeyPressed(KEY_DELETE) || IsKeyPressed(KEY_X)) && entidad_seleccionada) {
-        if (!es_borde_nivel(entidad_seleccionada)) {
-            int id_eliminar = entidad_seleccionada->get_id();
-            if (entidad_arrastrada == entidad_seleccionada) entidad_arrastrada = nullptr;
-            entidad_seleccionada = nullptr;
-            motor.remover_entidad(id_eliminar);
+        if (!motor.get_pausado()) {
+            spawn_error_timer = 0.5f;
+            spawn_error_pos = entidad_seleccionada->get_posicion();
+        } else if (!es_borde_nivel(entidad_seleccionada)) {
+            if (estado_actual == EstadoJuego::JUEGO_NIVEL && entidad_seleccionada->get_es_fijo()) {
+                spawn_error_timer = 0.5f;
+                spawn_error_pos = entidad_seleccionada->get_posicion();
+            } else {
+                int id_eliminar = entidad_seleccionada->get_id();
+                if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
+                    TipoObjetoMenu t_menu = entidad_seleccionada->get_tipo_menu();
+                    inventario_actual[t_menu]++;
+                    auto ptr = motor.transferir_entidad(id_eliminar);
+                    if (ptr) {
+                        inventario_entidades[t_menu].push_back(std::move(ptr));
+                    }
+                } else {
+                    motor.remover_entidad(id_eliminar);
+                }
+                if (entidad_arrastrada == entidad_seleccionada) entidad_arrastrada = nullptr;
+                entidad_seleccionada = nullptr;
+            }
         }
     }
 
     if (IsKeyPressed(KEY_F) && entidad_seleccionada) {
-        auto* vent = dynamic_cast<Ventilador*>(entidad_seleccionada);
-        if (vent) {
-            vent->invertir_direccion();
+        if (!motor.get_pausado()) {
+            spawn_error_timer = 0.5f;
+            spawn_error_pos = entidad_seleccionada->get_posicion();
+        } else if (estado_actual == EstadoJuego::JUEGO_NIVEL && entidad_seleccionada->get_es_fijo()) {
+            spawn_error_timer = 0.5f;
+            spawn_error_pos = entidad_seleccionada->get_posicion();
+        } else {
+            auto* vent = dynamic_cast<Ventilador*>(entidad_seleccionada);
+            if (vent) {
+                vent->invertir_direccion();
+            } else {
+                auto* ramp = dynamic_cast<PlanoInclinado*>(entidad_seleccionada);
+                if (ramp) {
+                    ramp->invertir();
+                }
+            }
+        }
+    }
+
+    if (IsKeyPressed(KEY_T) && entidad_seleccionada) {
+        if (!motor.get_pausado()) {
+            spawn_error_timer = 0.5f;
+            spawn_error_pos = entidad_seleccionada->get_posicion();
+        } else if (estado_actual == EstadoJuego::JUEGO_NIVEL && entidad_seleccionada->get_es_fijo()) {
+            spawn_error_timer = 0.5f;
+            spawn_error_pos = entidad_seleccionada->get_posicion();
         } else {
             auto* ramp = dynamic_cast<PlanoInclinado*>(entidad_seleccionada);
             if (ramp) {
-                ramp->invertir();
+                ramp->alternar_tamano();
+            }
+        }
+    }
+
+    if ((IsKeyPressed(KEY_P) || IsKeyPressed(KEY_G)) && entidad_seleccionada && estado_actual == EstadoJuego::JUEGO_CREATIVO) {
+        if (!motor.get_pausado()) {
+            spawn_error_timer = 0.5f;
+            spawn_error_pos = entidad_seleccionada->get_posicion();
+        } else if (!es_borde_nivel(entidad_seleccionada)) {
+            entidad_seleccionada->set_es_fijo(!entidad_seleccionada->get_es_fijo());
+            TraceLog(LOG_INFO, "Entidad #%d es_fijo toggled to %d", entidad_seleccionada->get_id(), entidad_seleccionada->get_es_fijo());
+        }
+    }
+
+    if (estado_actual == EstadoJuego::JUEGO_CREATIVO && entidad_seleccionada && motor.get_pausado()) {
+        ParedRectangular* p = dynamic_cast<ParedRectangular*>(entidad_seleccionada);
+        if (p && !es_borde_nivel(p)) {
+            double paso = (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)) ? 1.0 : 10.0;
+            double nw = p->get_ancho(), nh = p->get_alto();
+            bool cambiado = false;
+            if (IsKeyPressed(KEY_RIGHT)) { nw = std::max(20.0, nw + paso); cambiado = true; }
+            if (IsKeyPressed(KEY_LEFT))  { nw = std::max(20.0, nw - paso); cambiado = true; }
+            if (IsKeyPressed(KEY_DOWN))  { nh = std::max(8.0,  nh + paso); cambiado = true; }
+            if (IsKeyPressed(KEY_UP))    { nh = std::max(8.0,  nh - paso); cambiado = true; }
+            if (cambiado) {
+                p->set_dimensiones(nw, nh);
+            }
+        } else {
+            PlanoInclinado* ramp = dynamic_cast<PlanoInclinado*>(entidad_seleccionada);
+            if (ramp) {
+                double paso = (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)) ? 1.0 : 10.0;
+                double nb = ramp->get_base(), nh = ramp->get_altura();
+                bool cambiado = false;
+                if (IsKeyPressed(KEY_RIGHT)) { nb = std::max(20.0, nb + paso); cambiado = true; }
+                if (IsKeyPressed(KEY_LEFT))  { nb = std::max(20.0, nb - paso); cambiado = true; }
+                if (IsKeyPressed(KEY_DOWN))  { nh = std::max(8.0,  nh + paso); cambiado = true; }
+                if (IsKeyPressed(KEY_UP))    { nh = std::max(8.0,  nh - paso); cambiado = true; }
+                if (cambiado) {
+                    ramp->set_dimensiones(nb, nh);
+                }
             }
         }
     }
 
     if (IsKeyPressed(KEY_R)) {
-        motor.limpiar();
-        contador_bolas = 0;
-        resetear_punteros_borde();
-        limpiar_estado_tras_cargar_partida();
-        crear_escena(motor);
-        gestor_eventos.limpiar();
-        modo_evento_ui = ModoEventoUI::INACTIVO;
+        if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
+            if (nivel_campana_actual != -1) {
+                cargar_nivel_campana(motor, nivel_campana_actual);
+            } else if (!nivel_usuario_actual_path.empty()) {
+                int ancho_cargado = ANCHO;
+                int alto_cargado = ALTO;
+                cargar_partida(motor, gestor_eventos, nivel_usuario_actual_path, ancho_cargado, alto_cargado, contador_bolas);
+                ANCHO = ancho_cargado;
+                ALTO = alto_cargado;
+            }
+        } else {
+            motor.limpiar();
+            contador_bolas = 0;
+            resetear_punteros_borde();
+            limpiar_estado_tras_cargar_partida();
+            crear_escena(motor);
+            gestor_eventos.limpiar();
+            modo_evento_ui = ModoEventoUI::INACTIVO;
+            motor.set_pausado(true);
+        }
     }
 
     if (IsKeyPressed(KEY_KP_ADD) || IsKeyPressed(KEY_EQUAL)) {
@@ -3539,6 +3052,43 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     for (const auto* e : motor.get_entidades()) {
         dibujar_entidad(e);
         dibujar_debug(e);
+        
+        if (estado_actual == EstadoJuego::JUEGO_CREATIVO && !e->get_es_fijo()) {
+            Color inv_color = Color{76, 219, 138, 130};
+            TipoForma forma = e->get_tipo_forma();
+            if (forma == TipoForma::CIRCULO) {
+                Vector2D pos;
+                double radio = 0.0;
+                if (obtener_datos_circulo(e, pos, radio)) {
+                    DrawCircleLines(static_cast<int>(pos.x), static_cast<int>(pos.y),
+                                    static_cast<float>(radio + 3.0), inv_color);
+                    DrawText("I", static_cast<int>(pos.x - 3), static_cast<int>(pos.y - 5), 10, inv_color);
+                }
+            } else if (forma == TipoForma::AABB) {
+                const ParedRectangular* pr = dynamic_cast<const ParedRectangular*>(e);
+                if (pr) {
+                    Vector2D pos = pr->get_posicion();
+                    DrawRectangleLinesEx({(float)pos.x - 2, (float)pos.y - 2,
+                        (float)pr->get_ancho() + 4, (float)pr->get_alto() + 4}, 1.0f, inv_color);
+                    DrawText("I", static_cast<int>(pos.x + 2), static_cast<int>(pos.y + 2), 10, inv_color);
+                }
+            } else if (forma == TipoForma::POLIGONO) {
+                const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
+                if (ramp) {
+                    Vector2D pos = ramp->get_posicion();
+                    DrawRectangleLinesEx({(float)pos.x - 2, (float)pos.y - 2,
+                        (float)ramp->get_base() + 4, (float)ramp->get_altura() + 4}, 1.0f, inv_color);
+                    DrawText("I", static_cast<int>(pos.x + 2), static_cast<int>(pos.y + 2), 10, inv_color);
+                }
+                const Balancin* bal = dynamic_cast<const Balancin*>(e);
+                if (bal) {
+                    Vector2D pos = bal->get_posicion();
+                    DrawRectangleLinesEx({(float)pos.x - 2, (float)pos.y - 2,
+                        (float)bal->get_largo() + 4, (float)bal->get_espesor() + 4}, 1.0f, inv_color);
+                    DrawText("I", static_cast<int>(pos.x + 2), static_cast<int>(pos.y + 2), 10, inv_color);
+                }
+            }
+        }
     }
     dibujar_previsualizacion_cuerda(motor);
 
@@ -3569,6 +3119,17 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                 Vector2D spos = sp->get_posicion();
                 DrawRectangleLinesEx({(float)spos.x - 3, (float)spos.y - 3,
                     (float)sp->get_ancho() + 6, (float)sp->get_alto() + 6}, 2.0f, sel_color);
+
+                // Draw resize handles if in JUEGO_CREATIVO and paused
+                if (estado_actual == EstadoJuego::JUEGO_CREATIVO && motor.get_pausado() && !es_borde_nivel(sp)) {
+                    auto handles = calcular_handles(sp);
+                    for (int i = 0; i < 8; ++i) {
+                        bool activo = (handle_activo == handles.tipos[i]);
+                        Color col = activo ? Color{255, 200, 50, 255} : Color{80, 160, 255, 200};
+                        DrawRectangleRec(handles.rects[i], col);
+                        DrawRectangleLinesEx(handles.rects[i], 1.5f, {20, 80, 200, 255});
+                    }
+                }
             } else {
                 Vector2D spos = entidad_seleccionada->get_posicion();
                 const Trampolin* st = dynamic_cast<const Trampolin*>(entidad_seleccionada);
@@ -3640,6 +3201,14 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                 { p_ext.x + 1, p_ext.y + 4 },
                 Color{40, 40, 40, 255}
             );
+
+            // Si es una rampa, dibujar también el badge de cambiar tamaño [T]
+            if (sr_rot) {
+                Vector2 size_badge_pos = { badge_pos.x + 32.0f, badge_pos.y };
+                DrawCircleV(size_badge_pos, 14.0f, Color{50, 180, 255, 240});
+                DrawCircleLines(size_badge_pos.x, size_badge_pos.y, 14.0f, WHITE);
+                DrawTextEx(fuente_menu, "T", { size_badge_pos.x - 5.0f, size_badge_pos.y - 8.0f }, 16.0f, 1.0f, Color{40, 40, 40, 255});
+            }
         }
     }
 
@@ -3696,6 +3265,27 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     BotonesHUD btns = calcular_rectangulos_botones_hud();
     Vector2 mouse = GetMousePosition();
     
+    // Play button
+    bool hover_play = CheckCollisionPointRec(mouse, btns.rect_play);
+    bool play_activo = motor.get_pausado();
+    Color play_tint = play_activo ? WHITE : Color{120, 120, 120, 255};
+    if (tex_hud_play.id > 0) {
+        DrawTexturePro(tex_hud_play, {0.0f, 0.0f, (float)tex_hud_play.width, (float)tex_hud_play.height}, btns.rect_play, {0.0f, 0.0f}, 0.0f, play_tint);
+    }
+    if (hover_play && play_activo) {
+        DrawRectangleRoundedLinesEx(btns.rect_play, 0.2f, 4, 2.0f, SKYBLUE);
+    }
+
+    // Reset button
+    bool hover_reset = CheckCollisionPointRec(mouse, btns.rect_reset);
+    if (tex_hud_reset.id > 0) {
+        Texture2D tex = hover_reset && (tex_hud_reset_hover.id > 0) ? tex_hud_reset_hover : tex_hud_reset;
+        DrawTexturePro(tex, {0.0f, 0.0f, (float)tex.width, (float)tex.height}, btns.rect_reset, {0.0f, 0.0f}, 0.0f, WHITE);
+    }
+    if (hover_reset) {
+        DrawRectangleRoundedLinesEx(btns.rect_reset, 0.2f, 4, 2.0f, SKYBLUE);
+    }
+
     // Opciones (Engrane)
     bool hover_opciones = CheckCollisionPointRec(mouse, btns.rect_opciones);
     if (tex_hud_opciones.id > 0) {
@@ -3753,7 +3343,7 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
         draw_help_line("Objetivo:", "Coloca objetos para que la pelota llegue a la zona meta.", start_y, box.x + 30.0f);
         draw_help_line("Arrastrar:", "Arrastra objetos del menu lateral al canvas.", start_y + dy, box.x + 30.0f);
         draw_help_line("Mover:", "Haz click izquierdo en un objeto y arrastralo.", start_y + dy * 2, box.x + 30.0f);
-        draw_help_line("Rotar (F):", "Selecciona un objeto y presiona F para rotarlo o invertirlo.", start_y + dy * 3, box.x + 30.0f);
+        draw_help_line("Rotar / Tamano:", "F: rotar/invertir. T: alternar tamano de rampas.", start_y + dy * 3, box.x + 30.0f);
         draw_help_line("Borrar (SUPR/X):", "Selecciona un objeto y presiona X o SUPR para eliminarlo.", start_y + dy * 4, box.x + 30.0f);
         draw_help_line("Simulacion:", "Presiona ESPACIO para correr o pausar la fisica.", start_y + dy * 5, box.x + 30.0f);
         draw_help_line("Menu Lateral:", "Presiona TAB para ocultar/mostrar el catalogo de objetos.", start_y + dy * 6, box.x + 30.0f);
@@ -3833,7 +3423,7 @@ void dibujar_y_actualizar_boton_silencio() {
 // ============================================================================
 int main() {
     // ---- Inicializar ventana ----
-    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
+    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_HIGHDPI);
     InitWindow(ANCHO, ALTO, "TIM - Motor de Fisica | Prototipo RK4 + Raylib");
     InitAudioDevice(); // Inicializar dispositivo de audio de Raylib
     ANCHO = GetScreenWidth();
@@ -3960,6 +3550,9 @@ int main() {
     if (tex_hud_opciones_hover.id > 0) UnloadTexture(tex_hud_opciones_hover);
     if (tex_hud_ayuda.id > 0) UnloadTexture(tex_hud_ayuda);
     if (tex_hud_salir.id > 0) UnloadTexture(tex_hud_salir);
+    if (tex_hud_play.id > 0) UnloadTexture(tex_hud_play);
+    if (tex_hud_reset.id > 0) UnloadTexture(tex_hud_reset);
+    if (tex_hud_reset_hover.id > 0) UnloadTexture(tex_hud_reset_hover);
     if (tex_menu_fondo.id > 0) UnloadTexture(tex_menu_fondo);
     if (tex_menu_box.id > 0) UnloadTexture(tex_menu_box);
     
