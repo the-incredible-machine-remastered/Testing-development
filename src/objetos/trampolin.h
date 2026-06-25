@@ -22,6 +22,7 @@ public:
           deformacion(0.0), velocidad_deformacion(0.0) {
         set_restitucion(0.9); // Alto rebote normal
         set_friccion(0.2);     // Poca fricción en la lona
+        tipo_menu = TipoObjetoMenu::TRAMPOLIN;
     }
 
     // --- Getters & Setters ---
@@ -62,7 +63,9 @@ public:
         std::stringstream ss;
         ss << "ent TRAMPOLIN id=" << get_id()
            << " x=" << posicion.x << " y=" << posicion.y
-           << " w=" << ancho << " h=" << alto;
+           << " w=" << ancho << " h=" << alto
+           << " fijo=" << (es_fijo ? 1 : 0)
+           << " tipo_menu=" << static_cast<int>(tipo_menu);
         return ss.str();
     }
 

@@ -27,6 +27,7 @@ public:
           potencia(1800.0), direccion(1.0, 0.0), fase_aspas(0.0) {
         set_restitucion(0.2);
         set_friccion(0.5);
+        tipo_menu = TipoObjetoMenu::VENTILADOR;
     }
 
     // --- Getters ---
@@ -77,7 +78,9 @@ public:
         ss << "ent VENTILADOR id=" << get_id()
            << " x=" << posicion.x << " y=" << posicion.y
            << " w=" << ancho << " h=" << alto
-           << " der=" << (mira_derecha() ? 1 : 0);
+           << " der=" << (mira_derecha() ? 1 : 0)
+           << " fijo=" << (es_fijo ? 1 : 0)
+           << " tipo_menu=" << static_cast<int>(tipo_menu);
         return ss.str();
     }
 

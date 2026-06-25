@@ -103,7 +103,9 @@ public:
         : EntidadFisica(id, Vector2D(), 0.0, TipoForma::NINGUNA, true),
           extremo_a(a), extremo_b(b), soportes_id(soportes),
           longitud_inicial(longitud_total), ultima_tension(0.0),
-          estabilizar_columpio(true) {}
+          estabilizar_columpio(true) {
+        tipo_menu = TipoObjetoMenu::CUERDA;
+    }
 
     const AnclajeCuerda& get_extremo_a() const { return extremo_a; }
     const AnclajeCuerda& get_extremo_b() const { return extremo_b; }
@@ -191,6 +193,11 @@ public:
         return TipoEntidadJuego::CUERDA;
     }
 
+    void set_extremo_a(AnclajeCuerda a) { extremo_a = a; }
+    void set_extremo_b(AnclajeCuerda b) { extremo_b = b; }
+    void set_soportes(std::vector<int> s) { soportes_id = s; }
+    void set_longitud_inicial(double len) { longitud_inicial = len; }
+
     std::string serializar() const override {
         std::stringstream ss;
         ss << "ent CUERDA id=" << get_id()
@@ -201,6 +208,8 @@ public:
             if (i > 0) ss << ",";
             ss << soportes_id[i];
         }
+        ss << " fijo=" << (es_fijo ? 1 : 0)
+           << " tipo_menu=" << static_cast<int>(tipo_menu);
         return ss.str();
     }
 };

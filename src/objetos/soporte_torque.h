@@ -14,7 +14,9 @@ private:
 public:
     SoporteTorque(int id, Vector2D pos_inicial, double r = 16.0)
         : EntidadFisica(id, pos_inicial, 0.0, TipoForma::NINGUNA, true),
-          radio(r) {}
+          radio(r) {
+        tipo_menu = TipoObjetoMenu::SOPORTE_TORQUE;
+    }
 
     double get_radio() const { return radio; }
     Vector2D get_punto_cuerda() const { return posicion; }
@@ -28,7 +30,9 @@ public:
         std::stringstream ss;
         ss << "ent SOPORTE id=" << get_id()
            << " x=" << posicion.x << " y=" << posicion.y
-           << " r=" << radio;
+           << " r=" << radio
+           << " fijo=" << (es_fijo ? 1 : 0)
+           << " tipo_menu=" << static_cast<int>(tipo_menu);
         return ss.str();
     }
 

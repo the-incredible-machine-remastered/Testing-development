@@ -1,5 +1,13 @@
 #pragma once
 
+enum class EstadoJuego {
+    MENU_PRINCIPAL,
+    MENU_OPCIONES,
+    SELECCION_NIVELES,
+    JUEGO_CREATIVO,
+    JUEGO_NIVEL
+};
+
 enum class TipoEntidadJuego {
     CUALQUIERA,
     BOLA,
@@ -36,3 +44,5 @@ inline const char* nombre_tipo_entidad(TipoEntidadJuego t) {
         default: return "???";
     }
 }
+
+extern EstadoJuego estado_actual;

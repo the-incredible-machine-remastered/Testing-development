@@ -35,6 +35,7 @@ public:
           estado(EstadoBarril::ESPERANDO), timer(0.0), pop_factor(0.0) {
         set_restitucion(0.2); // Poca elasticidad para que la pelota reciba el impulso del chavo
         set_friccion(0.4);
+        tipo_menu = TipoObjetoMenu::BARRIL_CHAVO;
     }
 
     // --- Getters ---
@@ -88,7 +89,9 @@ public:
         std::stringstream ss;
         ss << "ent BARRIL id=" << get_id()
            << " x=" << posicion.x << " y=" << posicion.y
-           << " w=" << ancho << " h=" << alto;
+           << " w=" << ancho << " h=" << alto
+           << " fijo=" << (es_fijo ? 1 : 0)
+           << " tipo_menu=" << static_cast<int>(tipo_menu);
         return ss.str();
     }
 

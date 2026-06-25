@@ -8,6 +8,7 @@
 #include "math_utils.h"
 #include "tipo_entidad.h"
 #include "registro_eventos.h"
+#include "../objetos/catalogo_menu.gen.h"
 #include <string>
 #include <vector>
 #include <sstream>
@@ -25,6 +26,8 @@ enum class TipoForma {
 class EntidadFisica {
 protected:
     int id_objeto;
+    bool es_fijo = true;
+    TipoObjetoMenu tipo_menu = TipoObjetoMenu::NINGUNO;
 
     // ---- Cinemática lineal ----
     Vector2D posicion;
@@ -186,6 +189,11 @@ public:
     void set_amortiguamiento(double d) { amortiguamiento_lineal = d; }
     void set_inercia(double i) { inercia = i; }
 
+    bool get_es_fijo() const { return es_fijo; }
+    void set_es_fijo(bool f) { es_fijo = f; }
+    TipoObjetoMenu get_tipo_menu() const { return tipo_menu; }
+    void set_tipo_menu(TipoObjetoMenu t) { tipo_menu = t; }
+
     // ---- Métodos polimórficos ----
     virtual void dibujar(bool modo_debug) const {}
     virtual bool contiene_punto(const Vector2D& p) const { return false; }
@@ -198,7 +206,9 @@ public:
         ss << " x=" << posicion.x << " y=" << posicion.y
            << " vx=" << velocidad.x << " vy=" << velocidad.y
            << " ang=" << angulo
-           << " omega=" << velocidad_angular;
+           << " omega=" << velocidad_angular
+           << " fijo=" << (es_fijo ? 1 : 0)
+           << " tipo_menu=" << static_cast<int>(tipo_menu);
         return ss.str();
     }
     virtual void on_collision(EntidadFisica* otro, const InfoColision& info) {}

@@ -18,6 +18,8 @@
 #include "../objetos/zona_meta.h"
 #include "eventos.h"
 #include "rutas_datos.h"
+#include "../objetos/catalogo_menu.gen.h"
+#include "../core/tipo_entidad.h"
 
 #include <algorithm>
 #include <cctype>
@@ -38,6 +40,40 @@ bool es_borde_nivel(const EntidadFisica* e);
 void resetear_punteros_borde();
 void crear_bordes_nivel(MotorFisica& motor);
 void limpiar_estado_tras_cargar_partida();
+
+extern std::unordered_map<TipoObjetoMenu, int> inventario_maximo;
+extern std::unordered_map<TipoObjetoMenu, int> inventario_actual;
+extern std::unordered_map<TipoObjetoMenu, std::vector<std::unique_ptr<EntidadFisica>>> inventario_entidades;
+extern EstadoJuego estado_actual;
+
+inline TipoObjetoMenu mapear_tipo_entidad_a_menu(TipoEntidadJuego t, const EntidadFisica* e) {
+    switch (t) {
+        case TipoEntidadJuego::BOLA: return TipoObjetoMenu::BOLA;
+        case TipoEntidadJuego::BOLA_REBOTADORA: return TipoObjetoMenu::BOLA_REBOTADORA;
+        case TipoEntidadJuego::TRAMPOLIN: return TipoObjetoMenu::TRAMPOLIN;
+        case TipoEntidadJuego::BALANCIN: return TipoObjetoMenu::BALANCIN;
+        case TipoEntidadJuego::RAMPA: return TipoObjetoMenu::RAMPA;
+        case TipoEntidadJuego::VENTILADOR: return TipoObjetoMenu::VENTILADOR;
+        case TipoEntidadJuego::SEGUIDOR: return TipoObjetoMenu::SEGUIDOR_BOOSTER;
+        case TipoEntidadJuego::BARRIL: return TipoObjetoMenu::BARRIL_CHAVO;
+        case TipoEntidadJuego::CUBETA: return TipoObjetoMenu::CUBETA;
+        case TipoEntidadJuego::SOPORTE: return TipoObjetoMenu::SOPORTE_TORQUE;
+        case TipoEntidadJuego::ZONA_META: return TipoObjetoMenu::ZONA_META;
+        case TipoEntidadJuego::CUERDA: return TipoObjetoMenu::CUERDA;
+        case TipoEntidadJuego::PARED: {
+            const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
+            if (p) {
+                double w = p->get_ancho();
+                double h = p->get_alto();
+                if (std::abs(w - 150.0) < 10.0 && std::abs(h - 15.0) < 5.0) return TipoObjetoMenu::PLATAFORMA;
+                if (std::abs(w - 80.0) < 10.0 && std::abs(h - 120.0) < 10.0) return TipoObjetoMenu::PARED_LARGA;
+                if (std::abs(w - 120.0) < 10.0 && std::abs(h - 20.0) < 5.0) return TipoObjetoMenu::PLATAFORMA_DECOR;
+            }
+            return TipoObjetoMenu::PLATAFORMA;
+        }
+        default: return TipoObjetoMenu::NINGUNO;
+    }
+}
 
 enum class ModoPanelGuardado {
     CERRADO,
@@ -285,7 +321,7 @@ inline const std::unordered_map<std::string, CreadorEntidad>& obtener_registro_f
     return registro;
 }
 
-inline void instanciar_desde_linea(MotorFisica& motor, const std::string& linea, int& max_id) {
+inline void instanciar_desde_linea(MotorFisica& motor, const std::string& linea, int& max_id, bool es_snapshot = false) {
     if (linea.rfind("ent ", 0) != 0) return;
 
     std::string tipo;
@@ -302,6 +338,27 @@ inline void instanciar_desde_linea(MotorFisica& motor, const std::string& linea,
     if (it != registro.end()) {
         auto e = it->second(id, linea);
         if (e) {
+            bool fijo = (leer_valor_i(linea, "fijo=", 1) != 0);
+            e->set_es_fijo(fijo);
+            
+            int tm = leer_valor_i(linea, "tipo_menu=", -1);
+            TipoObjetoMenu tipo_menu = TipoObjetoMenu::NINGUNO;
+            if (tm >= 0 && tm < static_cast<int>(TipoObjetoMenu::COUNT)) {
+                tipo_menu = static_cast<TipoObjetoMenu>(tm);
+            } else {
+                tipo_menu = mapear_tipo_entidad_a_menu(e->get_tipo_entidad(), e.get());
+            }
+            e->set_tipo_menu(tipo_menu);
+
+            if (!fijo && !es_snapshot) {
+                inventario_maximo[tipo_menu]++;
+                inventario_actual[tipo_menu]++;
+                if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
+                    inventario_entidades[tipo_menu].push_back(std::move(e));
+                    return;
+                }
+            }
+
             motor.agregar_entidad(std::move(e));
         }
     } else {
@@ -311,6 +368,8 @@ inline void instanciar_desde_linea(MotorFisica& motor, const std::string& linea,
 
 inline bool cargar_partida(MotorFisica& motor, GestorEventos& gestor, const std::string& ruta_archivo,
                            int& ancho, int& alto, int& contador_bolas) {
+    limpiar_estado_tras_cargar_partida();
+
     std::ifstream in(ruta_archivo);
     if (!in) {
         mensaje_guardado = "No se pudo abrir la partida";
@@ -348,7 +407,7 @@ inline bool cargar_partida(MotorFisica& motor, GestorEventos& gestor, const std:
             } else if (linea.rfind("alto", 0) == 0) {
                 alto = std::stoi(linea.substr(5));
             } else if (linea.rfind("ent ", 0) == 0) {
-                instanciar_desde_linea(motor, linea, max_id);
+                instanciar_desde_linea(motor, linea, max_id, false);
             } else if (linea.rfind("evt ", 0) == 0) {
                 CondicionEvento cond = deserializar_condicion_desde_linea(linea);
                 old_condiciones.push_back(cond);
@@ -433,10 +492,171 @@ inline bool cargar_partida(MotorFisica& motor, GestorEventos& gestor, const std:
 
     motor.set_gravedad(Vector2D(0, gravedad_y));
     motor.set_siguiente_id(max_id + 1);
-    limpiar_estado_tras_cargar_partida();
+    
+    // Asegurar que todos los objetos comiencen completamente en reposo
+    for (auto* e : motor.get_entidades()) {
+        e->set_velocidad(Vector2D(0.0, 0.0));
+        e->set_velocidad_angular(0.0);
+    }
+    
     mensaje_guardado = "Partida cargada";
     mensaje_guardado_timer = 3.0f;
+    motor.set_pausado(true);
     return true;
+}
+
+inline std::string snapshot_simulacion = "";
+
+inline void guardar_snapshot_simulacion(const MotorFisica& motor, GestorEventos& gestor) {
+    std::stringstream out;
+    out << "tim_save 1\n";
+    out << "gravedad_y " << motor.get_gravedad().y << "\n";
+    out << "siguiente_id " << motor.get_siguiente_id() << "\n";
+    
+    for (const auto& pair : inventario_actual) {
+        out << "inv_item " << static_cast<int>(pair.first) << " " << pair.second << "\n";
+    }
+
+    for (const auto* e : motor.get_entidades()) {
+        if (!e || es_borde_nivel(e)) continue;
+
+        std::string s = e->serializar();
+        if (!s.empty()) {
+            out << s << "\n";
+        }
+    }
+
+    out << "siguiente_id_evento " << gestor.siguiente_id_evento << "\n";
+    serializar_nodo_recursivo(gestor.raiz, out);
+    snapshot_simulacion = out.str();
+    TraceLog(LOG_INFO, "Snapshot de simulación guardado (tamaño: %d bytes)", static_cast<int>(snapshot_simulacion.size()));
+}
+
+inline void restaurar_snapshot_simulacion(MotorFisica& motor, GestorEventos& gestor) {
+    if (snapshot_simulacion.empty()) return;
+
+    resetear_punteros_borde();
+    motor.limpiar();
+    gestor.limpiar();
+    crear_bordes_nivel(motor);
+
+    for (auto& pair : inventario_actual) {
+        pair.second = 0;
+    }
+
+    std::stringstream in(snapshot_simulacion);
+    double gravedad_y = 500.0;
+    int max_id = 0;
+    std::string linea;
+
+    std::vector<CondicionEvento> old_condiciones;
+    TipoLogicaVictoria old_logica = TipoLogicaVictoria::CUALQUIERA;
+    bool arbol_nuevo_cargado = false;
+    std::vector<NodoEvento> stack_nodos;
+
+    while (std::getline(in, linea)) {
+        if (linea.empty()) continue;
+        try {
+            if (linea.rfind("gravedad_y", 0) == 0) {
+                gravedad_y = std::stod(linea.substr(11));
+            } else if (linea.rfind("siguiente_id_evento", 0) == 0) {
+                gestor.siguiente_id_evento = std::stoi(linea.substr(20));
+            } else if (linea.rfind("siguiente_id", 0) == 0) {
+                max_id = std::stoi(linea.substr(13));
+            } else if (linea.rfind("inv_item ", 0) == 0) {
+                std::stringstream ss(linea.substr(9));
+                int tipo_val, cant_val;
+                if (ss >> tipo_val >> cant_val) {
+                    inventario_actual[static_cast<TipoObjetoMenu>(tipo_val)] = cant_val;
+                }
+            } else if (linea.rfind("ent ", 0) == 0) {
+                instanciar_desde_linea(motor, linea, max_id, true);
+            } else if (linea.rfind("evt ", 0) == 0) {
+                CondicionEvento cond = deserializar_condicion_desde_linea(linea);
+                old_condiciones.push_back(cond);
+            } else if (linea.rfind("logica_victoria", 0) == 0) {
+                if (linea.find("TODAS") != std::string::npos) {
+                    old_logica = TipoLogicaVictoria::TODAS;
+                } else {
+                    old_logica = TipoLogicaVictoria::CUALQUIERA;
+                }
+            } else if (linea.find("evt_grupo id=") != std::string::npos) {
+                auto extraer_str = [&](const std::string& clave) -> std::string {
+                    std::string buscar = clave + "=";
+                    size_t pos = linea.find(buscar);
+                    if (pos == std::string::npos) return "";
+                    pos += buscar.length();
+                    size_t fin = linea.find(' ', pos);
+                    if (fin == std::string::npos) fin = linea.length();
+                    return linea.substr(pos, fin - pos);
+                };
+                int node_id = -1;
+                try { node_id = std::stoi(extraer_str("id")); } catch(...) {}
+                std::string op_str = extraer_str("op");
+                TipoNodo tn = (op_str == "OR") ? TipoNodo::OPERADOR_OR : TipoNodo::OPERADOR_AND;
+                
+                NodoEvento nuevo_grupo;
+                nuevo_grupo.id = node_id;
+                nuevo_grupo.tipo = tn;
+                nuevo_grupo.cumplido = false;
+                
+                stack_nodos.push_back(nuevo_grupo);
+                arbol_nuevo_cargado = true;
+            } else if (linea.find("evt_cond ") != std::string::npos) {
+                auto extraer_str = [&](const std::string& clave) -> std::string {
+                    std::string buscar = clave + "=";
+                    size_t pos = linea.find(buscar);
+                    if (pos == std::string::npos) return "";
+                    pos += buscar.length();
+                    size_t fin = linea.find(' ', pos);
+                    if (fin == std::string::npos) fin = linea.length();
+                    return linea.substr(pos, fin - pos);
+                };
+                int node_id = -1;
+                try { node_id = std::stoi(extraer_str("id")); } catch(...) {}
+                CondicionEvento cond = deserializar_condicion_desde_linea(linea);
+                
+                NodoEvento nodo_cond;
+                nodo_cond.id = node_id;
+                nodo_cond.tipo = TipoNodo::CONDICION;
+                nodo_cond.condicion = cond;
+                nodo_cond.cumplido = false;
+                
+                if (!stack_nodos.empty()) {
+                    stack_nodos.back().hijos.push_back(nodo_cond);
+                } else {
+                    gestor.raiz = nodo_cond;
+                }
+                arbol_nuevo_cargado = true;
+            } else if (linea.find("evt_grupo_fin") != std::string::npos) {
+                if (stack_nodos.size() > 1) {
+                    NodoEvento hijo = stack_nodos.back();
+                    stack_nodos.pop_back();
+                    stack_nodos.back().hijos.push_back(hijo);
+                } else if (stack_nodos.size() == 1) {
+                    gestor.raiz = stack_nodos.back();
+                    stack_nodos.pop_back();
+                }
+                arbol_nuevo_cargado = true;
+            }
+        } catch (...) {
+            TraceLog(LOG_WARNING, "Error al procesar línea de snapshot: %s", linea.c_str());
+        }
+    }
+
+    if (!arbol_nuevo_cargado) {
+        gestor.limpiar();
+        gestor.raiz.tipo = (old_logica == TipoLogicaVictoria::TODAS) ? TipoNodo::OPERADOR_AND : TipoNodo::OPERADOR_OR;
+        gestor.raiz.id = -1;
+        for (const auto& cond : old_condiciones) {
+            gestor.agregar_condicion(gestor.raiz.id, cond);
+        }
+    }
+
+    motor.set_gravedad(Vector2D(0, gravedad_y));
+    motor.set_siguiente_id(max_id + 1);
+    limpiar_estado_tras_cargar_partida();
+    TraceLog(LOG_INFO, "Snapshot de simulación restaurado.");
 }
 
 inline void actualizar_mensaje_guardado(float dt) {

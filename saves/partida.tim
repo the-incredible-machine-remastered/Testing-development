@@ -1,0 +1,20 @@
+tim_save 1
+nombre partida
+ancho 1920
+alto 1080
+gravedad_y 500
+contador_bolas 1
+siguiente_id 14
+ent SEGUIDOR id=5 x=74 y=663 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=11 w=60 h=120
+ent ZONA_META id=6 x=1510 y=303 w=80 h=80 fijo=1 tipo_menu=13
+ent BOLA id=7 x=172 y=688 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=1 r=38 m=14.44 ci=0 ti=2
+ent PARED id=8 x=32 y=727.5 w=237 h=15 fijo=1 tipo_menu=6
+ent RAMPA id=9 x=1560 y=223 b=160 h=120 inv=1 fijo=1 tipo_menu=7
+ent RAMPA id=10 x=1308 y=225 b=160 h=120 inv=0 fijo=1 tipo_menu=7
+ent TRAMPOLIN id=11 x=161 y=868 w=80 h=20 fijo=0 tipo_menu=9
+ent TRAMPOLIN id=12 x=152 y=854 w=80 h=20 fijo=0 tipo_menu=9
+ent TRAMPOLIN id=13 x=157 y=860 w=80 h=20 fijo=0 tipo_menu=9
+siguiente_id_evento 2
+evt_grupo id=-1 op=AND
+  evt_cond id=1 tipo=ENT_EN_ZONA ez=7 ee=6
+evt_grupo_fin

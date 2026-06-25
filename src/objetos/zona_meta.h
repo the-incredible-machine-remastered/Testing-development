@@ -18,6 +18,7 @@ public:
     {
         tipo_forma = TipoForma::NINGUNA; // Sin colision fisica
         es_estatico = true;
+        tipo_menu = TipoObjetoMenu::ZONA_META;
     }
 
     bool contiene_punto(const Vector2D& p) const override {
@@ -65,7 +66,9 @@ public:
         std::stringstream ss;
         ss << "ent ZONA_META id=" << get_id()
            << " x=" << posicion.x << " y=" << posicion.y
-           << " w=" << ancho << " h=" << alto;
+           << " w=" << ancho << " h=" << alto
+           << " fijo=" << (es_fijo ? 1 : 0)
+           << " tipo_menu=" << static_cast<int>(tipo_menu);
         return ss.str();
     }
 

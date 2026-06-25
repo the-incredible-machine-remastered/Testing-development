@@ -44,7 +44,7 @@ private:
 public:
     MotorFisica(double dt = 1.0 / 120.0, Vector2D grav = Vector2D(0, 500.0))
         : gravedad(grav), dt_fijo(dt), acumulador_tiempo(0.0),
-          pausado(false), siguiente_id(1) {}
+          pausado(true), siguiente_id(1) {}
 
     ~MotorFisica() {
         limpiar();
@@ -83,6 +83,24 @@ public:
                 [id](const std::unique_ptr<EntidadFisica>& e) { return e->get_id() == id; }),
             entidades_owner.end()
         );
+    }
+
+    std::unique_ptr<EntidadFisica> transferir_entidad(int id) {
+        std::unique_ptr<EntidadFisica> target = nullptr;
+        for (auto it = entidades_owner.begin(); it != entidades_owner.end(); ++it) {
+            if ((*it) && (*it)->get_id() == id) {
+                target = std::move(*it);
+                entidades_owner.erase(it);
+                break;
+            }
+        }
+        if (target) {
+            entidades.erase(
+                std::remove(entidades.begin(), entidades.end(), target.get()),
+                entidades.end()
+            );
+        }
+        return target;
     }
 
     void limpiar() {
@@ -207,6 +225,11 @@ private:
  
         // 3. Integrar todas las entidades (cada una usa RK4)
         for (auto* e : entidades) {
+            if (estado_actual == EstadoJuego::JUEGO_CREATIVO && !e->get_es_fijo()) {
+                e->set_velocidad(Vector2D(0.0, 0.0));
+                e->set_velocidad_angular(0.0);
+                continue;
+            }
             e->actualizar_fisica(dt);
         }
  
@@ -227,6 +250,7 @@ private:
 
     void aplicar_gravedad() {
         for (auto* e : entidades) {
+            if (estado_actual == EstadoJuego::JUEGO_CREATIVO && !e->get_es_fijo()) continue;
             if (!e->get_es_estatico() && e->get_masa() > MathUtils::EPSILON) {
                 if (dynamic_cast<Balancin*>(e)) continue; // El balancín está pivotado y fijo linealmente
                 // F = m * g
@@ -254,6 +278,8 @@ private:
             for (size_t j = i + 1; j < entidades.size(); j++) {
                 EntidadFisica* a = entidades[i];
                 EntidadFisica* b = entidades[j];
+
+                if (estado_actual == EstadoJuego::JUEGO_CREATIVO && (!a->get_es_fijo() || !b->get_es_fijo())) continue;
 
                 // Skip si ambos son estáticos
                 if (a->get_es_estatico() && b->get_es_estatico()) continue;

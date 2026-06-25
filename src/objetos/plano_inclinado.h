@@ -43,6 +43,7 @@ public:
 
         // Ángulo exacto de la pendiente (sin aproximaciones)
         angulo_inclinacion = std::atan2(h, b);
+        tipo_menu = TipoObjetoMenu::RAMPA;
     }
 
     // Recalcular vértices del triángulo a partir de la posición actual.
@@ -106,7 +107,9 @@ public:
         ss << "ent RAMPA id=" << get_id()
            << " x=" << posicion.x << " y=" << posicion.y
            << " b=" << base_ancho << " h=" << altura_alto
-           << " inv=" << (es_invertido ? 1 : 0);
+           << " inv=" << (es_invertido ? 1 : 0)
+           << " fijo=" << (es_fijo ? 1 : 0)
+           << " tipo_menu=" << static_cast<int>(tipo_menu);
         return ss.str();
     }
 

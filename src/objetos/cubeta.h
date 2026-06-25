@@ -19,6 +19,7 @@ public:
         set_friccion(0.55);
         set_amortiguamiento(0.01);
         set_inercia((1.0 / 12.0) * m * (w * w + h * h));
+        tipo_menu = TipoObjetoMenu::CUBETA;
     }
 
     double get_ancho() const { return ancho; }

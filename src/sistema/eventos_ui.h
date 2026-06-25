@@ -6,6 +6,10 @@
 #include "../core/math_utils.h"
 #include <string>
 #include <vector>
+#include <unordered_map>
+
+extern EntidadFisica* entidad_arrastrada;
+inline bool panel_izquierdo_visible = true;
 
 enum class ModoEventoUI {
     INACTIVO,
@@ -193,8 +197,35 @@ inline void dibujar_seleccion_tipo_ui(int px, int& py, int w, const char* titulo
 inline void dibujar_panel_eventos_izquierdo(const MotorFisica& motor, GestorEventos& gestor, int alto_pantalla) {
     int px = 0;
     int w = 260; 
+
+    // Botón abrir en el borde izquierdo si está oculto
+    if (!panel_izquierdo_visible) {
+        Rectangle btn_abrir = { 0, (float)(alto_pantalla / 2 - 40), 24, 80 };
+        bool hover = CheckCollisionPointRec(GetMousePosition(), btn_abrir);
+        DrawRectangle(btn_abrir.x, btn_abrir.y, btn_abrir.width, btn_abrir.height, hover ? Color{165, 170, 182, 255} : Color{30, 32, 40, 240});
+        DrawRectangleLines(btn_abrir.x, btn_abrir.y, btn_abrir.width, btn_abrir.height, Color{50, 52, 65, 255});
+        DrawText(">", btn_abrir.x + 7, btn_abrir.y + 32, 18, hover ? Color{100, 150, 220, 255} : Color{55, 80, 110, 255});
+        
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && hover) {
+            panel_izquierdo_visible = true;
+        }
+        return;
+    }
+
     DrawRectangle(px, 0, w, alto_pantalla, Color{30, 32, 40, 240});
     DrawRectangleLines(px, 0, w, alto_pantalla, Color{50, 52, 65, 255});
+
+    // Botón cerrar en el borde derecho del panel si está visible
+    Rectangle btn_cerrar = { (float)w, (float)(alto_pantalla / 2 - 40), 24, 80 };
+    bool hover_cerrar = CheckCollisionPointRec(GetMousePosition(), btn_cerrar);
+    DrawRectangle(btn_cerrar.x, btn_cerrar.y, btn_cerrar.width, btn_cerrar.height, hover_cerrar ? Color{165, 170, 182, 255} : Color{30, 32, 40, 240});
+    DrawRectangleLines(btn_cerrar.x, btn_cerrar.y, btn_cerrar.width, btn_cerrar.height, Color{50, 52, 65, 255});
+    DrawText("<", btn_cerrar.x + 7, btn_cerrar.y + 32, 18, hover_cerrar ? Color{100, 150, 220, 255} : Color{55, 80, 110, 255});
+
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && hover_cerrar) {
+        panel_izquierdo_visible = false;
+        return;
+    }
 
     DrawText("ECUACION DE VICTORIA", px + 15, 20, 16, SKYBLUE);
 
@@ -205,7 +236,7 @@ inline void dibujar_panel_eventos_izquierdo(const MotorFisica& motor, GestorEven
         int nodo_a_toggle = -2;
         int nodo_padre_agregar = -2;
 
-        dibujar_nodo_ui(motor, gestor, gestor.raiz, px, py, w, 0, true, nodo_a_eliminar, nodo_a_toggle, nodo_padre_agregar);
+        dibujar_nodo_ui(motor, gestor, gestor.raiz, px, py, w, 0, (estado_actual == EstadoJuego::JUEGO_CREATIVO), nodo_a_eliminar, nodo_a_toggle, nodo_padre_agregar);
 
         if (nodo_a_eliminar != -2) {
             gestor.remover_nodo(nodo_a_eliminar);
@@ -381,6 +412,50 @@ inline void dibujar_panel_eventos_izquierdo(const MotorFisica& motor, GestorEven
         DrawText("Cancelar", btn_cancel.x + 95, btn_cancel.y + 7, 10, WHITE);
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), btn_cancel)) {
             modo_evento_ui = ModoEventoUI::INACTIVO;
+        }
+    }
+
+    // Inventario del Jugador (abajo a la izquierda)
+    if (estado_actual == EstadoJuego::JUEGO_CREATIVO) {
+        int panel_x = px + 12;
+        int panel_y = alto_pantalla - 390;
+        int panel_w = w - 24;
+        int panel_h = 260;
+
+        Rectangle rect_panel = { (float)panel_x, (float)panel_y, (float)panel_w, (float)panel_h };
+        
+        bool is_dragging = (entidad_arrastrada != nullptr);
+        bool is_hover = is_dragging && CheckCollisionPointRec(GetMousePosition(), rect_panel);
+
+        DrawRectangleRounded(rect_panel, 0.05f, 4, Color{22, 24, 30, 255});
+        DrawRectangleRoundedLinesEx(rect_panel, 0.05f, 4, 1.0f, is_hover ? GREEN : Color{60, 65, 80, 255});
+
+        DrawText("INVENTARIO DEL JUGADOR", panel_x + 10, panel_y + 10, 11, is_hover ? GREEN : SKYBLUE);
+        DrawLine(panel_x + 10, panel_y + 26, panel_x + panel_w - 10, panel_y + 26, Color{50, 50, 60, 255});
+
+        std::unordered_map<TipoEntidadJuego, int> items_inventario;
+        for (const auto* e : motor.get_entidades()) {
+            if (!e->get_es_fijo()) {
+                items_inventario[e->get_tipo_entidad()]++;
+            }
+        }
+
+        int item_y = panel_y + 36;
+        if (items_inventario.empty()) {
+            DrawText("Arrastra objetos aqui", panel_x + 15, item_y, 10, GRAY);
+            DrawText("para agregarlos al", panel_x + 15, item_y + 14, 10, GRAY);
+            DrawText("inventario (no fijos)", panel_x + 15, item_y + 28, 10, GRAY);
+        } else {
+            for (auto const& [tipo, cant] : items_inventario) {
+                if (item_y + 16 > panel_y + panel_h - 10) {
+                    DrawText("...", panel_x + 15, item_y, 10, GRAY);
+                    break;
+                }
+                const char* nombre = nombre_tipo_entidad(tipo);
+                DrawText(TextFormat("- %s:", nombre), panel_x + 15, item_y, 11, LIGHTGRAY);
+                DrawText(TextFormat("x%d", cant), panel_x + panel_w - 40, item_y, 11, ORANGE);
+                item_y += 18;
+            }
         }
     }
 }

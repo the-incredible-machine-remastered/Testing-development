@@ -31,6 +31,7 @@ public:
         angulo = 0.0;
         velocidad_angular = 0.0;
         angulo_limite = 15.0 * MathUtils::TIM_PI / 180.0;
+        tipo_menu = TipoObjetoMenu::BALANCIN;
     }
 
     // --- Getters ---

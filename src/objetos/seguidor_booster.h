@@ -101,6 +101,7 @@ public:
         
         set_restitucion(0.1); // Poco rebote para mantenerse firme
         set_friccion(0.5);    // Buen agarre en plataformas
+        tipo_menu = TipoObjetoMenu::SEGUIDOR_BOOSTER;
     }
 
     // --- Getters ---

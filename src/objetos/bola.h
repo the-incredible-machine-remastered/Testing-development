@@ -25,6 +25,7 @@ public:
         set_restitucion(0.7);   // Rebote alto
         set_friccion(0.5);      // Fricción media-alta (favorece rolling)
         set_amortiguamiento(0.002);  // Mínimo damping
+        tipo_menu = TipoObjetoMenu::BOLA;
     }
 
     // --- Getters ---

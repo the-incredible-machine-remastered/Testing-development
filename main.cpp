@@ -82,13 +82,11 @@ const Color COLOR_HUD         = {200, 200, 220, 255};   // Texto claro
 const Color COLOR_CONTROLES   = {130, 130, 160, 200};   // Texto controles
 
 // Estado del prototipo
-enum class EstadoJuego {
-    MENU_PRINCIPAL,
-    MENU_OPCIONES,
-    SELECCION_NIVELES,
-    JUEGO_CREATIVO,
-    JUEGO_NIVEL
-};
+std::unordered_map<TipoObjetoMenu, int> inventario_maximo;
+std::unordered_map<TipoObjetoMenu, int> inventario_actual;
+std::unordered_map<TipoObjetoMenu, std::vector<std::unique_ptr<EntidadFisica>>> inventario_entidades;
+int nivel_campana_actual = -1;
+std::string nivel_usuario_actual_path = "";
 
 EstadoJuego estado_actual = EstadoJuego::MENU_PRINCIPAL;
 EstadoJuego estado_previo = EstadoJuego::MENU_PRINCIPAL;
@@ -432,6 +430,9 @@ Texture2D tex_hud_opciones;
 Texture2D tex_hud_opciones_hover;
 Texture2D tex_hud_ayuda;
 Texture2D tex_hud_salir;
+Texture2D tex_hud_play;
+Texture2D tex_hud_reset;
+Texture2D tex_hud_reset_hover;
 Texture2D tex_menu_fondo;
 Texture2D tex_menu_box;
 Texture2D tex_btn_jugar1;
@@ -468,6 +469,19 @@ bool punto_en_menu(int mx, int my) {
     // Área del menú Principal (solo si está visible)
     if (!menu_visible) return false;
     return mx >= px && mx < ANCHO && my >= 0 && my < ALTO;
+}
+
+bool punto_en_panel_izquierdo(int mx, int my) {
+    int w = 260;
+    int bx = panel_izquierdo_visible ? w : 0;
+    
+    // Área del botón de abrir/cerrar del panel izquierdo
+    if (mx >= bx && mx < bx + 24 && my >= ALTO / 2 - 40 && my < ALTO / 2 + 40) {
+        return true;
+    }
+    
+    if (!panel_izquierdo_visible) return false;
+    return mx >= 0 && mx < w && my >= 0 && my < ALTO;
 }
 
 bool punto_en_area_juego(int mx, int my) {
@@ -556,6 +570,12 @@ void limpiar_estado_tras_cargar_partida() {
     arrastrando_spawn = TipoObjetoMenu::NINGUNO;
     cancelar_colocacion_cuerda();
     handle_activo = HandleResize::NINGUNO;
+    inventario_maximo.clear();
+    inventario_actual.clear();
+    inventario_entidades.clear();
+    snapshot_simulacion = "";
+    menu_tab = 0;
+    menu_pagina = 0;
 }
 
 void crear_bordes_nivel(MotorFisica& motor) {
@@ -725,9 +745,9 @@ bool crear_rampa(MotorFisica& motor, Vector2D pos, bool invertido) {
     return true;
 }
 
-bool crear_plataforma(MotorFisica& motor, Vector2D pos, double w, double h) {
+bool crear_plataforma(MotorFisica& motor, Vector2D pos, double w, double h, TipoObjetoMenu t_menu = TipoObjetoMenu::PLATAFORMA) {
     Vector2D spawn(pos.x - w / 2.0, pos.y - h / 2.0);
-    motor.agregar_entidad(new ParedRectangular(motor.generar_id(), spawn, w, h));
+    motor.agregar_entidad(new ParedRectangular(motor.generar_id(), spawn, w, h, t_menu));
     return true;
 }
 
@@ -750,9 +770,9 @@ bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
         case TipoObjetoMenu::TRAMPOLIN:         return crear_trampolin(motor, pos);
         case TipoObjetoMenu::BALANCIN:          return crear_balancin(motor, pos);
         case TipoObjetoMenu::RAMPA:             return crear_rampa(motor, pos, false);
-        case TipoObjetoMenu::PLATAFORMA:        return crear_plataforma(motor, pos, 150.0, 15.0);
-        case TipoObjetoMenu::PARED_LARGA:       return crear_plataforma(motor, pos, 80.0, 120.0);
-        case TipoObjetoMenu::PLATAFORMA_DECOR:   return crear_plataforma(motor, pos, 120.0, 20.0);
+        case TipoObjetoMenu::PLATAFORMA:        return crear_plataforma(motor, pos, 150.0, 15.0, TipoObjetoMenu::PLATAFORMA);
+        case TipoObjetoMenu::PARED_LARGA:       return crear_plataforma(motor, pos, 80.0, 120.0, TipoObjetoMenu::PARED_LARGA);
+        case TipoObjetoMenu::PLATAFORMA_DECOR:   return crear_plataforma(motor, pos, 120.0, 20.0, TipoObjetoMenu::PLATAFORMA_DECOR);
         case TipoObjetoMenu::SEGUIDOR_BOOSTER:  return crear_seguidor_booster(motor, pos);
         case TipoObjetoMenu::BARRIL_CHAVO:      return crear_barril_chavo(motor, pos);
         case TipoObjetoMenu::VENTILADOR:        return crear_ventilador(motor, pos);
@@ -1001,14 +1021,29 @@ static std::vector<RectCeldaMenu> celdas_menu_cache;
 void recolectar_items_visibles(int tab, int pagina, int categoria,
                                std::vector<const ItemCatalogo*>& out) {
     out.clear();
-    for (int i = 0; i < CATALOGO_MENU_COUNT; ++i) {
-        const ItemCatalogo& it = CATALOGO_MENU[i];
-        if (it.tab == tab && it.pagina == pagina && it.categoria == categoria)
-            out.push_back(&it);
+    if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
+        if (pagina != 0) return;
+        for (int i = 0; i < CATALOGO_MENU_COUNT; ++i) {
+            const ItemCatalogo& it = CATALOGO_MENU[i];
+            if (it.tab == tab && it.categoria == categoria) {
+                if (inventario_maximo[it.tipo] > 0) {
+                    out.push_back(&it);
+                }
+            }
+        }
+    } else {
+        for (int i = 0; i < CATALOGO_MENU_COUNT; ++i) {
+            const ItemCatalogo& it = CATALOGO_MENU[i];
+            if (it.tab == tab && it.pagina == pagina && it.categoria == categoria)
+                out.push_back(&it);
+        }
     }
 }
 
 int contar_paginas_tab(int tab) {
+    if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
+        return 1;
+    }
     int max_pag = 0;
     for (int i = 0; i < CATALOGO_MENU_COUNT; ++i) {
         if (CATALOGO_MENU[i].tab == tab)
@@ -1052,9 +1087,17 @@ TipoObjetoMenu tipo_en_celda(int mx, int my, const std::vector<RectCeldaMenu>& c
 }
 
 void dibujar_celda_menu(const RectCeldaMenu& celda, bool resaltada){
+    int cant = 1;
+    bool disp = celda.disponible;
+    if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
+        cant = inventario_actual[celda.tipo];
+        if (cant <= 0) {
+            disp = false;
+        }
+    }
 
     Color fondo = resaltada ? MENU_AZUL_CLARO : MENU_CELDA_FONDO;
-    if (!celda.disponible) fondo = ColorAlpha(MENU_CELDA_FONDO, 0.5f);
+    if (!disp) fondo = ColorAlpha(MENU_CELDA_FONDO, 0.5f);
 
     // Dibujar asset de celda si está cargado
     if (tex_celda_menu.id > 0) {
@@ -1067,21 +1110,23 @@ void dibujar_celda_menu(const RectCeldaMenu& celda, bool resaltada){
         DrawRectangleRounded(celda.rect, 0.08f, 6, fondo);
     }
     DrawRectangleRoundedLinesEx(celda.rect, 0.08f, 6, 1.0f,
-        celda.disponible ? MENU_BORDE : MENU_INACTIVO);
+        disp ? MENU_BORDE : MENU_INACTIVO);
 
     float cx = celda.rect.x + celda.rect.width / 2.0f;
     float cy = celda.rect.y + celda.rect.height / 2.0f - 4.0f;
-    unsigned char alpha = celda.disponible ? 255 : 120;
+    unsigned char alpha = disp ? 255 : 120;
 
     if (celda.tipo != TipoObjetoMenu::NINGUNO)
         dibujar_icono_objeto(celda.tipo, cx, cy, 1.0f, alpha);
     else
         dibujar_icono_objeto(TipoObjetoMenu::NINGUNO, cx, cy, 1.0f, alpha);
 
-    DrawText("1",
-        static_cast<int>(celda.rect.x + celda.rect.width / 2 - 4),
+    std::string cant_str = (estado_actual == EstadoJuego::JUEGO_CREATIVO) ? "inf" : "x" + std::to_string(cant);
+    
+    DrawText(cant_str.c_str(),
+        static_cast<int>(celda.rect.x + celda.rect.width / 2 - MeasureText(cant_str.c_str(), 12) / 2),
         static_cast<int>(celda.rect.y + celda.rect.height - 18),
-        12, celda.disponible ? MENU_AZUL : MENU_INACTIVO);
+        12, disp ? MENU_AZUL : MENU_INACTIVO);
 }
 
 void dibujar_encabezado_categoria(int panel_x, int y, const char* titulo, bool abierta, int& out_alto) {
@@ -1246,8 +1291,10 @@ void dibujar_menu_lateral() {
     }
 
     // Guardado / carga de partidas
-    int py_guardado = ALTO - MENU_PAGINACION_ALTO - 180 - 215;
-    dibujar_panel_guardado(px, py_guardado, MENU_ANCHO, fuente_menu);
+    if (estado_actual != EstadoJuego::JUEGO_NIVEL) {
+        int py_guardado = ALTO - MENU_PAGINACION_ALTO - 180 - 215;
+        dibujar_panel_guardado(px, py_guardado, MENU_ANCHO, fuente_menu);
+    }
 
     // Paginación
     int paginas = contar_paginas_tab(menu_tab);
@@ -1321,8 +1368,10 @@ void dibujar_menu_lateral() {
 }
 
 bool manejar_click_menu(int mx, int my, MotorFisica& motor) {
-    if (manejar_click_panel_guardado(mx, my, motor, gestor_eventos, ANCHO, ALTO, contador_bolas)) {
-        return true;
+    if (estado_actual != EstadoJuego::JUEGO_NIVEL) {
+        if (manejar_click_panel_guardado(mx, my, motor, gestor_eventos, ANCHO, ALTO, contador_bolas)) {
+            return true;
+        }
     }
 
     if (!menu_visible) {
@@ -1678,11 +1727,25 @@ void dibujar_hud(const MotorFisica& motor) {
                        dynamic_cast<PlanoInclinado*>(entidad_seleccionada) != nullptr;
         bool redimensionable = dynamic_cast<ParedRectangular*>(entidad_seleccionada) != nullptr &&
                                !es_borde_nivel(entidad_seleccionada);
-        const char* rotar_txt = rotable ? "  [F] Rotar" : "";
-        const char* resize_txt = redimensionable ? "  [Flechas] Resize" : "";
-        DrawText(TextFormat("Seleccionado: Entidad #%d  [DEL] Eliminar%s%s  [Click Der/ESC] Deseleccionar",
-                 entidad_seleccionada->get_id(), rotar_txt, resize_txt),
-                 margin, y + 88, 14, Color{255, 200, 80, 255});
+        const char* rotar_txt = (rotable && (!entidad_seleccionada->get_es_fijo() || estado_actual == EstadoJuego::JUEGO_CREATIVO)) ? "  [F] Rotar" : "";
+        const char* resize_txt = (redimensionable && estado_actual == EstadoJuego::JUEGO_CREATIVO) ? "  [Flechas] Resize" : "";
+        
+        std::string info_txt;
+        if (estado_actual == EstadoJuego::JUEGO_CREATIVO) {
+            const char* fijo_str = entidad_seleccionada->get_es_fijo() ? "Fijo" : "Inventario del Jugador";
+            const char* toggle_fijo_txt = !es_borde_nivel(entidad_seleccionada) ? "  [P/G] Cambiar Tipo (Fijo/Inventario)" : "";
+            info_txt = TextFormat("Seleccionado: %s #%d (%s)%s%s%s  [DEL] Eliminar  [Click Der/ESC] Deseleccionar",
+                                  nombre_tipo_entidad(entidad_seleccionada->get_tipo_entidad()),
+                                  entidad_seleccionada->get_id(), fijo_str, toggle_fijo_txt, rotar_txt, resize_txt);
+        } else {
+            const char* fijo_str = entidad_seleccionada->get_es_fijo() ? "Fijo (Bloqueado)" : "Colocado por ti";
+            const char* del_txt = entidad_seleccionada->get_es_fijo() ? "" : "  [DEL] Eliminar";
+            info_txt = TextFormat("Seleccionado: %s #%d (%s)%s%s  [Click Der/ESC] Deseleccionar",
+                                  nombre_tipo_entidad(entidad_seleccionada->get_tipo_entidad()),
+                                  entidad_seleccionada->get_id(), fijo_str, del_txt, rotar_txt);
+        }
+        
+        DrawText(info_txt.c_str(), margin, y + 88, 14, Color{255, 200, 80, 255});
     }
 
     // Controles
@@ -1743,6 +1806,9 @@ void cargandoTexturas() {
     tex_hud_opciones_hover = cargar_textura_datos("Assets/hud/opciones2.png");
     tex_hud_ayuda = cargar_textura_datos("Assets/hud/nose.png");
     tex_hud_salir = cargar_textura_datos("Assets/hud/ver.png");
+    tex_hud_play = cargar_textura_datos("Assets/hud/inicio.png");
+    tex_hud_reset = cargar_textura_datos("Assets/hud/deshacer.png");
+    tex_hud_reset_hover = cargar_textura_datos("Assets/hud/deshacer2.png");
     
     tex_menu_fondo = cargar_textura_datos("Assets/menu/fondo.png");
     if (tex_menu_fondo.id == 0) {
@@ -2044,6 +2110,7 @@ void dibujar_menu_principal(MotorFisica& motor) {
         gestor_eventos.limpiar();
         modo_evento_ui = ModoEventoUI::INACTIVO;
         estado_actual = EstadoJuego::JUEGO_CREATIVO;
+        motor.set_pausado(true);
     }
     
     if (dibujar_boton_imagen_interactivo(rect_opciones, tex_btn_opciones1, tex_btn_opciones2)) {
@@ -2211,6 +2278,9 @@ void actualizar_seleccion_niveles(MotorFisica& motor) {
 
 // Inicializa un nivel de campaña oficial en memoria
 void cargar_nivel_campana(MotorFisica& motor, int lvl_idx) {
+    nivel_campana_actual = lvl_idx;
+    nivel_usuario_actual_path = "";
+
     motor.limpiar();
     resetear_punteros_borde();
     limpiar_estado_tras_cargar_partida();
@@ -2221,18 +2291,19 @@ void cargar_nivel_campana(MotorFisica& motor, int lvl_idx) {
     if (lvl_idx == 0) path = "Assets/campaign/1_primer_impacto.tim";
     else if (lvl_idx == 1) path = "Assets/campaign/2_rebote_perfecto.tim";
     else if (lvl_idx == 2) path = "Assets/campaign/3_el_soplido.tim";
-    else path = "Assets/campaign/4_reaccion_fisica.tim";
+    else path = "Assets/campaign/4_messi_gol_gol_gol.tim";
 
     if (FileExists(path.c_str())) {
         int w = ANCHO;
         int h = ALTO;
         int cont = contador_bolas;
+        estado_actual = EstadoJuego::JUEGO_NIVEL;
         if (cargar_partida(motor, gestor_eventos, path, w, h, cont)) {
             ANCHO = w;
             ALTO = h;
             contador_bolas = cont;
-            estado_actual = EstadoJuego::JUEGO_NIVEL;
         } else {
+            estado_actual = EstadoJuego::SELECCION_NIVELES;
             TraceLog(LOG_WARNING, "Error al cargar archivo de campana: %s", path.c_str());
         }
     } else {
@@ -2344,7 +2415,7 @@ void dibujar_seleccion_niveles(MotorFisica& motor) {
             { "1. Primer Impacto", "Entiende la gravedad haciendo caer", "una pelota dentro de la cubeta.", "FACIL", GREEN },
             { "2. Rebote Perfecto", "Utiliza el trampolin para desviar", "la trayectoria de la bola.", "FACIL", GREEN },
             { "3. El Soplido", "Usa la corriente de viento del", "ventilador para empujar objetos.", "MEDIO", ORANGE },
-            { "4. Reaccion Fisica", "Activa el balancin para catapultar", "la bola hasta la meta.", "DIFICIL", RED }
+            { "4. Messi gol gol gol", "Ayuda a Messi a meter un golazo", "usando los trampolines.", "DIFICIL", RED }
         };
         
         for (int i = 0; i < 4; ++i) {
@@ -2422,10 +2493,15 @@ void dibujar_seleccion_niveles(MotorFisica& motor) {
             if (hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 int ancho_cargado = ANCHO;
                 int alto_cargado = ALTO;
-                cargar_partida(motor, gestor_eventos, partidas_guardadas[i].ruta_archivo, ancho_cargado, alto_cargado, contador_bolas);
-                ANCHO = ancho_cargado;
-                ALTO = alto_cargado;
+                nivel_campana_actual = -1;
+                nivel_usuario_actual_path = partidas_guardadas[i].ruta_archivo;
                 estado_actual = EstadoJuego::JUEGO_NIVEL;
+                if (cargar_partida(motor, gestor_eventos, partidas_guardadas[i].ruta_archivo, ancho_cargado, alto_cargado, contador_bolas)) {
+                    ANCHO = ancho_cargado;
+                    ALTO = alto_cargado;
+                } else {
+                    estado_actual = EstadoJuego::SELECCION_NIVELES;
+                }
             }
         }
         
@@ -2467,6 +2543,8 @@ void dibujar_seleccion_niveles(MotorFisica& motor) {
 }
 
 struct BotonesHUD {
+    Rectangle rect_play;
+    Rectangle rect_reset;
     Rectangle rect_opciones;
     Rectangle rect_ayuda;
     Rectangle rect_salir;
@@ -2480,6 +2558,8 @@ BotonesHUD calcular_rectangulos_botones_hud() {
     float y_offset = ALTO - 150.0f;
     
     BotonesHUD btns;
+    btns.rect_play = { 20.0f + 1110.0f * escala + 35, y_offset + 20.0f * escala + 25 , 70.0f * escala - 20 , 70.0f * escala - 20 };
+    btns.rect_reset = { 20.0f + 1210.0f * escala + 35, y_offset + 20.0f * escala + 25 , 70.0f * escala - 20 , 70.0f * escala - 20 };
     btns.rect_opciones = { 20.0f + 1310.0f * escala+35, y_offset + 20.0f * escala + 25 , 70.0f * escala-20 , 70.0f * escala - 20 };
     btns.rect_ayuda = { 20.0f + 1410.0f * escala+26, y_offset + 20.0f * escala + 25 , 70.0f * escala-20 , 70.0f * escala - 20};
     btns.rect_salir = { 20.0f + 1510.0f * escala+26, y_offset + 20.0f * escala + 25 , 70.0f * escala-20 , 70.0f * escala - 20};
@@ -2538,12 +2618,30 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
         cancelar_colocacion_cuerda();
     }
 
-    manejar_teclas_panel_guardado(motor, gestor_eventos, ANCHO, ALTO, contador_bolas);
+    if (estado_actual != EstadoJuego::JUEGO_NIVEL) {
+        manejar_teclas_panel_guardado(motor, gestor_eventos, ANCHO, ALTO, contador_bolas);
+    }
 
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         // Interceptar clicks en los botones del HUD primero
         BotonesHUD btns = calcular_rectangulos_botones_hud();
         Vector2 mouse_pos = {(float)mx, (float)my};
+        if (CheckCollisionPointRec(mouse_pos, btns.rect_play)) {
+            if (motor.get_pausado()) {
+                guardar_snapshot_simulacion(motor, gestor_eventos);
+                motor.set_pausado(false);
+                cancelar_colocacion_cuerda();
+            } else {
+                spawn_error_timer = 0.5f;
+                spawn_error_pos = Vector2D(mx, my);
+            }
+            return;
+        }
+        if (CheckCollisionPointRec(mouse_pos, btns.rect_reset)) {
+            restaurar_snapshot_simulacion(motor, gestor_eventos);
+            motor.set_pausado(true);
+            return;
+        }
         if (CheckCollisionPointRec(mouse_pos, btns.rect_opciones)) {
             mostrar_pausa_overlay = true;
             return;
@@ -2557,9 +2655,8 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             return;
         }
 
-        if (mx < 260) {
+        if (punto_en_panel_izquierdo(mx, my)) {
             entidad_seleccionada = nullptr;  // Deseleccionar al interactuar con el panel de eventos
-            // Click en panel eventos izquierdo
         } else if (punto_en_menu(mx, my)) {
             entidad_seleccionada = nullptr;  // Deseleccionar al clickear en el menú
             if (manejar_click_menu(mx, my, motor)) {
@@ -2568,15 +2665,28 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                 TipoObjetoMenu tipo = tipo_en_celda(mx, my, celdas_menu_cache);
                 if (tipo == TipoObjetoMenu::CUERDA) {
                     if (motor.get_pausado()) {
-                        cancelar_colocacion_cuerda();
-                        estado_cuerda = EstadoColocacionCuerda::ESPERANDO_EXTREMO_A;
+                        if (estado_actual == EstadoJuego::JUEGO_NIVEL && inventario_actual[TipoObjetoMenu::CUERDA] <= 0) {
+                            spawn_error_timer = 0.5f;
+                            spawn_error_pos = Vector2D(mx, my);
+                        } else {
+                            cancelar_colocacion_cuerda();
+                            estado_cuerda = EstadoColocacionCuerda::ESPERANDO_EXTREMO_A;
+                        }
                     } else {
                         spawn_error_timer = 0.5f;
                         spawn_error_pos = Vector2D(mx, my);
                     }
                 } else if (tipo != TipoObjetoMenu::NINGUNO) {
-                    cancelar_colocacion_cuerda();
-                    arrastrando_spawn = tipo;
+                    if (!motor.get_pausado()) {
+                        spawn_error_timer = 0.5f;
+                        spawn_error_pos = Vector2D(mx, my);
+                    } else if (estado_actual == EstadoJuego::JUEGO_NIVEL && inventario_actual[tipo] <= 0) {
+                        spawn_error_timer = 0.5f;
+                        spawn_error_pos = Vector2D(mx, my);
+                    } else {
+                        cancelar_colocacion_cuerda();
+                        arrastrando_spawn = tipo;
+                    }
                 }
             }
         } else if (punto_en_area_juego(mx, my)) {
@@ -2609,10 +2719,23 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                 if (!handle_click_detectado) {
                     EntidadFisica* clicked = obtener_entidad_bajo_mouse(motor, mouse_pos);
                     if (clicked) {
-                        if (!manejar_click_evento_ui(gestor_eventos, clicked)) {
-                            entidad_arrastrada = clicked;
+                        if (estado_actual == EstadoJuego::JUEGO_NIVEL && clicked->get_es_fijo()) {
                             entidad_seleccionada = clicked;
-                            offset_arrastre = clicked->get_posicion() - mouse_pos;
+                        } else {
+                            bool manejado_por_evento = false;
+                            if (estado_actual == EstadoJuego::JUEGO_CREATIVO) {
+                                manejado_por_evento = manejar_click_evento_ui(gestor_eventos, clicked);
+                            }
+                            if (!manejado_por_evento) {
+                                if (motor.get_pausado()) {
+                                    entidad_arrastrada = clicked;
+                                    offset_arrastre = clicked->get_posicion() - mouse_pos;
+                                } else {
+                                    spawn_error_timer = 0.5f;
+                                    spawn_error_pos = clicked->get_posicion();
+                                }
+                                entidad_seleccionada = clicked;
+                            }
                         }
                     } else {
                         entidad_seleccionada = nullptr;
@@ -2662,11 +2785,84 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
         if (arrastrando_spawn != TipoObjetoMenu::NINGUNO) {
             if (punto_en_area_juego(mx, my)) {
-                spawn_desde_menu(motor, arrastrando_spawn, Vector2D(mx, my));
+                bool spawn_exito = false;
+                if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
+                    if (!inventario_entidades[arrastrando_spawn].empty()) {
+                        auto e = std::move(inventario_entidades[arrastrando_spawn].back());
+                        inventario_entidades[arrastrando_spawn].pop_back();
+
+                        double w_or_r = 0.0, h_val = 0.0;
+                        TipoForma forma = e->get_tipo_forma();
+                        if (forma == TipoForma::CIRCULO) {
+                            auto* b = dynamic_cast<Bola*>(e.get());
+                            if (b) w_or_r = b->get_radio();
+                            auto* br = dynamic_cast<BolaRebotadora*>(e.get());
+                            if (br) w_or_r = br->get_radio();
+                        } else if (forma == TipoForma::AABB) {
+                            Vector2D size = e->get_max() - e->get_min();
+                            w_or_r = size.x;
+                            h_val = size.y;
+                        } else if (forma == TipoForma::POLIGONO) {
+                            auto* ramp = dynamic_cast<PlanoInclinado*>(e.get());
+                            if (ramp) {
+                                w_or_r = ramp->get_base();
+                                h_val = ramp->get_altura();
+                            }
+                            auto* bal = dynamic_cast<Balancin*>(e.get());
+                            if (bal) {
+                                w_or_r = bal->get_largo();
+                                h_val = bal->get_espesor();
+                            }
+                        }
+
+                        Vector2D pos_destino(mx, my);
+                        if (forma == TipoForma::AABB || forma == TipoForma::POLIGONO) {
+                            pos_destino.x = mx - w_or_r / 2.0;
+                            pos_destino.y = my - h_val / 2.0;
+                        }
+
+                        if (posicion_valida_para_spawn(motor, pos_destino, forma, w_or_r, h_val)) {
+                            e->set_posicion(pos_destino);
+                            e->set_velocidad(Vector2D(0, 0));
+                            e->set_velocidad_angular(0);
+                            
+                            auto* ramp = dynamic_cast<PlanoInclinado*>(e.get());
+                            if (ramp) ramp->recalcular_vertices();
+
+                            motor.agregar_entidad(std::move(e));
+                            inventario_actual[arrastrando_spawn]--;
+                            spawn_exito = true;
+                        } else {
+                            inventario_entidades[arrastrando_spawn].push_back(std::move(e));
+                            spawn_error_timer = 0.5f;
+                            spawn_error_pos = Vector2D(mx, my);
+                        }
+                    }
+                } else {
+                    spawn_exito = spawn_desde_menu(motor, arrastrando_spawn, Vector2D(mx, my));
+                }
+
+                if (spawn_exito) {
+                    arrastrando_spawn = TipoObjetoMenu::NINGUNO;
+                }
+            } else {
                 arrastrando_spawn = TipoObjetoMenu::NINGUNO;
             }
         }
-        entidad_arrastrada = nullptr;
+        if (entidad_arrastrada != nullptr) {
+            if (estado_actual == EstadoJuego::JUEGO_CREATIVO && !es_borde_nivel(entidad_arrastrada)) {
+                int panel_x = 12;
+                int panel_y = ALTO - 390;
+                int panel_w = 236; // 260 - 24
+                int panel_h = 260;
+                Rectangle rect_panel = { (float)panel_x, (float)panel_y, (float)panel_w, (float)panel_h };
+                if (panel_izquierdo_visible && CheckCollisionPointRec(GetMousePosition(), rect_panel)) {
+                    entidad_arrastrada->set_es_fijo(false);
+                    TraceLog(LOG_INFO, "Entidad #%d arrastrada al inventario, es_fijo = false", entidad_arrastrada->get_id());
+                }
+            }
+            entidad_arrastrada = nullptr;
+        }
         handle_activo = HandleResize::NINGUNO;
     }
 
@@ -2677,8 +2873,14 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     }
 
     if (IsKeyPressed(KEY_SPACE)) {
-        motor.set_pausado(!motor.get_pausado());
-        if (!motor.get_pausado()) cancelar_colocacion_cuerda();
+        if (motor.get_pausado()) {
+            guardar_snapshot_simulacion(motor, gestor_eventos);
+            motor.set_pausado(false);
+            cancelar_colocacion_cuerda();
+        } else {
+            restaurar_snapshot_simulacion(motor, gestor_eventos);
+            motor.set_pausado(true);
+        }
     }
 
     if (IsKeyPressed(KEY_D)) {
@@ -2686,30 +2888,73 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     }
 
     if ((IsKeyPressed(KEY_DELETE) || IsKeyPressed(KEY_X)) && entidad_seleccionada) {
-        if (!es_borde_nivel(entidad_seleccionada)) {
-            int id_eliminar = entidad_seleccionada->get_id();
-            if (entidad_arrastrada == entidad_seleccionada) entidad_arrastrada = nullptr;
-            entidad_seleccionada = nullptr;
-            motor.remover_entidad(id_eliminar);
+        if (!motor.get_pausado()) {
+            spawn_error_timer = 0.5f;
+            spawn_error_pos = entidad_seleccionada->get_posicion();
+        } else if (!es_borde_nivel(entidad_seleccionada)) {
+            if (estado_actual == EstadoJuego::JUEGO_NIVEL && entidad_seleccionada->get_es_fijo()) {
+                spawn_error_timer = 0.5f;
+                spawn_error_pos = entidad_seleccionada->get_posicion();
+            } else {
+                int id_eliminar = entidad_seleccionada->get_id();
+                if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
+                    TipoObjetoMenu t_menu = entidad_seleccionada->get_tipo_menu();
+                    inventario_actual[t_menu]++;
+                    auto ptr = motor.transferir_entidad(id_eliminar);
+                    if (ptr) {
+                        inventario_entidades[t_menu].push_back(std::move(ptr));
+                    }
+                } else {
+                    motor.remover_entidad(id_eliminar);
+                }
+                if (entidad_arrastrada == entidad_seleccionada) entidad_arrastrada = nullptr;
+                entidad_seleccionada = nullptr;
+            }
         }
     }
 
     if (IsKeyPressed(KEY_F) && entidad_seleccionada) {
-        auto* vent = dynamic_cast<Ventilador*>(entidad_seleccionada);
-        if (vent) {
-            vent->invertir_direccion();
+        if (!motor.get_pausado()) {
+            spawn_error_timer = 0.5f;
+            spawn_error_pos = entidad_seleccionada->get_posicion();
+        } else if (estado_actual == EstadoJuego::JUEGO_NIVEL && entidad_seleccionada->get_es_fijo()) {
+            spawn_error_timer = 0.5f;
+            spawn_error_pos = entidad_seleccionada->get_posicion();
         } else {
-            auto* ramp = dynamic_cast<PlanoInclinado*>(entidad_seleccionada);
-            if (ramp) {
-                ramp->invertir();
+            auto* vent = dynamic_cast<Ventilador*>(entidad_seleccionada);
+            if (vent) {
+                vent->invertir_direccion();
+            } else {
+                auto* ramp = dynamic_cast<PlanoInclinado*>(entidad_seleccionada);
+                if (ramp) {
+                    ramp->invertir();
+                }
             }
         }
     }
 
     if (IsKeyPressed(KEY_T) && entidad_seleccionada) {
-        auto* ramp = dynamic_cast<PlanoInclinado*>(entidad_seleccionada);
-        if (ramp) {
-            ramp->alternar_tamano();
+        if (!motor.get_pausado()) {
+            spawn_error_timer = 0.5f;
+            spawn_error_pos = entidad_seleccionada->get_posicion();
+        } else if (estado_actual == EstadoJuego::JUEGO_NIVEL && entidad_seleccionada->get_es_fijo()) {
+            spawn_error_timer = 0.5f;
+            spawn_error_pos = entidad_seleccionada->get_posicion();
+        } else {
+            auto* ramp = dynamic_cast<PlanoInclinado*>(entidad_seleccionada);
+            if (ramp) {
+                ramp->alternar_tamano();
+            }
+        }
+    }
+
+    if ((IsKeyPressed(KEY_P) || IsKeyPressed(KEY_G)) && entidad_seleccionada && estado_actual == EstadoJuego::JUEGO_CREATIVO) {
+        if (!motor.get_pausado()) {
+            spawn_error_timer = 0.5f;
+            spawn_error_pos = entidad_seleccionada->get_posicion();
+        } else if (!es_borde_nivel(entidad_seleccionada)) {
+            entidad_seleccionada->set_es_fijo(!entidad_seleccionada->get_es_fijo());
+            TraceLog(LOG_INFO, "Entidad #%d es_fijo toggled to %d", entidad_seleccionada->get_id(), entidad_seleccionada->get_es_fijo());
         }
     }
 
@@ -2744,13 +2989,26 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     }
 
     if (IsKeyPressed(KEY_R)) {
-        motor.limpiar();
-        contador_bolas = 0;
-        resetear_punteros_borde();
-        limpiar_estado_tras_cargar_partida();
-        crear_escena(motor);
-        gestor_eventos.limpiar();
-        modo_evento_ui = ModoEventoUI::INACTIVO;
+        if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
+            if (nivel_campana_actual != -1) {
+                cargar_nivel_campana(motor, nivel_campana_actual);
+            } else if (!nivel_usuario_actual_path.empty()) {
+                int ancho_cargado = ANCHO;
+                int alto_cargado = ALTO;
+                cargar_partida(motor, gestor_eventos, nivel_usuario_actual_path, ancho_cargado, alto_cargado, contador_bolas);
+                ANCHO = ancho_cargado;
+                ALTO = alto_cargado;
+            }
+        } else {
+            motor.limpiar();
+            contador_bolas = 0;
+            resetear_punteros_borde();
+            limpiar_estado_tras_cargar_partida();
+            crear_escena(motor);
+            gestor_eventos.limpiar();
+            modo_evento_ui = ModoEventoUI::INACTIVO;
+            motor.set_pausado(true);
+        }
     }
 
     if (IsKeyPressed(KEY_KP_ADD) || IsKeyPressed(KEY_EQUAL)) {
@@ -2794,6 +3052,43 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     for (const auto* e : motor.get_entidades()) {
         dibujar_entidad(e);
         dibujar_debug(e);
+        
+        if (estado_actual == EstadoJuego::JUEGO_CREATIVO && !e->get_es_fijo()) {
+            Color inv_color = Color{76, 219, 138, 130};
+            TipoForma forma = e->get_tipo_forma();
+            if (forma == TipoForma::CIRCULO) {
+                Vector2D pos;
+                double radio = 0.0;
+                if (obtener_datos_circulo(e, pos, radio)) {
+                    DrawCircleLines(static_cast<int>(pos.x), static_cast<int>(pos.y),
+                                    static_cast<float>(radio + 3.0), inv_color);
+                    DrawText("I", static_cast<int>(pos.x - 3), static_cast<int>(pos.y - 5), 10, inv_color);
+                }
+            } else if (forma == TipoForma::AABB) {
+                const ParedRectangular* pr = dynamic_cast<const ParedRectangular*>(e);
+                if (pr) {
+                    Vector2D pos = pr->get_posicion();
+                    DrawRectangleLinesEx({(float)pos.x - 2, (float)pos.y - 2,
+                        (float)pr->get_ancho() + 4, (float)pr->get_alto() + 4}, 1.0f, inv_color);
+                    DrawText("I", static_cast<int>(pos.x + 2), static_cast<int>(pos.y + 2), 10, inv_color);
+                }
+            } else if (forma == TipoForma::POLIGONO) {
+                const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
+                if (ramp) {
+                    Vector2D pos = ramp->get_posicion();
+                    DrawRectangleLinesEx({(float)pos.x - 2, (float)pos.y - 2,
+                        (float)ramp->get_base() + 4, (float)ramp->get_altura() + 4}, 1.0f, inv_color);
+                    DrawText("I", static_cast<int>(pos.x + 2), static_cast<int>(pos.y + 2), 10, inv_color);
+                }
+                const Balancin* bal = dynamic_cast<const Balancin*>(e);
+                if (bal) {
+                    Vector2D pos = bal->get_posicion();
+                    DrawRectangleLinesEx({(float)pos.x - 2, (float)pos.y - 2,
+                        (float)bal->get_largo() + 4, (float)bal->get_espesor() + 4}, 1.0f, inv_color);
+                    DrawText("I", static_cast<int>(pos.x + 2), static_cast<int>(pos.y + 2), 10, inv_color);
+                }
+            }
+        }
     }
     dibujar_previsualizacion_cuerda(motor);
 
@@ -2970,6 +3265,27 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     BotonesHUD btns = calcular_rectangulos_botones_hud();
     Vector2 mouse = GetMousePosition();
     
+    // Play button
+    bool hover_play = CheckCollisionPointRec(mouse, btns.rect_play);
+    bool play_activo = motor.get_pausado();
+    Color play_tint = play_activo ? WHITE : Color{120, 120, 120, 255};
+    if (tex_hud_play.id > 0) {
+        DrawTexturePro(tex_hud_play, {0.0f, 0.0f, (float)tex_hud_play.width, (float)tex_hud_play.height}, btns.rect_play, {0.0f, 0.0f}, 0.0f, play_tint);
+    }
+    if (hover_play && play_activo) {
+        DrawRectangleRoundedLinesEx(btns.rect_play, 0.2f, 4, 2.0f, SKYBLUE);
+    }
+
+    // Reset button
+    bool hover_reset = CheckCollisionPointRec(mouse, btns.rect_reset);
+    if (tex_hud_reset.id > 0) {
+        Texture2D tex = hover_reset && (tex_hud_reset_hover.id > 0) ? tex_hud_reset_hover : tex_hud_reset;
+        DrawTexturePro(tex, {0.0f, 0.0f, (float)tex.width, (float)tex.height}, btns.rect_reset, {0.0f, 0.0f}, 0.0f, WHITE);
+    }
+    if (hover_reset) {
+        DrawRectangleRoundedLinesEx(btns.rect_reset, 0.2f, 4, 2.0f, SKYBLUE);
+    }
+
     // Opciones (Engrane)
     bool hover_opciones = CheckCollisionPointRec(mouse, btns.rect_opciones);
     if (tex_hud_opciones.id > 0) {
@@ -3234,6 +3550,9 @@ int main() {
     if (tex_hud_opciones_hover.id > 0) UnloadTexture(tex_hud_opciones_hover);
     if (tex_hud_ayuda.id > 0) UnloadTexture(tex_hud_ayuda);
     if (tex_hud_salir.id > 0) UnloadTexture(tex_hud_salir);
+    if (tex_hud_play.id > 0) UnloadTexture(tex_hud_play);
+    if (tex_hud_reset.id > 0) UnloadTexture(tex_hud_reset);
+    if (tex_hud_reset_hover.id > 0) UnloadTexture(tex_hud_reset_hover);
     if (tex_menu_fondo.id > 0) UnloadTexture(tex_menu_fondo);
     if (tex_menu_box.id > 0) UnloadTexture(tex_menu_box);
     

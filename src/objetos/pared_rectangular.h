@@ -13,8 +13,10 @@ protected:
     double alto;
 
 public:
-    ParedRectangular(int id, Vector2D pos_inicial, double w, double h)
-        : ObstaculoEstatico(id, pos_inicial, TipoForma::AABB), ancho(w), alto(h) {}
+    ParedRectangular(int id, Vector2D pos_inicial, double w, double h, TipoObjetoMenu t_menu = TipoObjetoMenu::PLATAFORMA)
+        : ObstaculoEstatico(id, pos_inicial, TipoForma::AABB), ancho(w), alto(h) {
+        tipo_menu = t_menu;
+    }
 
     // --- Getters ---
     double get_ancho() const { return ancho; }
@@ -37,7 +39,9 @@ public:
         std::stringstream ss;
         ss << "ent PARED id=" << get_id()
            << " x=" << posicion.x << " y=" << posicion.y
-           << " w=" << ancho << " h=" << alto;
+           << " w=" << ancho << " h=" << alto
+           << " fijo=" << (es_fijo ? 1 : 0)
+           << " tipo_menu=" << static_cast<int>(tipo_menu);
         return ss.str();
     }
 

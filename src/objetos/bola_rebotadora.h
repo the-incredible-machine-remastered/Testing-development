@@ -31,6 +31,7 @@ public:
           impacto_cooldown(0.0), multiplicador_rebote(3.25) {
         set_restitucion(0.85); // Muy rebotona, como una esfera inflable
         set_friccion(0.18);    // Superficie resbalosa
+        tipo_menu = TipoObjetoMenu::BOLA_REBOTADORA;
     }
 
     // --- Getters ---
