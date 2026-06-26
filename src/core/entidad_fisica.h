@@ -181,6 +181,7 @@ public:
 
     // ---- Setters ----
     void set_posicion(const Vector2D& pos) { posicion = pos; }
+    virtual void set_posicion_editor(const Vector2D& pos) { set_posicion(pos); }
     void set_angulo(double a) { angulo = a; }
     void set_velocidad(const Vector2D& vel) { velocidad = vel; }
     void set_velocidad_angular(double omega) { velocidad_angular = omega; }

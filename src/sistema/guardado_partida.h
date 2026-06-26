@@ -40,6 +40,7 @@ bool es_borde_nivel(const EntidadFisica* e);
 void resetear_punteros_borde();
 void crear_bordes_nivel(MotorFisica& motor);
 void limpiar_estado_tras_cargar_partida();
+void limpiar_estado_tras_restaurar_snapshot();
 
 extern std::unordered_map<TipoObjetoMenu, int> inventario_maximo;
 extern std::unordered_map<TipoObjetoMenu, int> inventario_actual;
@@ -655,7 +656,7 @@ inline void restaurar_snapshot_simulacion(MotorFisica& motor, GestorEventos& ges
 
     motor.set_gravedad(Vector2D(0, gravedad_y));
     motor.set_siguiente_id(max_id + 1);
-    limpiar_estado_tras_cargar_partida();
+    limpiar_estado_tras_restaurar_snapshot();
     TraceLog(LOG_INFO, "Snapshot de simulación restaurado.");
 }
 

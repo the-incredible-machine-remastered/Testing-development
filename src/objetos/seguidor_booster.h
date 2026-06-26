@@ -110,6 +110,11 @@ public:
     double get_alto() const { return alto; }
     EstadoSeguidor get_estado() const { return estado; }
     Vector2D get_posicion_inicial() const { return posicion_inicial; }
+    void set_posicion_inicial(const Vector2D& pos) { posicion_inicial = pos; }
+    void set_posicion_editor(const Vector2D& pos) override {
+        posicion = pos;
+        posicion_inicial = pos;
+    }
     double get_angulo_pierna() const { return angulo_pierna; }
     double get_direccion_carrera() const { return direccion_carrera; }
     double get_kicker_factor() const { return kicker_factor; }

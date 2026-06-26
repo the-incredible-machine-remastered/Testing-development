@@ -407,8 +407,18 @@ private:
 
     // Helper: Polígono (poly_ent) vs AABB (aabb_ent)
     InfoColision colision_poligono_aabb(EntidadFisica* poly_ent, EntidadFisica* aabb_ent) {
+        std::vector<Vector2D> vertices_poly;
         auto* balancin = dynamic_cast<Balancin*>(poly_ent);
-        if (!balancin) return InfoColision{};
+        if (balancin) {
+            vertices_poly = balancin->get_vertices();
+        } else {
+            auto* rampa = dynamic_cast<PlanoInclinado*>(poly_ent);
+            if (rampa) {
+                vertices_poly = rampa->get_vertices();
+            }
+        }
+
+        if (vertices_poly.size() < 3) return InfoColision{};
 
         Vector2D min, max;
         if (!obtener_datos_aabb(aabb_ent, min, max)) return InfoColision{};
@@ -420,7 +430,7 @@ private:
             Vector2D(min.x, max.y)
         };
 
-        return Colisiones::poligono_vs_poligono(balancin->get_vertices(), vertices_aabb);
+        return Colisiones::poligono_vs_poligono(vertices_poly, vertices_aabb);
     }
 
     // Helper: Polígono (poly_a) vs Polígono (poly_b)

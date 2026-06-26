@@ -576,6 +576,15 @@ void limpiar_estado_tras_cargar_partida() {
     snapshot_simulacion = "";
     menu_tab = 0;
     menu_pagina = 0;
+    modo_debug = false;
+}
+
+void limpiar_estado_tras_restaurar_snapshot() {
+    entidad_arrastrada = nullptr;
+    entidad_seleccionada = nullptr;
+    arrastrando_spawn = TipoObjetoMenu::NINGUNO;
+    cancelar_colocacion_cuerda();
+    handle_activo = HandleResize::NINGUNO;
 }
 
 void crear_bordes_nivel(MotorFisica& motor) {
@@ -2594,6 +2603,13 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
         return;
     }
 
+    if (modo_panel_guardado != ModoPanelGuardado::CERRADO) {
+        if (estado_actual != EstadoJuego::JUEGO_NIVEL) {
+            manejar_teclas_panel_guardado(motor, gestor_eventos, ANCHO, ALTO, contador_bolas);
+        }
+        return;
+    }
+
     reconstruir_celdas_menu();
 
     if (IsKeyPressed(KEY_TAB)) {
@@ -2604,9 +2620,7 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     int my = GetMouseY();
 
     if (IsKeyPressed(KEY_ESCAPE)) {
-        if (modo_panel_guardado != ModoPanelGuardado::CERRADO) {
-            modo_panel_guardado = ModoPanelGuardado::CERRADO;
-        } else if (estado_cuerda != EstadoColocacionCuerda::INACTIVA) {
+        if (estado_cuerda != EstadoColocacionCuerda::INACTIVA) {
             cancelar_colocacion_cuerda();
         } else {
             mostrar_pausa_overlay = true;
@@ -2616,10 +2630,6 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) &&
         estado_cuerda != EstadoColocacionCuerda::INACTIVA) {
         cancelar_colocacion_cuerda();
-    }
-
-    if (estado_actual != EstadoJuego::JUEGO_NIVEL) {
-        manejar_teclas_panel_guardado(motor, gestor_eventos, ANCHO, ALTO, contador_bolas);
     }
 
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
@@ -2772,7 +2782,7 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
         nueva_pos.x = std::max(30.0, std::min(limite_x, nueva_pos.x));
         nueva_pos.y = std::max(30.0, std::min(double(ALTO - 30.0), nueva_pos.y));
 
-        entidad_arrastrada->set_posicion(nueva_pos);
+        entidad_arrastrada->set_posicion_editor(nueva_pos);
         entidad_arrastrada->set_velocidad(Vector2D(0.0, 0.0));
         entidad_arrastrada->set_velocidad_angular(0.0);
 
@@ -2822,7 +2832,7 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                         }
 
                         if (posicion_valida_para_spawn(motor, pos_destino, forma, w_or_r, h_val)) {
-                            e->set_posicion(pos_destino);
+                            e->set_posicion_editor(pos_destino);
                             e->set_velocidad(Vector2D(0, 0));
                             e->set_velocidad_angular(0);
                             
@@ -2883,7 +2893,7 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
         }
     }
 
-    if (IsKeyPressed(KEY_D)) {
+    if (IsKeyPressed(KEY_D) && estado_actual != EstadoJuego::JUEGO_NIVEL) {
         modo_debug = !modo_debug;
     }
 
@@ -3425,6 +3435,7 @@ int main() {
     // ---- Inicializar ventana ----
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_HIGHDPI);
     InitWindow(ANCHO, ALTO, "TIM - Motor de Fisica | Prototipo RK4 + Raylib");
+    SetExitKey(KEY_NULL);
     InitAudioDevice(); // Inicializar dispositivo de audio de Raylib
     ANCHO = GetScreenWidth();
     ALTO = GetScreenHeight();
