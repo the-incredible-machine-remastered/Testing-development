@@ -49,7 +49,17 @@ extern EstadoJuego estado_actual;
 
 inline TipoObjetoMenu mapear_tipo_entidad_a_menu(TipoEntidadJuego t, const EntidadFisica* e) {
     switch (t) {
-        case TipoEntidadJuego::BOLA: return TipoObjetoMenu::BOLA;
+        case TipoEntidadJuego::BOLA: {
+            const Bola* b = dynamic_cast<const Bola*>(e);
+            if (b) {
+                double r = b->get_radio();
+                if (r < 22.0) return TipoObjetoMenu::BOLA_TENIS;
+                if (r < 30.0) return TipoObjetoMenu::BOLA_BOLOS;
+                if (r > 44.0) return TipoObjetoMenu::BOLA_PLAYA;
+                return TipoObjetoMenu::BOLA_NORMAL;
+            }
+            return TipoObjetoMenu::BOLA_NORMAL;
+        }
         case TipoEntidadJuego::BOLA_REBOTADORA: return TipoObjetoMenu::BOLA_REBOTADORA;
         case TipoEntidadJuego::TRAMPOLIN: return TipoObjetoMenu::TRAMPOLIN;
         case TipoEntidadJuego::BALANCIN: return TipoObjetoMenu::BALANCIN;
@@ -344,7 +354,9 @@ inline void instanciar_desde_linea(MotorFisica& motor, const std::string& linea,
             
             int tm = leer_valor_i(linea, "tipo_menu=", -1);
             TipoObjetoMenu tipo_menu = TipoObjetoMenu::NINGUNO;
-            if (tm >= 0 && tm < static_cast<int>(TipoObjetoMenu::COUNT)) {
+            if (e->get_tipo_entidad() == TipoEntidadJuego::BOLA) {
+                tipo_menu = mapear_tipo_entidad_a_menu(e->get_tipo_entidad(), e.get());
+            } else if (tm >= 0 && tm < static_cast<int>(TipoObjetoMenu::COUNT)) {
                 tipo_menu = static_cast<TipoObjetoMenu>(tm);
             } else {
                 tipo_menu = mapear_tipo_entidad_a_menu(e->get_tipo_entidad(), e.get());

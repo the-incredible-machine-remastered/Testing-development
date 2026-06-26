@@ -727,23 +727,80 @@ bool crear_trampolin(MotorFisica& motor, Vector2D pos) {
 // ============================================================================
 // Crear bola en posición del mouse (con validación)
 // ============================================================================
-bool crear_bola(MotorFisica& motor, Vector2D pos) {
-    double radio = 35.0 + GetRandomValue(0, 8);   // Radio entre 8-16 px
-
-    // Verificar que no colisiona con nada existente
+bool crear_bola_playa(MotorFisica& motor, Vector2D pos) {
+    double radio = 50.0;
     if (!posicion_valida_para_spawn(motor, pos, TipoForma::CIRCULO, radio, 0.0)) {
-        spawn_error_timer = 0.5f;  // Flash rojo de 0.5s
+        spawn_error_timer = 0.5f;
         spawn_error_pos = pos;
         return false;
     }
-
-    double masa = radio * radio * 0.01;           // Proporcional al área
+    double masa = 2.0;
     Bola* b = new Bola(motor.generar_id(), pos, radio, masa);
-    b->set_color_idx(contador_bolas % NUM_COLORES);
-    b->set_texture_idx(GetRandomValue(0, 2)); 
-    contador_bolas++;
+    b->set_tipo_menu(TipoObjetoMenu::BOLA_PLAYA);
+    b->set_color_idx(0);
+    b->set_texture_idx(1);
+    b->set_restitucion(0.8);
+    b->set_friccion(0.4);
     motor.agregar_entidad(b);
     return true;
+}
+
+bool crear_bola_normal(MotorFisica& motor, Vector2D pos) {
+    double radio = 33.0;
+    if (!posicion_valida_para_spawn(motor, pos, TipoForma::CIRCULO, radio, 0.0)) {
+        spawn_error_timer = 0.5f;
+        spawn_error_pos = pos;
+        return false;
+    }
+    double masa = 12.0;
+    Bola* b = new Bola(motor.generar_id(), pos, radio, masa);
+    b->set_tipo_menu(TipoObjetoMenu::BOLA_NORMAL);
+    b->set_color_idx(1);
+    b->set_texture_idx(2);
+    b->set_restitucion(0.65);
+    b->set_friccion(0.5);
+    motor.agregar_entidad(b);
+    return true;
+}
+
+bool crear_bola_bolos(MotorFisica& motor, Vector2D pos) {
+    double radio = 25.0;
+    if (!posicion_valida_para_spawn(motor, pos, TipoForma::CIRCULO, radio, 0.0)) {
+        spawn_error_timer = 0.5f;
+        spawn_error_pos = pos;
+        return false;
+    }
+    double masa = 60.0;
+    Bola* b = new Bola(motor.generar_id(), pos, radio, masa);
+    b->set_tipo_menu(TipoObjetoMenu::BOLA_BOLOS);
+    b->set_color_idx(2);
+    b->set_texture_idx(0);
+    b->set_restitucion(0.15);
+    b->set_friccion(0.6);
+    motor.agregar_entidad(b);
+    return true;
+}
+
+bool crear_bola_tenis(MotorFisica& motor, Vector2D pos) {
+    double radio = 18.0;
+    if (!posicion_valida_para_spawn(motor, pos, TipoForma::CIRCULO, radio, 0.0)) {
+        spawn_error_timer = 0.5f;
+        spawn_error_pos = pos;
+        return false;
+    }
+    double masa = 2.5;
+    Bola* b = new Bola(motor.generar_id(), pos, radio, masa);
+    b->set_tipo_menu(TipoObjetoMenu::BOLA_TENIS);
+    b->set_color_idx(3);
+    b->set_texture_idx(0);
+    b->set_restitucion(0.75);
+    b->set_friccion(0.6);
+    motor.agregar_entidad(b);
+    return true;
+}
+
+bool crear_bola(MotorFisica& motor, Vector2D pos) {
+    return crear_bola_normal(motor, pos);
 }
 
 bool crear_rampa(MotorFisica& motor, Vector2D pos, bool invertido) {
@@ -774,7 +831,10 @@ bool crear_zona_meta(MotorFisica& motor, Vector2D pos) {
 
 bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
     switch (tipo) {
-        case TipoObjetoMenu::BOLA:              return crear_bola(motor, pos);
+        case TipoObjetoMenu::BOLA_PLAYA:        return crear_bola_playa(motor, pos);
+        case TipoObjetoMenu::BOLA_NORMAL:       return crear_bola_normal(motor, pos);
+        case TipoObjetoMenu::BOLA_BOLOS:        return crear_bola_bolos(motor, pos);
+        case TipoObjetoMenu::BOLA_TENIS:        return crear_bola_tenis(motor, pos);
         case TipoObjetoMenu::BOLA_REBOTADORA:   return crear_bola_rebotadora(motor, pos);
         case TipoObjetoMenu::TRAMPOLIN:         return crear_trampolin(motor, pos);
         case TipoObjetoMenu::BALANCIN:          return crear_balancin(motor, pos);
@@ -803,11 +863,51 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
     };
 
     switch (tipo) {
-        case TipoObjetoMenu::BOLA: {
+        case TipoObjetoMenu::BOLA_PLAYA:
+        case TipoObjetoMenu::BOLA_NORMAL:
+        case TipoObjetoMenu::BOLA_BOLOS:
+        case TipoObjetoMenu::BOLA_TENIS: {
             float r = 14.0f * escala;
-            Color col = tint(PALETA_BOLAS[contador_bolas % NUM_COLORES]);
-            DrawCircle(static_cast<int>(cx), static_cast<int>(cy), r, col);
-            DrawCircleLines(static_cast<int>(cx), static_cast<int>(cy), r, tint(DARKGRAY));
+            int tex_idx = 0;
+            Color tint_color = WHITE;
+
+            if (tipo == TipoObjetoMenu::BOLA_PLAYA) {
+                r = 16.0f * escala;
+                tex_idx = 1;
+                tint_color = WHITE;
+            } else if (tipo == TipoObjetoMenu::BOLA_BOLOS) {
+                r = 11.0f * escala;
+                tex_idx = 0;
+                tint_color = {60, 60, 60, 255};
+            } else if (tipo == TipoObjetoMenu::BOLA_TENIS) {
+                r = 9.0f * escala;
+                tex_idx = 0;
+                tint_color = {180, 255, 50, 255};
+            } else { // BOLA or BOLA_NORMAL
+                r = 13.0f * escala;
+                tex_idx = 2;
+                tint_color = {255, 120, 60, 255};
+            }
+
+            if (tex_idx >= 0 && tex_idx < 3 && tex_bola[tex_idx].id > 0) {
+                DrawTexturePro(
+                    tex_bola[tex_idx],
+                    { 0, 0, (float)tex_bola[tex_idx].width, (float)tex_bola[tex_idx].height },
+                    { cx - r, cy - r, 2.0f * r, 2.0f * r },
+                    { 0, 0 },
+                    0.0f,
+                    tint(tint_color)
+                );
+            } else {
+                Color col = PALETA_BOLAS[0];
+                if (tipo == TipoObjetoMenu::BOLA_PLAYA) col = {255, 230, 109, 255};
+                else if (tipo == TipoObjetoMenu::BOLA_BOLOS) col = {40, 40, 40, 255};
+                else if (tipo == TipoObjetoMenu::BOLA_TENIS) col = {180, 255, 50, 255};
+                else col = {255, 107, 107, 255};
+
+                DrawCircle(static_cast<int>(cx), static_cast<int>(cy), r, tint(col));
+                DrawCircleLines(static_cast<int>(cx), static_cast<int>(cy), r, tint(ColorBrightness(col, -0.3f)));
+            }
             break;
         }
         case TipoObjetoMenu::TRAMPOLIN: {
