@@ -14,7 +14,10 @@
 enum class TipoAnclajeCuerda {
     Cubeta,
     BalancinIzquierdo,
-    BalancinDerecho
+    BalancinDerecho,
+    SoporteFijo,
+    Globo,
+    Gancho
 };
 
 struct AnclajeCuerda {
@@ -167,8 +170,8 @@ public:
         Vector2D dir_a = tramo_a / len_a;
         Vector2D dir_b = tramo_b / len_b;
         double velocidad_estira = -Vector2D::dot(va, dir_a) - Vector2D::dot(vb, dir_b);
-        double k = 520.0;
-        double c = 70.0;
+        double k = 800.0;
+        double c = 280.0;
         double tension_peso = std::max(
             tension_por_peso(ent_a, extremo_a.tipo, dir_a, gravedad),
             tension_por_peso(ent_b, extremo_b.tipo, dir_b, gravedad)

@@ -16,11 +16,12 @@ protected:
     double espesor;
     double angulo_limite;
     double resistencia_pivote;
+    double angulo_inicial; // -1=izq, 0=equilibrio, 1=der
 
 public:
     Balancin(int id, Vector2D pos_pivot, double length = 200.0, double thickness = 6.0, double m = 8.0)
         : EntidadFisica(id, pos_pivot, m, TipoForma::POLIGONO, false),
-          largo(length), espesor(thickness), resistencia_pivote(1800.0) {
+          largo(length), espesor(thickness), resistencia_pivote(600.0) {
 
         // Barra + herrajes/base: mas inercia para que una carga colgada incline,
         // pero no haga girar el balancin demasiado facil.
@@ -28,6 +29,7 @@ public:
         set_restitucion(0.2);
         set_friccion(0.3);
 
+        angulo_inicial = 0.0;
         angulo = 0.0;
         velocidad_angular = 0.0;
         angulo_limite = 15.0 * MathUtils::TIM_PI / 180.0;
@@ -38,6 +40,15 @@ public:
     double get_espesor() const { return espesor; }
     double get_angulo_limite() const { return angulo_limite; }
     double get_resistencia_pivote() const { return resistencia_pivote; }
+    double get_angulo_inicial() const { return angulo_inicial; }
+
+    void ciclar_inclinacion() {
+        if (angulo_inicial == 0.0)       angulo_inicial = angulo_limite;
+        else if (angulo_inicial > 0.0)   angulo_inicial = -angulo_limite;
+        else                             angulo_inicial = 0.0;
+        angulo = angulo_inicial;
+        velocidad_angular = 0.0;
+    }
 
     Vector2D get_punto_extremo_izquierdo() const {
         Vector2D dir(std::cos(angulo), std::sin(angulo));
@@ -111,7 +122,7 @@ public:
     std::string serializar() const override {
         std::stringstream ss;
         ss << "ent BALANCIN id=" << get_id() << serializar_base()
-           << " largo=" << largo << " esp=" << espesor;
+           << " largo=" << largo << " esp=" << espesor << " ang0=" << angulo_inicial;
         return ss.str();
     }
 

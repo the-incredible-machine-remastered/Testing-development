@@ -30,6 +30,11 @@
 #include "objetos/seguidor_booster.h"
 #include "objetos/barril_chavo.h"
 #include "objetos/ventilador.h"
+#include "objetos/globo.h"
+#include "objetos/gancho.h"
+#include "objetos/pistola.h"
+#include "objetos/tijera.h"
+#include "objetos/bola_beisbol.h"
 #include "fisica/colisiones.h"
 #include "fisica/motor_fisica.h"
 #include "objetos/catalogo_menu.gen.h"
@@ -101,14 +106,14 @@ enum class TabOpciones {
     SONIDO,
     IDIOMA
 };
-TabOpciones pestaña_opciones_actual = TabOpciones::CONTROLES;
+TabOpciones pestana_opciones_actual = TabOpciones::CONTROLES;
 
 enum class TabNiveles {
     CAMPANA,
     MIS_NIVELES,
     IMPORTAR
 };
-TabNiveles pestaña_niveles_actual = TabNiveles::CAMPANA;
+TabNiveles pestana_niveles_actual = TabNiveles::CAMPANA;
 
 bool salir_juego = false;
 bool mostrar_ayuda_overlay = false;
@@ -187,6 +192,10 @@ Vector2D posicion_anclaje_cuerda(const EntidadFisica* e, TipoAnclajeCuerda tipo)
         return cubeta ? cubeta->get_punto_cuerda() : e->get_posicion();
     }
 
+    if (tipo == TipoAnclajeCuerda::Globo || tipo == TipoAnclajeCuerda::SoporteFijo || tipo == TipoAnclajeCuerda::Gancho) {
+        return e->get_posicion();
+    }
+
     const Balancin* bal = dynamic_cast<const Balancin*>(e);
     if (!bal) return e->get_posicion();
     return tipo == TipoAnclajeCuerda::BalancinIzquierdo
@@ -217,6 +226,53 @@ bool detectar_anclaje_cuerda(const MotorFisica& motor, Vector2D mouse_pos,
             if (d2 <= mejor_dist2) {
                 mejor_dist2 = d2;
                 out = { cubeta->get_id(), TipoAnclajeCuerda::Cubeta };
+                punto_out = p;
+                encontrado = true;
+            }
+        }
+
+        if (e->get_tipo_entidad() == TipoEntidadJuego::GLOBO) {
+            Vector2D p = e->get_posicion();
+            double d2 = (p - mouse_pos).magnitud_cuadrada();
+            if (d2 <= mejor_dist2) {
+                mejor_dist2 = d2;
+                out = { e->get_id(), TipoAnclajeCuerda::Globo };
+                punto_out = p;
+                encontrado = true;
+            }
+        }
+
+        const SoporteTorque* soporte = dynamic_cast<const SoporteTorque*>(e);
+        if (soporte) {
+            Vector2D p = soporte->get_punto_cuerda();
+            double d2 = (p - mouse_pos).magnitud_cuadrada();
+            if (d2 <= mejor_dist2) {
+                mejor_dist2 = d2;
+                out = { soporte->get_id(), TipoAnclajeCuerda::SoporteFijo };
+                punto_out = p;
+                encontrado = true;
+            }
+        }
+
+        const Gancho* gancho = dynamic_cast<const Gancho*>(e);
+        if (gancho) {
+            Vector2D p = gancho->get_punto_cuerda();
+            double d2 = (p - mouse_pos).magnitud_cuadrada();
+            if (d2 <= mejor_dist2) {
+                mejor_dist2 = d2;
+                out = { gancho->get_id(), TipoAnclajeCuerda::Gancho };
+                punto_out = p;
+                encontrado = true;
+            }
+        }
+
+        const Pistola* pistola_anc = dynamic_cast<const Pistola*>(e);
+        if (pistola_anc) {
+            Vector2D p = pistola_anc->get_posicion();
+            double d2 = (p - mouse_pos).magnitud_cuadrada();
+            if (d2 <= mejor_dist2) {
+                mejor_dist2 = d2;
+                out = { pistola_anc->get_id(), TipoAnclajeCuerda::Gancho };
                 punto_out = p;
                 encontrado = true;
             }
@@ -307,6 +363,8 @@ bool manejar_click_colocacion_cuerda(MotorFisica& motor, Vector2D mouse_pos) {
         AnclajeCuerda anclaje;
         Vector2D punto;
         if (detectar_anclaje_cuerda(motor, mouse_pos, anclaje, punto)) {
+            // El torque solo puede ser soporte intermedio, no extremo_a
+            if (anclaje.tipo == TipoAnclajeCuerda::SoporteFijo) return true;
             cuerda_extremo_a = anclaje;
             cuerda_punto_a_preview = punto;
             estado_cuerda = EstadoColocacionCuerda::ESPERANDO_SOPORTE;
@@ -717,6 +775,16 @@ bool crear_bola(MotorFisica& motor, Vector2D pos) {
     return true;
 }
 
+bool crear_gancho(MotorFisica& motor, Vector2D pos) {
+    motor.agregar_entidad(new Gancho(motor.generar_id(), pos));
+    return true;
+}
+
+bool crear_pistola(MotorFisica& motor, Vector2D pos) {
+    motor.agregar_entidad(new Pistola(motor.generar_id(), pos, 0.0));
+    return true;
+}
+
 bool crear_rampa(MotorFisica& motor, Vector2D pos, bool invertido) {
     double b = 160.0;
     double h = 120.0;
@@ -737,6 +805,9 @@ bool crear_seguidor_booster(MotorFisica& motor, Vector2D pos);
 bool crear_barril_chavo(MotorFisica& motor, Vector2D pos);
 bool crear_cubeta(MotorFisica& motor, Vector2D pos);
 bool crear_soporte_torque(MotorFisica& motor, Vector2D pos);
+bool crear_globo(MotorFisica& motor, Vector2D pos);
+bool crear_bola_beisbol(MotorFisica& motor, Vector2D pos);
+bool crear_tijera(MotorFisica& motor, Vector2D pos);
 
 bool crear_zona_meta(MotorFisica& motor, Vector2D pos) {
     motor.agregar_entidad(new ZonaMeta(motor.generar_id(), pos, 80.0, 80.0));
@@ -758,6 +829,11 @@ bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
         case TipoObjetoMenu::VENTILADOR:        return crear_ventilador(motor, pos);
         case TipoObjetoMenu::CUBETA:            return crear_cubeta(motor, pos);
         case TipoObjetoMenu::SOPORTE_TORQUE:    return crear_soporte_torque(motor, pos);
+        case TipoObjetoMenu::GANCHO:            return crear_gancho(motor, pos);
+        case TipoObjetoMenu::PISTOLA:           return crear_pistola(motor, pos);
+        case TipoObjetoMenu::GLOBO:             return crear_globo(motor, pos);
+        case TipoObjetoMenu::BOLA_BEISBOL:      return crear_bola_beisbol(motor, pos);
+        case TipoObjetoMenu::TIJERA:            return crear_tijera(motor, pos);
         case TipoObjetoMenu::ZONA_META:         return crear_zona_meta(motor, pos);
         case TipoObjetoMenu::CUERDA:            return false;
         default: return false;
@@ -955,6 +1031,31 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
             DrawCircleV({cx, cy}, 5.0f * escala, tint(Color{35, 38, 42, 255}));
             break;
         }
+        case TipoObjetoMenu::GANCHO: {
+            // Eye bolt: aro arriba + cuerpo con rosca abajo
+            Color gc = tint(Color{170, 178, 186, 255});
+            Color gd = tint(Color{100, 108, 116, 255});
+            Color gb = tint(Color{210, 215, 220, 255});
+            float r = 10.0f * escala;
+            // cuerpo con rosca
+            float bw = r * 1.1f, bh = r * 1.1f;
+            DrawRectangleRec({cx - bw/2, cy, bw, bh}, gc);
+            DrawRectangleLinesEx({cx - bw/2, cy, bw, bh}, 1.2f, gd);
+            for (int i = 1; i <= 2; i++)
+                DrawLineEx({cx - bw/2 + 1, cy + bh*i/3.0f}, {cx + bw/2 - 1, cy + bh*i/3.0f}, 1.0f, gd);
+            // cuello
+            float nw = bw * 0.7f, nh = r * 0.3f;
+            DrawRectangleRec({cx - nw/2, cy - nh, nw, nh}, gc);
+            DrawRectangleLinesEx({cx - nw/2, cy - nh, nw, nh}, 1.0f, gd);
+            // aro
+            float ar = r * 0.72f;
+            float ay = cy - nh - ar;
+            DrawRing({cx, ay}, ar * 0.52f, ar, 0, 360, 20, gc);
+            DrawCircleLines((int)cx, (int)ay, ar, gd);
+            DrawCircleLines((int)cx, (int)ay, ar * 0.52f, gd);
+            DrawCircleLines((int)(cx - ar*0.2f), (int)(ay - ar*0.2f), ar*0.18f, gb);
+            break;
+        }
         case TipoObjetoMenu::BOLA_REBOTADORA: {
             float r = 18.0f * escala;
             DrawCircle(static_cast<int>(cx), static_cast<int>(cy), r, tint(Color{218, 48, 42, 255}));
@@ -981,6 +1082,75 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
             DrawRectangleRec({cx - w / 2, cy - h / 2, w, h}, tint(Color{70, 84, 96, 255}));
             DrawCircleLines(static_cast<int>(cx + w / 2), static_cast<int>(cy), 8 * escala,
                             tint(Color{190, 210, 220, 255}));
+            break;
+        }
+        case TipoObjetoMenu::PISTOLA: {
+            Color pc = tint(Color{60, 65, 70, 255});
+            Color pm = tint(Color{100, 60, 30, 255});
+            Color pml = tint(Color{140, 148, 155, 255});
+            float s = escala;
+            // mango
+            DrawRectangleRec({cx - 4*s, cy, 14*s, 16*s}, pm);
+            // cuerpo
+            DrawRectangleRec({cx - 18*s, cy - 8*s, 36*s, 13*s}, pc);
+            // cañón
+            DrawRectangleRec({cx + 6*s, cy - 5*s, 20*s, 8*s}, pml);
+            // aros rojos (gatillo)
+            DrawCircle((int)(cx - 2*s), (int)(cy + 4*s), 4*s, tint(Color{200, 40, 40, 255}));
+            break;
+        }
+        case TipoObjetoMenu::GLOBO: {
+            float r = 14.0f * escala;
+            DrawCircle((int)cx, (int)(cy + 4 * escala), r, tint(Color{220, 50, 50, 255}));
+            DrawCircleLines((int)cx, (int)(cy + 4 * escala), r, tint(Color{150, 20, 20, 255}));
+            // hilo
+            DrawLineEx({cx, cy + 4 * escala + r}, {cx, cy + r * 2.2f + 4 * escala}, 1.5f, tint(Color{80, 80, 80, 255}));
+            break;
+        }
+        case TipoObjetoMenu::TIJERA: {
+            // Tijera horizontal: aros a la izquierda, puntas a la derecha
+            float hx = 18.0f * escala;
+            float hy = 9.0f * escala;
+            float ra = 6.5f * escala;
+            Color sc = tint(Color{175, 182, 195, 255});
+            Color sd = tint(Color{80, 88, 100, 255});
+            // cuchilla superior: aro izq arriba -> punta derecha arriba
+            DrawLineEx({cx - hx + ra, cy - hy * 0.3f}, {cx + hx, cy - hy}, 2.8f * escala, sc);
+            // cuchilla inferior: aro izq abajo -> punta derecha abajo
+            DrawLineEx({cx - hx + ra, cy + hy * 0.3f}, {cx + hx, cy + hy}, 2.8f * escala, sc);
+            // aros izquierda (rojos como mangos)
+            DrawCircle((int)(cx - hx + ra), (int)(cy - hy * 0.55f), ra, tint(Color{200, 40, 40, 255}));
+            DrawCircleLines((int)(cx - hx + ra), (int)(cy - hy * 0.55f), ra, sd);
+            DrawCircle((int)(cx - hx + ra), (int)(cy + hy * 0.55f), ra, tint(Color{200, 40, 40, 255}));
+            DrawCircleLines((int)(cx - hx + ra), (int)(cy + hy * 0.55f), ra, sd);
+            // pivote central
+            DrawCircle((int)(cx - hx * 0.1f), (int)cy, 2.5f * escala, sd);
+            // línea verde de corte vertical
+            DrawLineEx({cx + hx * 0.15f, cy - hy * 1.4f}, {cx + hx * 0.15f, cy + hy * 1.4f}, 1.5f * escala, tint(Color{80, 200, 80, 255}));
+            break;
+        }
+        case TipoObjetoMenu::BOLA_BEISBOL: {
+            float r = 14.0f * escala;
+            DrawCircle((int)cx, (int)cy, r, tint(Color{240, 235, 220, 255}));
+            DrawCircleLines((int)cx, (int)cy, r, tint(Color{180, 170, 150, 255}));
+            // costuras
+            DrawLineEx({cx - r * 0.3f, cy - r * 0.8f}, {cx - r * 0.3f, cy + r * 0.8f}, 1.5f, tint(Color{200, 60, 60, 255}));
+            DrawLineEx({cx + r * 0.3f, cy - r * 0.8f}, {cx + r * 0.3f, cy + r * 0.8f}, 1.5f, tint(Color{200, 60, 60, 255}));
+            break;
+        }
+        case TipoObjetoMenu::ZONA_META: {
+            float w = 36.0f * escala;
+            float h = 36.0f * escala;
+            // bandera ajedrez verde/blanco
+            int tiles = 3;
+            float tw = w / tiles, th = h / tiles;
+            for (int row = 0; row < tiles; row++) {
+                for (int col = 0; col < tiles; col++) {
+                    Color tc = ((row + col) % 2 == 0) ? tint(Color{60, 180, 80, 200}) : tint(Color{240, 240, 240, 200});
+                    DrawRectangleRec({cx - w/2 + col * tw, cy - h/2 + row * th, tw, th}, tc);
+                }
+            }
+            DrawRectangleLinesEx({cx - w/2, cy - h/2, w, h}, 1.5f, tint(Color{30, 120, 50, 255}));
             break;
         }
         default:
@@ -1481,6 +1651,39 @@ bool crear_cubeta(MotorFisica& motor, Vector2D pos) {
 
 bool crear_soporte_torque(MotorFisica& motor, Vector2D pos) {
     motor.agregar_entidad(new SoporteTorque(motor.generar_id(), pos, 16.0));
+    return true;
+}
+
+bool crear_globo(MotorFisica& motor, Vector2D pos) {
+    double radio = 18.0;
+    if (!posicion_valida_para_spawn(motor, pos, TipoForma::CIRCULO, radio, 0.0)) {
+        spawn_error_timer = 0.5f;
+        spawn_error_pos = pos;
+        return false;
+    }
+    Globo* g = new Globo(motor.generar_id(), pos, radio);
+    motor.agregar_entidad(g);
+    return true;
+}
+
+bool crear_bola_beisbol(MotorFisica& motor, Vector2D pos) {
+    double radio = 12.0;
+    if (!posicion_valida_para_spawn(motor, pos, TipoForma::CIRCULO, radio, 0.0)) {
+        spawn_error_timer = 0.5f;
+        spawn_error_pos = pos;
+        return false;
+    }
+    BolaBeisbol* b = new BolaBeisbol(motor.generar_id(), pos, radio);
+    motor.agregar_entidad(b);
+    return true;
+}
+
+bool crear_tijera(MotorFisica& motor, Vector2D pos) {
+    double w = 70.0;
+    double h = 30.0;
+    Vector2D spawn_pos(pos.x - w / 2.0, pos.y - h / 2.0);
+    Tijera* t = new Tijera(motor.generar_id(), spawn_pos, w, h);
+    motor.agregar_entidad(t);
     return true;
 }
 
@@ -2090,7 +2293,7 @@ void dibujar_menu_opciones() {
     DrawRectangle(static_cast<int>(sidebar_x), static_cast<int>(title_y), 4, 32, SKYBLUE);
     DrawTextEx(fuente_menu, "OPCIONES", { sidebar_x + 15.0f, title_y }, 32.0f, 2.0f, WHITE);
 
-    // 2. Definir pestañas del sidebar
+    // 2. Definir pestanas del sidebar
     struct TabButton {
         TabOpciones tab;
         const char* label;
@@ -2104,14 +2307,14 @@ void dibujar_menu_opciones() {
     };
     int num_tabs = 5;
 
-    // Dibujar pestañas principales
+    // Dibujar pestanas principales
     for (int i = 0; i < num_tabs; ++i) {
         Rectangle btn_rect = { sidebar_x, start_y + i * spacing_y, sidebar_w, btn_h };
-        bool is_active = (pestaña_opciones_actual == tabs[i].tab);
+        bool is_active = (pestana_opciones_actual == tabs[i].tab);
         bool hover = CheckCollisionPointRec(mouse, btn_rect);
         
         if (hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            pestaña_opciones_actual = tabs[i].tab;
+            pestana_opciones_actual = tabs[i].tab;
         }
         
         if (is_active) {
@@ -2164,10 +2367,10 @@ void dibujar_menu_opciones() {
     // 5. Línea divisoria vertical
     DrawLineEx({ divider_x, ALTO * 0.15f }, { divider_x, ALTO * 0.82f }, 1.5f, Color{ 70, 75, 110, 100 });
 
-    // 6. Columna derecha (Contenido dinámico de la pestaña)
+    // 6. Columna derecha (Contenido dinámico de la pestana)
     float content_y = ALTO * 0.25f;
 
-    if (pestaña_opciones_actual == TabOpciones::CONTROLES) {
+    if (pestana_opciones_actual == TabOpciones::CONTROLES) {
         DrawTextEx(fuente_menu, "CONTROLES", { content_x, ALTO * 0.15f }, 32.0f, 2.0f, SKYBLUE);
         
         float dy = 38.0f;
@@ -2188,10 +2391,10 @@ void dibujar_menu_opciones() {
         dibujar_linea_opcion("[ESC]", "Regresar / Pausar el juego", content_y + dy * 9);
     } else {
         const char* section_title = "";
-        if (pestaña_opciones_actual == TabOpciones::JUGABILIDAD) section_title = "JUGABILIDAD";
-        else if (pestaña_opciones_actual == TabOpciones::VIDEO) section_title = "VIDEO";
-        else if (pestaña_opciones_actual == TabOpciones::SONIDO) section_title = "SONIDO";
-        else if (pestaña_opciones_actual == TabOpciones::IDIOMA) section_title = "IDIOMA";
+        if (pestana_opciones_actual == TabOpciones::JUGABILIDAD) section_title = "JUGABILIDAD";
+        else if (pestana_opciones_actual == TabOpciones::VIDEO) section_title = "VIDEO";
+        else if (pestana_opciones_actual == TabOpciones::SONIDO) section_title = "SONIDO";
+        else if (pestana_opciones_actual == TabOpciones::IDIOMA) section_title = "IDIOMA";
         
         DrawTextEx(fuente_menu, section_title, { content_x, ALTO * 0.15f }, 32.0f, 2.0f, SKYBLUE);
         
@@ -2265,7 +2468,7 @@ void dibujar_seleccion_niveles(MotorFisica& motor) {
     DrawRectangle(static_cast<int>(sidebar_x), static_cast<int>(title_y), 4, 32, SKYBLUE);
     DrawTextEx(fuente_menu, "NIVELES", { sidebar_x + 15.0f, title_y }, 32.0f, 2.0f, WHITE);
 
-    // 2. Definir pestañas del sidebar
+    // 2. Definir pestanas del sidebar
     struct TabButton {
         TabNiveles tab;
         const char* label;
@@ -2277,14 +2480,14 @@ void dibujar_seleccion_niveles(MotorFisica& motor) {
     };
     int num_tabs = 3;
 
-    // Dibujar pestañas principales
+    // Dibujar pestanas principales
     for (int i = 0; i < num_tabs; ++i) {
         Rectangle btn_rect = { sidebar_x, start_y + i * spacing_y, sidebar_w, btn_h };
-        bool is_active = (pestaña_niveles_actual == tabs[i].tab);
+        bool is_active = (pestana_niveles_actual == tabs[i].tab);
         bool hover = CheckCollisionPointRec(mouse, btn_rect);
         
         if (hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            pestaña_niveles_actual = tabs[i].tab;
+            pestana_niveles_actual = tabs[i].tab;
         }
         
         if (is_active) {
@@ -2323,7 +2526,7 @@ void dibujar_seleccion_niveles(MotorFisica& motor) {
     // 4. Panel derecho de contenido
     float content_y = ALTO * 0.25f;
 
-    if (pestaña_niveles_actual == TabNiveles::CAMPANA) {
+    if (pestana_niveles_actual == TabNiveles::CAMPANA) {
         DrawTextEx(fuente_menu, "CAMPANA OFICIAL", { content_x, ALTO * 0.15f }, 32.0f, 2.0f, SKYBLUE);
         
         // Grid de 4 niveles oficiales pre-diseñados
@@ -2376,7 +2579,7 @@ void dibujar_seleccion_niveles(MotorFisica& motor) {
             }
         }
     } 
-    else if (pestaña_niveles_actual == TabNiveles::MIS_NIVELES) {
+    else if (pestana_niveles_actual == TabNiveles::MIS_NIVELES) {
         DrawTextEx(fuente_menu, "MIS NIVELES", { content_x, ALTO * 0.15f }, 32.0f, 2.0f, SKYBLUE);
         
         float card_w = 260.0f;
@@ -2434,7 +2637,7 @@ void dibujar_seleccion_niveles(MotorFisica& motor) {
             DrawTextEx(fuente_menu, "Entra a 'Modo Creativo' desde el menu de inicio para disenar y guardar tus puzles.", { content_x, content_y + 30.0f }, 16.0f, 1.0f, LIGHTGRAY);
         }
     }
-    else if (pestaña_niveles_actual == TabNiveles::IMPORTAR) {
+    else if (pestana_niveles_actual == TabNiveles::IMPORTAR) {
         DrawTextEx(fuente_menu, "IMPORTAR NIVEL (.tim)", { content_x, ALTO * 0.15f }, 32.0f, 2.0f, SKYBLUE);
         
         // Área interactiva de Drag and Drop
@@ -2702,6 +2905,13 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             auto* ramp = dynamic_cast<PlanoInclinado*>(entidad_seleccionada);
             if (ramp) {
                 ramp->invertir();
+            } else {
+                auto* bal = dynamic_cast<Balancin*>(entidad_seleccionada);
+                if (bal) bal->ciclar_inclinacion();
+                else {
+                    auto* pist = dynamic_cast<Pistola*>(entidad_seleccionada);
+                    if (pist) pist->invertir();
+                }
             }
         }
     }
@@ -3147,7 +3357,7 @@ int main() {
                     std::filesystem::copy_file(ruta_origen, ruta_destino, std::filesystem::copy_options::overwrite_existing, ec);
                     
                     refrescar_lista_partidas();
-                    pestaña_niveles_actual = TabNiveles::MIS_NIVELES;
+                    pestana_niveles_actual = TabNiveles::MIS_NIVELES;
                     estado_actual = EstadoJuego::SELECCION_NIVELES;
                 }
             }
