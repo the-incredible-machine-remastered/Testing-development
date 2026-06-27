@@ -3657,8 +3657,8 @@ void dibujar_y_actualizar_boton_silencio() {
 // ============================================================================
 int main() {
     // ---- Inicializar ventana ----
-    //SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_HIGHDPI);
-    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
+    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_HIGHDPI);
+    //SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
     InitWindow(ANCHO, ALTO, "TIM - Motor de Fisica | Prototipo RK4 + Raylib");
     InitAudioDevice(); // Inicializar dispositivo de audio de Raylib
     ANCHO = GetScreenWidth();
