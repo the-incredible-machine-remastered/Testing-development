@@ -202,7 +202,7 @@ inline void dibujar_panel_eventos_izquierdo(const MotorFisica& motor, GestorEven
     if (!panel_izquierdo_visible) {
         Rectangle btn_abrir = { 0, (float)(alto_pantalla / 2 - 40), 24, 80 };
         bool hover = CheckCollisionPointRec(GetMousePosition(), btn_abrir);
-        DrawRectangle(btn_abrir.x, btn_abrir.y, btn_abrir.width, btn_abrir.height, hover ? Color{165, 170, 182, 255} : Color{30, 32, 40, 240});
+        DrawRectangle(btn_abrir.x, btn_abrir.y, btn_abrir.width, btn_abrir.height, hover ? Color{165, 170, 182, 255} : Color{30, 32, 40, 255});
         DrawRectangleLines(btn_abrir.x, btn_abrir.y, btn_abrir.width, btn_abrir.height, Color{50, 52, 65, 255});
         DrawText(">", btn_abrir.x + 7, btn_abrir.y + 32, 18, hover ? Color{100, 150, 220, 255} : Color{55, 80, 110, 255});
         
@@ -212,13 +212,13 @@ inline void dibujar_panel_eventos_izquierdo(const MotorFisica& motor, GestorEven
         return;
     }
 
-    DrawRectangle(px, 0, w, alto_pantalla, Color{30, 32, 40, 240});
+    DrawRectangle(px, 0, w, alto_pantalla, Color{30, 32, 40, 255});
     DrawRectangleLines(px, 0, w, alto_pantalla, Color{50, 52, 65, 255});
 
     // Botón cerrar en el borde derecho del panel si está visible
     Rectangle btn_cerrar = { (float)w, (float)(alto_pantalla / 2 - 40), 24, 80 };
     bool hover_cerrar = CheckCollisionPointRec(GetMousePosition(), btn_cerrar);
-    DrawRectangle(btn_cerrar.x, btn_cerrar.y, btn_cerrar.width, btn_cerrar.height, hover_cerrar ? Color{165, 170, 182, 255} : Color{30, 32, 40, 240});
+    DrawRectangle(btn_cerrar.x, btn_cerrar.y, btn_cerrar.width, btn_cerrar.height, hover_cerrar ? Color{165, 170, 182, 255} : Color{30, 32, 40, 255});
     DrawRectangleLines(btn_cerrar.x, btn_cerrar.y, btn_cerrar.width, btn_cerrar.height, Color{50, 52, 65, 255});
     DrawText("<", btn_cerrar.x + 7, btn_cerrar.y + 32, 18, hover_cerrar ? Color{100, 150, 220, 255} : Color{55, 80, 110, 255});
 

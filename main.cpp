@@ -116,6 +116,11 @@ bool modo_debug = false;
 int contador_bolas = 0;
 GestorEventos gestor_eventos;
 
+// Cronómetro y rastreo de nivel actual para reinicios
+double tiempo_nivel = 0.0;
+std::string ruta_nivel_actual = "";
+int campana_nivel_actual = -1;
+
 // Audio del juego
 Music musica_menu;
 bool sonido_mutado = false;
@@ -451,6 +456,26 @@ Texture2D tex_ventilador_aspa;   // Aspa del ventilador
 
 // Animaciones del SeguidorBooster
 Animacion* anim_seguidor_corriendo = nullptr;
+Texture2D tex_menu_inicio_anim;
+Animacion* anim_menu_inicio = nullptr;
+float pos_x_anim_menu = 0.0f;
+Texture2D tex_menu_fede_anim;
+Animacion* anim_menu_fede = nullptr;
+Texture2D tex_menu_moto_anim;
+Animacion* anim_menu_moto = nullptr;
+float pos_x_anim_moto = 0.0f;
+Texture2D tex_menu_jose_anim;
+Animacion* anim_menu_jose = nullptr;
+float pos_x_anim_jose = 0.0f;
+Texture2D tex_menu_gusano_anim;
+Animacion* anim_menu_gusano = nullptr;
+float pos_x_anim_gusano = 0.0f;
+float timer_espera_menu = 0.0f;
+float timer_espera_moto = 0.0f;
+Texture2D tex_menu_drom_anim;
+Animacion* anim_menu_drom = nullptr;
+float pos_x_anim_drom = 0.0f;
+float timer_espera_drom = 0.0f;
 
 int ancho_area_juego() {
     return menu_visible ? (ANCHO - MENU_ANCHO) : ANCHO;
@@ -468,10 +493,12 @@ bool punto_en_menu(int mx, int my) {
     
     // Área del menú Principal (solo si está visible)
     if (!menu_visible) return false;
+    if (my >= ALTO - 150) return false; // El HUD está sobre el menú lateral en la parte inferior
     return mx >= px && mx < ANCHO && my >= 0 && my < ALTO;
 }
 
 bool punto_en_panel_izquierdo(int mx, int my) {
+    if (estado_actual == EstadoJuego::JUEGO_NIVEL) return false;
     int w = 260;
     int bx = panel_izquierdo_visible ? w : 0;
     
@@ -1296,6 +1323,7 @@ void dibujar_menu_lateral() {
         dibujar_panel_guardado(px, py_guardado, MENU_ANCHO, fuente_menu);
     }
 
+
     // Paginación
     int paginas = contar_paginas_tab(menu_tab);
     int py = ALTO - MENU_PAGINACION_ALTO - 180;  // 10px de margen desde el fondo del asset
@@ -1373,6 +1401,7 @@ bool manejar_click_menu(int mx, int my, MotorFisica& motor) {
             return true;
         }
     }
+
 
     if (!menu_visible) {
         int bx = ANCHO - 26;
@@ -1890,6 +1919,60 @@ void cargandoTexturas() {
         anim_seguidor_corriendo = new Animacion(tex_seguidor_corriendo, 8, 12, 8);
     }
 
+    // Inicializar animaciones del Menú de Inicio
+    tex_menu_inicio_anim = cargar_textura_datos("Assets/animation/manuel-n.png");
+    if (tex_menu_inicio_anim.id == 0) {
+        TraceLog(LOG_WARNING, "Textura de animacion de menu no encontrada: Assets/animation/manuel-n.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura de animacion de menu cargada: %dx%d", tex_menu_inicio_anim.width, tex_menu_inicio_anim.height);
+        anim_menu_inicio = new Animacion(tex_menu_inicio_anim, 6, 8, 6);
+        pos_x_anim_menu = ANCHO * 0.25f;
+    }
+
+    tex_menu_fede_anim = cargar_textura_datos("Assets/animation/fede-ani.png");
+    if (tex_menu_fede_anim.id == 0) {
+        TraceLog(LOG_WARNING, "Textura de animacion fede no encontrada: Assets/animation/fede.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura de animacion fede cargada: %dx%d", tex_menu_fede_anim.width, tex_menu_fede_anim.height);
+        anim_menu_fede = new Animacion(tex_menu_fede_anim, 8, 4, 8);
+    }
+
+    tex_menu_moto_anim = cargar_textura_datos("Assets/animation/moto-ani.png");
+    if (tex_menu_moto_anim.id == 0) {
+        TraceLog(LOG_WARNING, "Textura de animacion moto no encontrada: Assets/animation/moto-ani.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura de animacion moto cargada: %dx%d", tex_menu_moto_anim.width, tex_menu_moto_anim.height);
+        anim_menu_moto = new Animacion(tex_menu_moto_anim, 8, 4, 8);
+        pos_x_anim_moto = ANCHO + 150.0f;
+    }
+
+    tex_menu_jose_anim = cargar_textura_datos("Assets/animation/jose-ani.png");
+    if (tex_menu_jose_anim.id == 0) {
+        TraceLog(LOG_WARNING, "Textura de animacion jose no encontrada: Assets/animation/jose-ani.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura de animacion jose cargada: %dx%d", tex_menu_jose_anim.width, tex_menu_jose_anim.height);
+        anim_menu_jose = new Animacion(tex_menu_jose_anim, 8, 8, 8);
+        pos_x_anim_jose = ANCHO * 0.5f;
+    }
+
+    tex_menu_gusano_anim = cargar_textura_datos("Assets/animation/gusa-ani.png");
+    if (tex_menu_gusano_anim.id == 0) {
+        TraceLog(LOG_WARNING, "Textura de animacion gusano no encontrada: Assets/animation/gusa-ani.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura de animacion gusano cargada: %dx%d", tex_menu_gusano_anim.width, tex_menu_gusano_anim.height);
+        anim_menu_gusano = new Animacion(tex_menu_gusano_anim, 8, 8, 8);
+        pos_x_anim_gusano = ANCHO * 0.5f + 100.0f;
+    }
+
+    tex_menu_drom_anim = cargar_textura_datos("Assets/animation/drom.png");
+    if (tex_menu_drom_anim.id == 0) {
+        TraceLog(LOG_WARNING, "Textura de animacion drone no encontrada: Assets/animation/drom.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura de animacion drone cargada: %dx%d", tex_menu_drom_anim.width, tex_menu_drom_anim.height);
+        anim_menu_drom = new Animacion(tex_menu_drom_anim, 8, 8, 8);
+        pos_x_anim_drom = -150.0f;
+    }
+
     // Cargar texturas de los nuevos assets
     tex_trampolin = cargar_textura_datos("Assets/trampolin/trampolin.png");
     if (tex_trampolin.id == 0) {
@@ -2047,8 +2130,67 @@ bool dibujar_boton_imagen_interactivo(Rectangle rect, Texture2D tex_normal, Text
 // Funciones del Menú Principal
 // ============================================================================
 void actualizar_menu_principal() {
-    // Sin lógica de actualización compleja por ahora
+    if (anim_menu_inicio) {
+        if (timer_espera_menu > 0.0f) {
+            timer_espera_menu -= GetFrameTime();
+            if (timer_espera_menu <= 0.0f) {
+                pos_x_anim_menu = ANCHO + 150.0f;
+            }
+        } else {
+            anim_menu_inicio->actualizar(GetFrameTime());
+            pos_x_anim_menu -= 70.0f * GetFrameTime();
+            if (pos_x_anim_menu < -150.0f) {
+                // Tiempo de espera aleatorio entre 3.0 y 8.0 segundos
+                timer_espera_menu = (float)GetRandomValue(80, 100) / 10.0f;
+                pos_x_anim_menu = -1000.0f;
+            }
+        }
+    }
+    if (anim_menu_fede) {
+        anim_menu_fede->actualizar(GetFrameTime());
+    }
+    if (anim_menu_moto) {
+        if (timer_espera_moto > 0.0f) {
+            timer_espera_moto -= GetFrameTime();
+            if (timer_espera_moto <= 0.0f) {
+                pos_x_anim_moto = ANCHO + 150.0f;
+            }
+        } else {
+            anim_menu_moto->actualizar(GetFrameTime());
+            pos_x_anim_moto -= 500.0f * GetFrameTime();
+            if (pos_x_anim_moto < -150.0f) {
+                // Tiempo de espera aleatorio entre 5.0 y 12.0 segundos
+                timer_espera_moto = (float)GetRandomValue(100, 150) / 10.0f;
+                pos_x_anim_moto = -1000.0f;
+            }
+        }
+    }
+    if (anim_menu_jose) {
+        anim_menu_jose->actualizar(GetFrameTime());
+    }
+    if (anim_menu_gusano) {
+        anim_menu_gusano->actualizar(GetFrameTime());
+    }
+    if (anim_menu_drom) {
+        if (timer_espera_drom > 0.0f) {
+            timer_espera_drom -= GetFrameTime();
+            if (timer_espera_drom <= 0.0f) {
+                pos_x_anim_drom = -150.0f;
+            }
+        } else {
+            anim_menu_drom->actualizar(GetFrameTime());
+            pos_x_anim_drom += 150.0f * GetFrameTime();
+            if (pos_x_anim_drom > ANCHO + 150.0f) {
+                // Tiempo de espera aleatorio entre 4.0 y 10.0 segundos
+                timer_espera_drom = (float)GetRandomValue(80, 100) / 10.0f;
+                pos_x_anim_drom = -1000.0f;
+            }
+        }
+    }
 }
+
+
+
 
 void dibujar_menu_principal(MotorFisica& motor) {
     if (tex_menu_fondo.id > 0) {
@@ -2059,6 +2201,36 @@ void dibujar_menu_principal(MotorFisica& motor) {
     } else {
         // Fondo degradado fallback
         DrawRectangleGradientV(0, 0, ANCHO, ALTO, COLOR_FONDO, Color{10, 10, 25, 255});
+    }
+    
+    // Dibujar personaje animado Fede
+    if (anim_menu_fede) {
+        Vector2 pos_dibujo = { ANCHO * 0.75f + 150, ALTO * 0.65f + 100.0f };
+        anim_menu_fede->dibujar(pos_dibujo, 110.0f * 1.5f, 200.0f * 1.5f);
+    }
+
+    // Dibujar personaje animado Jose
+    if (anim_menu_jose) {
+        Vector2 pos_dibujo = { pos_x_anim_jose - 400, ALTO * 0.65f + 150.0f - 50};
+        anim_menu_jose->dibujar(pos_dibujo, 110.0f * 1.5f, 200.0f * 1.5f);
+    }
+
+    // Dibujar personaje animado Gusano
+    if (anim_menu_gusano) {
+        Vector2 pos_dibujo = { pos_x_anim_gusano + 730, ALTO * 0.65f + 50};
+        anim_menu_gusano->dibujar(pos_dibujo, 110.0f * 1.5f+50, 200.0f * 1.5f + 100);
+    }
+
+    // Dibujar personaje animado Manuel
+    if (anim_menu_inicio) {
+        Vector2 pos_dibujo = { pos_x_anim_menu, ALTO * 0.65f + 150.0f };
+        anim_menu_inicio->dibujar(pos_dibujo, 110.0f * 1.5f, 200.0f * 1.5f);
+    }
+
+    // Dibujar personaje animado Drone (Drom) - Capa superior
+    if (anim_menu_drom) {
+        Vector2 pos_dibujo = { pos_x_anim_drom, ALTO * 0.15f };
+        anim_menu_drom->dibujar(pos_dibujo, 110.0f * 1.5f, 200.0f * 1.5f);
     }
     
     // Título y Subtítulo
@@ -2120,6 +2292,12 @@ void dibujar_menu_principal(MotorFisica& motor) {
     
     if (dibujar_boton_imagen_interactivo(rect_salir, tex_btn_salir1, tex_btn_salir2)) {
         salir_juego = true;
+    }
+
+    // Dibujar personaje animado Moto (Frans) - Adelante del cuadro de opciones
+    if (anim_menu_moto) {
+        Vector2 pos_dibujo = { pos_x_anim_moto, ALTO * 0.65f + 150.0f + 75.0f };
+        anim_menu_moto->dibujar(pos_dibujo, 110.0f * 1.5f + 200 , 200.0f * 1.5f +50);
     }
 }
 
@@ -2278,6 +2456,7 @@ void actualizar_seleccion_niveles(MotorFisica& motor) {
 
 // Inicializa un nivel de campaña oficial en memoria
 void cargar_nivel_campana(MotorFisica& motor, int lvl_idx) {
+    tiempo_nivel = 0.0;
     nivel_campana_actual = lvl_idx;
     nivel_usuario_actual_path = "";
 
@@ -2398,11 +2577,11 @@ void dibujar_seleccion_niveles(MotorFisica& motor) {
         DrawTextEx(fuente_menu, "CAMPANA OFICIAL", { content_x, ALTO * 0.15f }, 32.0f, 2.0f, SKYBLUE);
         
         // Grid de 4 niveles oficiales pre-diseñados
-        float card_w = 280.0f;
+        float card_w = 380.0f;
         float card_h = 160.0f;
         float spacing_x = 40.0f;
         float spacing_y = 30.0f;
-        int cols = 2;
+        int cols = 3;
         
         struct LevelData {
             const char* name;
@@ -2435,12 +2614,12 @@ void dibujar_seleccion_niveles(MotorFisica& motor) {
             DrawRectangleRoundedLinesEx(draw_card, 0.08f, 4, 2.0f, hover_card ? WHITE : Color{70, 75, 110, 255});
             
             // Dibujar textos en la tarjeta
-            DrawTextEx(fuente_menu, official_lvls[i].name, { draw_card.x + 15.0f, draw_card.y + 15.0f }, 18.0f, 1.0f, GOLD);
-            DrawTextEx(fuente_menu, official_lvls[i].diff, { draw_card.x + 15.0f, draw_card.y + 40.0f }, 12.0f, 1.0f, official_lvls[i].diff_color);
+            DrawTextEx(fuente_menu, official_lvls[i].name, { draw_card.x + 15.0f, draw_card.y + 15.0f }, 24.0f, 1.0f, GOLD);
+            DrawTextEx(fuente_menu, official_lvls[i].diff, { draw_card.x + 15.0f, draw_card.y + 40.0f }, 16.0f, 1.0f, official_lvls[i].diff_color);
             
             // Texto descriptivo en dos líneas fijas
-            DrawTextEx(fuente_menu, official_lvls[i].desc1, { draw_card.x + 15.0f, draw_card.y + 65.0f }, 14.0f, 1.0f, LIGHTGRAY);
-            DrawTextEx(fuente_menu, official_lvls[i].desc2, { draw_card.x + 15.0f, draw_card.y + 85.0f }, 14.0f, 1.0f, LIGHTGRAY);
+            DrawTextEx(fuente_menu, official_lvls[i].desc1, { draw_card.x + 15.0f, draw_card.y + 65.0f }, 18.0f, 1.0f, LIGHTGRAY);
+            DrawTextEx(fuente_menu, official_lvls[i].desc2, { draw_card.x + 15.0f, draw_card.y + 85.0f }, 18.0f, 1.0f, LIGHTGRAY);
             
             if (hover_card && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 cargar_nivel_campana(motor, i);
@@ -2491,6 +2670,10 @@ void dibujar_seleccion_niveles(MotorFisica& motor) {
                        20, 1, WHITE);
                        
             if (hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                tiempo_nivel = 0.0;
+                campana_nivel_actual = -1;
+                ruta_nivel_actual = partidas_guardadas[i].ruta_archivo;
+
                 int ancho_cargado = ANCHO;
                 int alto_cargado = ALTO;
                 nivel_campana_actual = -1;
@@ -2559,12 +2742,14 @@ BotonesHUD calcular_rectangulos_botones_hud() {
     
     BotonesHUD btns;
     btns.rect_play = { 20.0f + 1110.0f * escala + 35, y_offset + 20.0f * escala + 25 , 70.0f * escala - 20 , 70.0f * escala - 20 };
-    btns.rect_reset = { 20.0f + 1210.0f * escala + 35, y_offset + 20.0f * escala + 25 , 70.0f * escala - 20 , 70.0f * escala - 20 };
+    btns.rect_reset = { 20.0f + 1210.0f * escala + 35 - 1260, y_offset + 20.0f * escala + 25, 70.0f * escala - 20 +10, 70.0f * escala - 20 +10};
     btns.rect_opciones = { 20.0f + 1310.0f * escala+35, y_offset + 20.0f * escala + 25 , 70.0f * escala-20 , 70.0f * escala - 20 };
     btns.rect_ayuda = { 20.0f + 1410.0f * escala+26, y_offset + 20.0f * escala + 25 , 70.0f * escala-20 , 70.0f * escala - 20};
     btns.rect_salir = { 20.0f + 1510.0f * escala+26, y_offset + 20.0f * escala + 25 , 70.0f * escala-20 , 70.0f * escala - 20};
+    btns.rect_play = { 20.0f * escala+25 , y_offset + 10.0f * escala + 15 , 70.0f * escala + 40 ,92.0f * escala};
     return btns;
 }
+
 
 // ============================================================================
 // Núcleo del Juego (Común para Sandbox y Niveles)
@@ -2592,6 +2777,10 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             }
         }
         return;
+    }
+
+    if (es_modo_nivel && !gestor_eventos.victoria_alcanzada) {
+        tiempo_nivel += GetFrameTime();
     }
 
     reconstruir_celdas_menu();
@@ -2626,34 +2815,42 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
         // Interceptar clicks en los botones del HUD primero
         BotonesHUD btns = calcular_rectangulos_botones_hud();
         Vector2 mouse_pos = {(float)mx, (float)my};
-        if (CheckCollisionPointRec(mouse_pos, btns.rect_play)) {
-            if (motor.get_pausado()) {
-                guardar_snapshot_simulacion(motor, gestor_eventos);
-                motor.set_pausado(false);
-                cancelar_colocacion_cuerda();
-            } else {
-                spawn_error_timer = 0.5f;
-                spawn_error_pos = Vector2D(mx, my);
+        if (!punto_en_panel_izquierdo(mx, my) && !punto_en_menu(mx, my)) {
+            if (CheckCollisionPointRec(mouse_pos, btns.rect_play)) {
+                if (motor.get_pausado()) {
+                    guardar_snapshot_simulacion(motor, gestor_eventos);
+                    motor.set_pausado(false);
+                    cancelar_colocacion_cuerda();
+                } else {
+                    spawn_error_timer = 0.5f;
+                    spawn_error_pos = Vector2D(mx, my);
+                }
+                return;
             }
-            return;
+            if (CheckCollisionPointRec(mouse_pos, btns.rect_reset)) {
+                restaurar_snapshot_simulacion(motor, gestor_eventos);
+                motor.set_pausado(true);
+                return;
+            }
+            if (CheckCollisionPointRec(mouse_pos, btns.rect_opciones)) {
+                mostrar_pausa_overlay = true;
+                return;
+            }
+            if (CheckCollisionPointRec(mouse_pos, btns.rect_ayuda)) {
+                mostrar_ayuda_overlay = true;
+                return;
+            }
+            if (CheckCollisionPointRec(mouse_pos, btns.rect_salir)) {
+                menu_visible = !menu_visible;
+                return;
+            }
+            if (CheckCollisionPointRec(mouse_pos, btns.rect_play)) {
+                motor.set_pausado(!motor.get_pausado());
+                if (!motor.get_pausado()) cancelar_colocacion_cuerda();
+                return;
+            }
         }
-        if (CheckCollisionPointRec(mouse_pos, btns.rect_reset)) {
-            restaurar_snapshot_simulacion(motor, gestor_eventos);
-            motor.set_pausado(true);
-            return;
-        }
-        if (CheckCollisionPointRec(mouse_pos, btns.rect_opciones)) {
-            mostrar_pausa_overlay = true;
-            return;
-        }
-        if (CheckCollisionPointRec(mouse_pos, btns.rect_ayuda)) {
-            mostrar_ayuda_overlay = true;
-            return;
-        }
-        if (CheckCollisionPointRec(mouse_pos, btns.rect_salir)) {
-            menu_visible = !menu_visible;
-            return;
-        }
+
 
         if (punto_en_panel_izquierdo(mx, my)) {
             entidad_seleccionada = nullptr;  // Deseleccionar al interactuar con el panel de eventos
@@ -2990,6 +3187,7 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
 
     if (IsKeyPressed(KEY_R)) {
         if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
+            tiempo_nivel = 0.0;
             if (nivel_campana_actual != -1) {
                 cargar_nivel_campana(motor, nivel_campana_actual);
             } else if (!nivel_usuario_actual_path.empty()) {
@@ -2998,6 +3196,13 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                 cargar_partida(motor, gestor_eventos, nivel_usuario_actual_path, ancho_cargado, alto_cargado, contador_bolas);
                 ANCHO = ancho_cargado;
                 ALTO = alto_cargado;
+            } else {
+                motor.limpiar();
+                contador_bolas = 0;
+                resetear_punteros_borde();
+                limpiar_estado_tras_cargar_partida();
+                crear_escena(motor);
+                gestor_eventos.limpiar();
             }
         } else {
             motor.limpiar();
@@ -3006,9 +3211,9 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             limpiar_estado_tras_cargar_partida();
             crear_escena(motor);
             gestor_eventos.limpiar();
-            modo_evento_ui = ModoEventoUI::INACTIVO;
-            motor.set_pausado(true);
         }
+        modo_evento_ui = ModoEventoUI::INACTIVO;
+        motor.set_pausado(true);
     }
 
     if (IsKeyPressed(KEY_KP_ADD) || IsKeyPressed(KEY_EQUAL)) {
@@ -3212,6 +3417,8 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
         }
     }
 
+    dibujar_menu_lateral();
+
     if (tex_base_central.id > 0) {
         float escala_panel_x = 1900.0f / tex_base_central.width;
         float escala_panel_y = 130.0f / tex_base_central.height;
@@ -3235,13 +3442,22 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     }
 
     dibujar_ghost_spawn();
-    dibujar_panel_eventos_izquierdo(motor, gestor_eventos, ALTO);
-    dibujar_menu_lateral();
 
     if (gestor_eventos.victoria_alcanzada) {
         DrawRectangle(0, 0, ANCHO, ALTO, ColorAlpha(BLACK, 0.7f));
-        DrawText("VICTORIA!", ANCHO/2 - 100, ALTO/2 - 40, 40, GREEN);
-        DrawText("Presiona R para reiniciar el nivel", ANCHO/2 - 160, ALTO/2 + 20, 20, WHITE);
+        DrawText("VICTORIA!", ANCHO/2 - 100, ALTO/2 - 60, 40, GREEN);
+        
+        if (es_modo_nivel) {
+            int min = (int)(tiempo_nivel / 60);
+            int seg = (int)(tiempo_nivel) % 60;
+            int ms = (int)(tiempo_nivel * 100) % 100;
+            const char* final_time_txt = TextFormat("Tiempo de completado: %02d:%02d.%02d", min, seg, ms);
+            int tw = MeasureText(final_time_txt, 24);
+            DrawText(final_time_txt, ANCHO/2 - tw/2, ALTO/2, 24, GOLD);
+            DrawText("Presiona R para reiniciar el nivel o ESC para salir", ANCHO/2 - 240, ALTO/2 + 50, 20, WHITE);
+        } else {
+            DrawText("Presiona R para reiniciar el nivel", ANCHO/2 - 160, ALTO/2 + 20, 20, WHITE);
+        }
     }
 
     if (titulo_alpha > 0.01f) {
@@ -3261,12 +3477,24 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     Vector2 ts = MeasureTextEx(fuente_menu, txt_modo, 16, 1);
     DrawTextEx(fuente_menu, txt_modo, {280 + (240 - ts.x)/2.0f, 30 + (35 - ts.y)/2.0f}, 16, 1, es_modo_nivel ? SKYBLUE : GOLD);
 
-    // Dibujar resaltado hover para los botones del HUD
+    // Dibujar banner del Cronómetro si estamos en Modo Nivel
+    if (es_modo_nivel) {
+        int min = (int)(tiempo_nivel / 60);
+        int seg = (int)(tiempo_nivel) % 60;
+        int ms = (int)(tiempo_nivel * 100) % 100;
+        
+        const char* txt_tiempo = TextFormat("%02d:%02d.%02d", min, seg, ms);
+        Vector2 ts_time = MeasureTextEx(fuente_menu, txt_tiempo, 16, 1);
+        DrawTextEx(fuente_menu, txt_tiempo, {715 + (180 - ts_time.x)/2.0f, 970 + (35 - ts_time.y)/2.0f}, 54, 9, WHITE);
+    }
+
     BotonesHUD btns = calcular_rectangulos_botones_hud();
     Vector2 mouse = GetMousePosition();
     
+    bool mouse_en_paneles = punto_en_panel_izquierdo((int)mouse.x, (int)mouse.y) || punto_en_menu((int)mouse.x, (int)mouse.y);
+    
     // Play button
-    bool hover_play = CheckCollisionPointRec(mouse, btns.rect_play);
+    bool hover_play = !mouse_en_paneles && CheckCollisionPointRec(mouse, btns.rect_play);
     bool play_activo = motor.get_pausado();
     Color play_tint = play_activo ? WHITE : Color{120, 120, 120, 255};
     if (tex_hud_play.id > 0) {
@@ -3277,7 +3505,7 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     }
 
     // Reset button
-    bool hover_reset = CheckCollisionPointRec(mouse, btns.rect_reset);
+    bool hover_reset = !mouse_en_paneles && CheckCollisionPointRec(mouse, btns.rect_reset);
     if (tex_hud_reset.id > 0) {
         Texture2D tex = hover_reset && (tex_hud_reset_hover.id > 0) ? tex_hud_reset_hover : tex_hud_reset;
         DrawTexturePro(tex, {0.0f, 0.0f, (float)tex.width, (float)tex.height}, btns.rect_reset, {0.0f, 0.0f}, 0.0f, WHITE);
@@ -3287,7 +3515,8 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     }
 
     // Opciones (Engrane)
-    bool hover_opciones = CheckCollisionPointRec(mouse, btns.rect_opciones);
+    bool hover_opciones = !mouse_en_paneles && CheckCollisionPointRec(mouse, btns.rect_opciones);
+
     if (tex_hud_opciones.id > 0) {
         Texture2D tex = hover_opciones && (tex_hud_opciones_hover.id > 0) ? tex_hud_opciones_hover : tex_hud_opciones;
         DrawTexturePro(tex, {0.0f, 0.0f, (float)tex.width, (float)tex.height}, btns.rect_opciones, {0.0f, 0.0f}, 0.0f, WHITE);
@@ -3297,21 +3526,26 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     }
     
     // Ayuda (?)
-    bool hover_ayuda = CheckCollisionPointRec(mouse, btns.rect_ayuda);
+    bool hover_ayuda = !mouse_en_paneles && CheckCollisionPointRec(mouse, btns.rect_ayuda);
+    if (tex_hud_ayuda.id > 0) {
+        DrawTexturePro(tex_hud_ayuda, {0.0f, 0.0f, (float)tex_hud_ayuda.width, (float)tex_hud_ayuda.height}, btns.rect_ayuda, {0.0f, 0.0f}, 0.0f, WHITE);
+    }
     if (hover_ayuda) {
-        if (tex_hud_ayuda.id > 0) {
-            DrawTexturePro(tex_hud_ayuda, {0.0f, 0.0f, (float)tex_hud_ayuda.width, (float)tex_hud_ayuda.height}, btns.rect_ayuda, {0.0f, 0.0f}, 0.0f, WHITE);
-        }
         DrawRectangleRoundedLinesEx(btns.rect_ayuda, 0.2f, 4, 2.0f, SKYBLUE);
     }
     
     // Salir (Menú)
-    bool hover_salir = CheckCollisionPointRec(mouse, btns.rect_salir);
+    bool hover_salir = !mouse_en_paneles && CheckCollisionPointRec(mouse, btns.rect_salir);
+    if (tex_hud_salir.id > 0) {
+        DrawTexturePro(tex_hud_salir, {0.0f, 0.0f, (float)tex_hud_salir.width, (float)tex_hud_salir.height}, btns.rect_salir, {0.0f, 0.0f}, 0.0f, WHITE);
+    }
     if (hover_salir) {
-        if (tex_hud_salir.id > 0) {
-            DrawTexturePro(tex_hud_salir, {0.0f, 0.0f, (float)tex_hud_salir.width, (float)tex_hud_salir.height}, btns.rect_salir, {0.0f, 0.0f}, 0.0f, WHITE);
-        }
         DrawRectangleRoundedLinesEx(btns.rect_salir, 0.2f, 4, 2.0f, SKYBLUE);
+    }
+
+    // Dibujar paneles laterales (sobre el HUD)
+    if (!es_modo_nivel) {
+        dibujar_panel_eventos_izquierdo(motor, gestor_eventos, ALTO);
     }
 
     // Dibujar Overlay de Ayuda
@@ -3423,7 +3657,8 @@ void dibujar_y_actualizar_boton_silencio() {
 // ============================================================================
 int main() {
     // ---- Inicializar ventana ----
-    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_HIGHDPI);
+    //SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_HIGHDPI);
+    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
     InitWindow(ANCHO, ALTO, "TIM - Motor de Fisica | Prototipo RK4 + Raylib");
     InitAudioDevice(); // Inicializar dispositivo de audio de Raylib
     ANCHO = GetScreenWidth();
@@ -3534,6 +3769,50 @@ int main() {
     if (anim_seguidor_corriendo) {
         delete anim_seguidor_corriendo;
     }
+    if (anim_menu_inicio) {
+        delete anim_menu_inicio;
+        anim_menu_inicio = nullptr;
+    }
+    if (tex_menu_inicio_anim.id > 0) {
+        UnloadTexture(tex_menu_inicio_anim);
+    }
+    if (anim_menu_fede) {
+        delete anim_menu_fede;
+        anim_menu_fede = nullptr;
+    }
+    if (tex_menu_fede_anim.id > 0) {
+        UnloadTexture(tex_menu_fede_anim);
+    }
+    if (anim_menu_moto) {
+        delete anim_menu_moto;
+        anim_menu_moto = nullptr;
+    }
+    if (tex_menu_moto_anim.id > 0) {
+        UnloadTexture(tex_menu_moto_anim);
+    }
+    if (anim_menu_jose) {
+        delete anim_menu_jose;
+        anim_menu_jose = nullptr;
+    }
+    if (tex_menu_jose_anim.id > 0) {
+        UnloadTexture(tex_menu_jose_anim);
+    }
+    if (anim_menu_gusano) {
+        delete anim_menu_gusano;
+        anim_menu_gusano = nullptr;
+    }
+    if (tex_menu_gusano_anim.id > 0) {
+        UnloadTexture(tex_menu_gusano_anim);
+    }
+    if (anim_menu_drom) {
+        delete anim_menu_drom;
+        anim_menu_drom = nullptr;
+    }
+    if (tex_menu_drom_anim.id > 0) {
+        UnloadTexture(tex_menu_drom_anim);
+    }
+
+
     if (tex_trampolin.id > 0) UnloadTexture(tex_trampolin);
     if (tex_balancin_base.id > 0) UnloadTexture(tex_balancin_base);
     if (tex_balancin_tabla.id > 0) UnloadTexture(tex_balancin_tabla);
@@ -3578,4 +3857,3 @@ int main() {
     CloseWindow();
     return 0;
 }
-// DrawTexturePro(textura, sourceRec, destRec, origin, rotation, tint);
