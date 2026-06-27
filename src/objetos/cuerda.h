@@ -14,7 +14,10 @@
 enum class TipoAnclajeCuerda {
     Cubeta,
     BalancinIzquierdo,
-    BalancinDerecho
+    BalancinDerecho,
+    SoporteFijo,
+    Globo,
+    Gancho
 };
 
 struct AnclajeCuerda {
@@ -29,6 +32,7 @@ private:
     std::vector<int> soportes_id;
     double longitud_inicial;
     double ultima_tension;
+    double tension_anterior;
     bool estabilizar_columpio;
 
     static EntidadFisica* buscar_entidad(const std::vector<EntidadFisica*>& entidades, int id) {
@@ -68,12 +72,7 @@ private:
 
     static void aplicar_en_anclaje(EntidadFisica* e, TipoAnclajeCuerda tipo,
                                    const Vector2D& punto, const Vector2D& fuerza) {
-        auto* balancin = dynamic_cast<Balancin*>(e);
-        if (balancin && tipo != TipoAnclajeCuerda::Cubeta) {
-            balancin->aplicar_fuerza_en_punto(punto, fuerza);
-            return;
-        }
-
+        // Cuerdas no generan torque en balancín — solo colisiones directas lo rotan
         e->aplicar_fuerza(fuerza);
     }
 
@@ -102,7 +101,7 @@ public:
            double longitud_total)
         : EntidadFisica(id, Vector2D(), 0.0, TipoForma::NINGUNA, true),
           extremo_a(a), extremo_b(b), soportes_id(soportes),
-          longitud_inicial(longitud_total), ultima_tension(0.0),
+          longitud_inicial(longitud_total), ultima_tension(0.0), tension_anterior(0.0),
           estabilizar_columpio(true) {
         tipo_menu = TipoObjetoMenu::CUERDA;
     }
@@ -112,6 +111,8 @@ public:
     const std::vector<int>& get_soportes_id() const { return soportes_id; }
     double get_longitud_inicial() const { return longitud_inicial; }
     double get_ultima_tension() const { return ultima_tension; }
+    double get_delta_tension() const { return ultima_tension - tension_anterior; }
+    void resetear_tension_anterior() { tension_anterior = ultima_tension; }
     bool get_estabilizar_columpio() const { return estabilizar_columpio; }
     void set_estabilizar_columpio(bool activo) { estabilizar_columpio = activo; }
 
@@ -169,14 +170,15 @@ public:
         Vector2D dir_a = tramo_a / len_a;
         Vector2D dir_b = tramo_b / len_b;
         double velocidad_estira = -Vector2D::dot(va, dir_a) - Vector2D::dot(vb, dir_b);
-        double k = 520.0;
-        double c = 70.0;
+        double k = 3000.0;
+        double c = 600.0;
         double tension_peso = std::max(
             tension_por_peso(ent_a, extremo_a.tipo, dir_a, gravedad),
             tension_por_peso(ent_b, extremo_b.tipo, dir_b, gravedad)
         );
         double tension_elastica = k * std::max(0.0, estiramiento)
                                 + c * std::max(0.0, velocidad_estira);
+        tension_anterior = ultima_tension;
         ultima_tension = std::max(0.0, tension_peso + tension_elastica);
 
         aplicar_en_anclaje(ent_a, extremo_a.tipo, pa, dir_a * ultima_tension);

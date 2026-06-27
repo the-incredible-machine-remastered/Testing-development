@@ -16,6 +16,8 @@
 #include "../objetos/soporte_torque.h"
 #include "../objetos/cuerda.h"
 #include "../objetos/zona_meta.h"
+#include "../objetos/gancho.h"
+#include "../objetos/pistola.h"
 #include "eventos.h"
 #include "rutas_datos.h"
 #include "../objetos/catalogo_menu.gen.h"
@@ -129,9 +131,15 @@ inline int tipo_anclaje_a_int(TipoAnclajeCuerda t) {
 }
 
 inline TipoAnclajeCuerda tipo_anclaje_desde_int(int v) {
-    if (v == 1) return TipoAnclajeCuerda::BalancinIzquierdo;
-    if (v == 2) return TipoAnclajeCuerda::BalancinDerecho;
-    return TipoAnclajeCuerda::Cubeta;
+    switch (v) {
+        case 0: return TipoAnclajeCuerda::Cubeta;
+        case 1: return TipoAnclajeCuerda::BalancinIzquierdo;
+        case 2: return TipoAnclajeCuerda::BalancinDerecho;
+        case 3: return TipoAnclajeCuerda::SoporteFijo;
+        case 4: return TipoAnclajeCuerda::Globo;
+        case 5: return TipoAnclajeCuerda::Gancho;
+        default: return TipoAnclajeCuerda::Cubeta;
+    }
 }
 
 inline double leer_valor(const std::string& linea, const char* clave, double defecto) {
@@ -250,6 +258,12 @@ inline const std::unordered_map<std::string, CreadorEntidad>& obtener_registro_f
         {"BALANCIN", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
             auto bal = std::make_unique<Balancin>(id, Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
                 leer_valor(linea, "largo=", 200), leer_valor(linea, "esp=", 6));
+            double ang0 = leer_valor(linea, "ang0=", 0.0);
+            if (ang0 != 0.0) {
+                bal->ciclar_inclinacion();
+                if (ang0 < 0.0 && bal->get_angulo_inicial() > 0.0) bal->ciclar_inclinacion();
+                if (ang0 > 0.0 && bal->get_angulo_inicial() < 0.0) bal->ciclar_inclinacion();
+            }
             bal->set_velocidad(Vector2D(leer_valor(linea, "vx=", 0), leer_valor(linea, "vy=", 0)));
             bal->set_velocidad_angular(leer_valor(linea, "omega=", 0));
             return bal;
@@ -311,6 +325,15 @@ inline const std::unordered_map<std::string, CreadorEntidad>& obtener_registro_f
                 }
             }
             return std::make_unique<Cuerda>(id, a, soportes, b, leer_valor(linea, "len=", 200));
+        }},
+        {"GANCHO", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Gancho>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)));
+        }},
+        {"PISTOLA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Pistola>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "ang=", 0.0));
         }},
         {"ZONA_META", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
             return std::make_unique<ZonaMeta>(id,

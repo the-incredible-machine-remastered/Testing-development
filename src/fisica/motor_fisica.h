@@ -23,6 +23,11 @@
 #include "../objetos/seguidor_booster.h"
 #include "../objetos/barril_chavo.h"
 #include "../objetos/ventilador.h"
+#include "../objetos/globo.h"
+#include "../objetos/tijera.h"
+#include "../objetos/gancho.h"
+#include "../objetos/pistola.h"
+#include "../objetos/soporte_torque.h"
 #include "colisiones.h"
 #include "fisica_ventilador.h"
 #include <vector>
@@ -36,7 +41,10 @@ private:
     Vector2D gravedad;
     double dt_fijo;              // Timestep fijo (ej. 1/120 s)
     double acumulador_tiempo;    // Acumula tiempo real para pasos fijos
+    double tiempo_simulacion;    // Tiempo total desde que arrancó la simulación
     bool pausado;
+    int pasos_desde_reanudar;    // Cuenta pasos tras quitar pausa para ignorar delta inicial
+    bool resetear_tensiones_cuerdas;
     int siguiente_id;
     std::vector<RegistroColision> colisiones_frame;
     std::vector<RegistroEventoEspecial> eventos_especiales_frame;
@@ -44,7 +52,9 @@ private:
 public:
     MotorFisica(double dt = 1.0 / 120.0, Vector2D grav = Vector2D(0, 500.0))
         : gravedad(grav), dt_fijo(dt), acumulador_tiempo(0.0),
-          pausado(true), siguiente_id(1) {}
+          tiempo_simulacion(0.0), pausado(true),
+          pasos_desde_reanudar(0), resetear_tensiones_cuerdas(false),
+          siguiente_id(1) {}
 
     ~MotorFisica() {
         limpiar();
@@ -107,11 +117,19 @@ public:
         entidades.clear();
         entidades_owner.clear();
         siguiente_id = 1;
+        tiempo_simulacion = 0.0;
+        acumulador_tiempo = 0.0;
+        pasos_desde_reanudar = 0;
+        resetear_tensiones_cuerdas = false;
     }
 
     // --- Control de simulación ---
 
-    void set_pausado(bool p) { pausado = p; }
+    void set_pausado(bool p) {
+        if (pausado && !p)
+            resetear_tensiones_cuerdas = true; // resetear tras los primeros 2 pasos
+        pausado = p;
+    }
     bool get_pausado() const { return pausado; }
     void set_gravedad(const Vector2D& g) { gravedad = g; }
     Vector2D get_gravedad() const { return gravedad; }
@@ -132,6 +150,7 @@ public:
 
         while (acumulador_tiempo >= dt_fijo) {
             paso_fisico(dt_fijo);
+            tiempo_simulacion += dt_fijo;
             acumulador_tiempo -= dt_fijo;
         }
     }
@@ -149,6 +168,13 @@ private:
         if (rebotadora) {
             pos = rebotadora->get_posicion();
             radio = rebotadora->get_radio();
+            return true;
+        }
+
+        auto* globo = dynamic_cast<Globo*>(e);
+        if (globo) {
+            pos = globo->get_posicion();
+            radio = globo->get_radio();
             return true;
         }
 
@@ -199,6 +225,13 @@ private:
             return true;
         }
 
+        auto* tijera = dynamic_cast<Tijera*>(e);
+        if (tijera) {
+            min = tijera->get_min();
+            max = tijera->get_max();
+            return true;
+        }
+
         return false;
     }
 
@@ -236,6 +269,12 @@ private:
         // 4. Detectar y resolver colisiones
         detectar_y_resolver_colisiones();
 
+        // 4.5 Tijeras activadas cortan cuerdas que pasan por su zona
+        cortar_cuerdas_con_tijeras();
+
+        // 4.6 Pistolas activadas disparan
+        disparar_pistolas();
+
         // 5. Recolectar eventos especiales pendientes de todas las entidades
         for (auto* e : entidades) {
             auto& evs = e->get_eventos_pendientes();
@@ -260,12 +299,183 @@ private:
     }
 
     void aplicar_tensiones_cuerda() {
-        for (auto* e : entidades) {
-            auto* cuerda = dynamic_cast<Cuerda*>(e);
-            if (cuerda) {
-                cuerda->aplicar_tension(entidades, gravedad);
+        // Resetear tension_anterior tras los primeros 3 pasos al reanudar
+        if (resetear_tensiones_cuerdas) {
+            pasos_desde_reanudar++;
+            if (pasos_desde_reanudar >= 3) {
+                for (auto* e : entidades) {
+                    auto* c = dynamic_cast<Cuerda*>(e);
+                    if (c) c->resetear_tension_anterior();
+                }
+                resetear_tensiones_cuerdas = false;
+                pasos_desde_reanudar = 0;
             }
         }
+
+        for (auto* e : entidades) {
+            auto* cuerda = dynamic_cast<Cuerda*>(e);
+            if (!cuerda) continue;
+            cuerda->aplicar_tension(entidades, gravedad);
+
+            // Activar pistola solo si la tensión aumentó bruscamente
+            if (resetear_tensiones_cuerdas) continue; // aún estabilizando
+            double delta = cuerda->get_delta_tension();
+            if (delta < 60.0) continue;
+
+            auto activar_si_pistola = [&](int id) {
+                for (auto* e2 : entidades) {
+                    if (e2->get_id() != id) continue;
+                    auto* pistola = dynamic_cast<Pistola*>(e2);
+                    if (pistola) pistola->activar_por_tension();
+                    break;
+                }
+            };
+            activar_si_pistola(cuerda->get_extremo_a().entidad_id);
+            activar_si_pistola(cuerda->get_extremo_b().entidad_id);
+        }
+    }
+
+    // Comprueba si el segmento P1-P2 intersecta el rectángulo [min, max]
+    static bool segmento_cruza_aabb(const Vector2D& p1, const Vector2D& p2,
+                                    const Vector2D& min, const Vector2D& max) {
+        // Primero: si algún extremo está dentro del AABB, ya intersecta
+        auto dentro = [&](const Vector2D& p) {
+            return p.x >= min.x && p.x <= max.x && p.y >= min.y && p.y <= max.y;
+        };
+        if (dentro(p1) || dentro(p2)) return true;
+
+        // Cohen-Sutherland simplificado: clipping del segmento contra el AABB
+        // Usamos el test de Liang-Barsky
+        double dx = p2.x - p1.x;
+        double dy = p2.y - p1.y;
+        double t0 = 0.0, t1 = 1.0;
+
+        auto clip = [&](double p, double q) -> bool {
+            if (std::abs(p) < MathUtils::EPSILON) return q >= 0.0;
+            double r = q / p;
+            if (p < 0) { if (r > t1) return false; if (r > t0) t0 = r; }
+            else        { if (r < t0) return false; if (r < t1) t1 = r; }
+            return true;
+        };
+
+        return clip(-dx, p1.x - min.x) && clip(dx, max.x - p1.x)
+            && clip(-dy, p1.y - min.y) && clip(dy, max.y - p1.y);
+    }
+
+    void cortar_cuerdas_con_tijeras() {
+        std::vector<int> ids_a_eliminar;
+        std::vector<EntidadFisica*> entidades_nuevas;
+
+        for (auto* e : entidades) {
+            auto* tijera = dynamic_cast<Tijera*>(e);
+            if (!tijera || !tijera->get_fue_activada() || tijera->get_ya_corto_cuerdas()) continue;
+
+            Vector2D t_min = tijera->get_min() - Vector2D(5, 5);
+            Vector2D t_max = tijera->get_max() + Vector2D(5, 5);
+
+            for (auto* e2 : entidades) {
+                auto* cuerda = dynamic_cast<Cuerda*>(e2);
+                if (!cuerda) continue;
+
+                // puntos: [extremo_a(0), sop0(1), sop1(2), ..., extremo_b(n-1)]
+                std::vector<Vector2D> puntos;
+                if (!cuerda->obtener_puntos(entidades, puntos)) continue;
+
+                int seg_cortado = -1;
+                for (size_t k = 1; k < puntos.size() && seg_cortado < 0; ++k) {
+                    if (segmento_cruza_aabb(puntos[k-1], puntos[k], t_min, t_max))
+                        seg_cortado = static_cast<int>(k);
+                }
+                if (seg_cortado < 0) continue;
+
+                ids_a_eliminar.push_back(cuerda->get_id());
+
+                const std::vector<int>& sops = cuerda->get_soportes_id();
+                int n = static_cast<int>(puntos.size());
+                int num_sops = static_cast<int>(sops.size());
+
+                // sops[i] corresponde a puntos[i+1]
+                // seg_cortado: índice del punto FINAL del segmento cortado
+                // Soportes lado A: sops[0 .. seg_cortado-2]  (count = seg_cortado-1)
+                // Soportes lado B: sops[seg_cortado-1 .. num_sops-1]  (count = num_sops - seg_cortado + 1... pero seg_cortado puede ser n-1)
+
+                int num_sops_a = seg_cortado - 1; // soportes antes del corte
+                int num_sops_b = num_sops - num_sops_a; // soportes después del corte
+
+                auto crear_bolita = [&](int id_soporte, Vector2D pos_soporte, double lon_ref) {
+                    if (lon_ref < 20.0) lon_ref = 20.0;
+                    Bola* bs = new Bola(generar_id(), pos_soporte + Vector2D(0, lon_ref * 0.3), 2.0, 0.3);
+                    bs->set_amortiguamiento(0.08);
+                    bs->set_restitucion(0.05);
+                    entidades_nuevas.push_back(bs);
+                    AnclajeCuerda a{ id_soporte, TipoAnclajeCuerda::SoporteFijo };
+                    AnclajeCuerda b{ bs->get_id(), TipoAnclajeCuerda::Cubeta };
+                    entidades_nuevas.push_back(new Cuerda(generar_id(), a, {}, b, lon_ref));
+                };
+
+                // LADO A: extremo_a → sops[0..num_sops_a-3] → sops[num_sops_a-2]
+                // sops[num_sops_a-1] = tN se descarta, bolita desde sops[num_sops_a-2] = tN-1
+                if (num_sops_a >= 2) {
+                    int id_b_a = sops[num_sops_a - 2]; // tN-1
+                    std::vector<int> sops_a(sops.begin(), sops.begin() + num_sops_a - 2);
+                    double lon_a = 0.0;
+                    for (int i = 0; i < seg_cortado - 2; ++i)
+                        lon_a += Vector2D::distancia(puntos[i], puntos[i+1]);
+                    if (lon_a > MathUtils::EPSILON) {
+                        AnclajeCuerda anc_b{ id_b_a, TipoAnclajeCuerda::SoporteFijo };
+                        entidades_nuevas.push_back(new Cuerda(
+                            generar_id(), cuerda->get_extremo_a(), sops_a, anc_b, lon_a
+                        ));
+                    }
+                    crear_bolita(id_b_a, puntos[seg_cortado-2],
+                        Vector2D::distancia(puntos[seg_cortado-2], puntos[seg_cortado-1]));
+                }
+
+                // LADO B: sops[num_sops_a+1] → sops[num_sops_a+2..] → extremo_b
+                // sops[num_sops_a] = t0 se descarta, bolita desde sops[num_sops_a+1] = t1
+                if (num_sops_b >= 2) {
+                    int id_a_b = sops[num_sops_a + 1]; // t1
+                    std::vector<int> sops_b(sops.begin() + num_sops_a + 2, sops.end());
+                    double lon_b = 0.0;
+                    for (int i = seg_cortado + 1; i < n - 1; ++i)
+                        lon_b += Vector2D::distancia(puntos[i], puntos[i+1]);
+                    if (lon_b > MathUtils::EPSILON) {
+                        AnclajeCuerda anc_a{ id_a_b, TipoAnclajeCuerda::SoporteFijo };
+                        entidades_nuevas.push_back(new Cuerda(
+                            generar_id(), anc_a, sops_b, cuerda->get_extremo_b(), lon_b
+                        ));
+                    }
+                    crear_bolita(id_a_b, puntos[seg_cortado + 1],
+                        Vector2D::distancia(puntos[seg_cortado + 1], puntos[seg_cortado + 2 < n ? seg_cortado + 2 : n - 1]));
+                }
+            }
+
+            tijera->set_ya_corto_cuerdas();
+            tijera->resetear_activacion();
+        }
+
+        for (int id : ids_a_eliminar)
+            remover_entidad(id);
+        for (auto* nueva : entidades_nuevas)
+            entidades.push_back(nueva);
+    }
+
+    void disparar_pistolas() {
+        std::vector<EntidadFisica*> nuevas;
+        for (auto* e : entidades) {
+            auto* pistola = dynamic_cast<Pistola*>(e);
+            if (!pistola || !pistola->get_disparada()) continue;
+
+            Vector2D dir = pistola->get_dir_disparo();
+            Vector2D pos = pistola->get_punto_bala();
+            Bola* bala = new Bola(generar_id(), pos, 8.0, 0.5);
+            bala->set_velocidad(dir * pistola->get_velocidad_bala());  // necesita getter
+            bala->set_restitucion(0.3);
+            bala->set_amortiguamiento(0.01);
+            nuevas.push_back(bala);
+            pistola->resetear_disparo();
+        }
+        for (auto* n : nuevas) entidades.push_back(n);
     }
 
     // ========================================================================
