@@ -16,6 +16,11 @@
 #include "../objetos/soporte_torque.h"
 #include "../objetos/cuerda.h"
 #include "../objetos/zona_meta.h"
+#include "../objetos/polea.h"
+#include "../objetos/rueda_hamster.h"
+#include "../objetos/cinta_transportadora.h"
+#include "../objetos/generador_motor.h"
+#include "../objetos/correa.h"
 #include "eventos.h"
 #include "rutas_datos.h"
 #include "../objetos/catalogo_menu.gen.h"
@@ -71,6 +76,11 @@ inline TipoObjetoMenu mapear_tipo_entidad_a_menu(TipoEntidadJuego t, const Entid
         case TipoEntidadJuego::SOPORTE: return TipoObjetoMenu::SOPORTE_TORQUE;
         case TipoEntidadJuego::ZONA_META: return TipoObjetoMenu::ZONA_META;
         case TipoEntidadJuego::CUERDA: return TipoObjetoMenu::CUERDA;
+        case TipoEntidadJuego::RUEDA_HAMSTER: return TipoObjetoMenu::RUEDA_HAMSTER;
+        case TipoEntidadJuego::POLEA: return TipoObjetoMenu::NINGUNO;
+        case TipoEntidadJuego::CINTA_TRANSPORTADORA: return TipoObjetoMenu::CINTA_TRANSPORTADORA;
+        case TipoEntidadJuego::GENERADOR_MOTOR: return TipoObjetoMenu::GENERADOR_MOTOR;
+        case TipoEntidadJuego::CORREA: return TipoObjetoMenu::CORREA;
         case TipoEntidadJuego::PARED: {
             const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
             if (p) {
@@ -322,6 +332,37 @@ inline const std::unordered_map<std::string, CreadorEntidad>& obtener_registro_f
                 }
             }
             return std::make_unique<Cuerda>(id, a, soportes, b, leer_valor(linea, "len=", 200));
+        }},
+        {"RUEDA_HAMSTER", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            auto b = std::make_unique<RuedaHamster>(id, Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "r=", 35.0));
+            b->set_velocidad_angular(leer_valor(linea, "omega=", 0));
+            b->set_hamster_corriendo(leer_valor_i(linea, "corr=", 0) != 0);
+            b->set_sentido_horario(leer_valor_i(linea, "sh=", 0) != 0);
+            return b;
+        }},
+        {"POLEA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            auto b = std::make_unique<Polea>(id, Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "r=", 18.0));
+            b->set_velocidad_angular(leer_valor(linea, "omega=", 0));
+            return b;
+        }},
+        {"CINTA_TRANSPORTADORA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            auto b = std::make_unique<CintaTransportadora>(id, Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 240.0), leer_valor(linea, "h=", 18.0));
+            b->set_velocidad_angular(leer_valor(linea, "omega=", 0));
+            return b;
+        }},
+        {"GENERADOR_MOTOR", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            auto b = std::make_unique<GeneradorMotor>(id, Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 60.0), leer_valor(linea, "h=", 50.0));
+            b->set_velocidad_angular(leer_valor(linea, "omega=", 0));
+            return b;
+        }},
+        {"CORREA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            int aid = leer_valor_i(linea, "aid=", 0);
+            int bid = leer_valor_i(linea, "bid=", 0);
+            return std::make_unique<Correa>(id, aid, bid);
         }},
         {"ZONA_META", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
             return std::make_unique<ZonaMeta>(id,

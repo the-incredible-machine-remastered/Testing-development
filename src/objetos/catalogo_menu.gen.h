@@ -21,9 +21,13 @@ enum class TipoObjetoMenu {
     SOPORTE_TORQUE,
     TRAMPOLIN,
     BARRIL_CHAVO,
+    GENERADOR_MOTOR,
+    RUEDA_HAMSTER,
     SEGUIDOR_BOOSTER,
     VENTILADOR,
     ZONA_META,
+    CINTA_TRANSPORTADORA,
+    CORREA,
     PLATAFORMA_DECOR,
     COUNT
 };
@@ -52,9 +56,13 @@ static const ItemCatalogo CATALOGO_MENU[] = {
     { TipoObjetoMenu::SOPORTE_TORQUE, "Torque", 1, 0, 0, true },
     { TipoObjetoMenu::TRAMPOLIN, "Trampolin", 2, 0, 0, true },
     { TipoObjetoMenu::BARRIL_CHAVO, "Barril", 0, 0, 1, true },
+    { TipoObjetoMenu::GENERADOR_MOTOR, "Generador", 0, 0, 1, true },
+    { TipoObjetoMenu::RUEDA_HAMSTER, "Rueda Hamster", 0, 0, 1, true },
     { TipoObjetoMenu::SEGUIDOR_BOOSTER, "Futbolista", 0, 0, 1, true },
     { TipoObjetoMenu::VENTILADOR, "Ventilador", 0, 0, 1, true },
     { TipoObjetoMenu::ZONA_META, "Zona Meta", 0, 0, 1, true },
+    { TipoObjetoMenu::CINTA_TRANSPORTADORA, "Cinta Transp.", 0, 1, 0, true },
+    { TipoObjetoMenu::CORREA, "Correa", 0, 1, 0, true },
     { TipoObjetoMenu::PLATAFORMA_DECOR, "Ladrillo", 0, 1, 0, true },
 };
 

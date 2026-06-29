@@ -23,6 +23,11 @@
 #include "../objetos/seguidor_booster.h"
 #include "../objetos/barril_chavo.h"
 #include "../objetos/ventilador.h"
+#include "../objetos/polea.h"
+#include "../objetos/rueda_hamster.h"
+#include "../objetos/cinta_transportadora.h"
+#include "../objetos/generador_motor.h"
+#include "../objetos/correa.h"
 #include "colisiones.h"
 #include "fisica_ventilador.h"
 #include <vector>
@@ -152,6 +157,20 @@ private:
             return true;
         }
 
+        auto* polea = dynamic_cast<Polea*>(e);
+        if (polea) {
+            pos = polea->get_posicion();
+            radio = polea->get_radio();
+            return true;
+        }
+
+        auto* rueda = dynamic_cast<RuedaHamster*>(e);
+        if (rueda) {
+            pos = rueda->get_posicion();
+            radio = rueda->get_radio();
+            return true;
+        }
+
         return false;
     }
 
@@ -199,6 +218,20 @@ private:
             return true;
         }
 
+        auto* cinta = dynamic_cast<CintaTransportadora*>(e);
+        if (cinta) {
+            min = cinta->get_min();
+            max = cinta->get_max();
+            return true;
+        }
+
+        auto* gen = dynamic_cast<GeneradorMotor*>(e);
+        if (gen) {
+            min = gen->get_min();
+            max = gen->get_max();
+            return true;
+        }
+
         return false;
     }
 
@@ -214,6 +247,9 @@ private:
 
         // 1.6 Aplicar constraints de cuerdas colocadas como herramienta
         aplicar_tensiones_cuerda();
+
+        // 1.7 Aplicar transmisión por correas
+        aplicar_correas();
  
         // 2. Actualizar comportamiento del futbolista seguidor
         for (auto* e : entidades) {
@@ -264,6 +300,15 @@ private:
             auto* cuerda = dynamic_cast<Cuerda*>(e);
             if (cuerda) {
                 cuerda->aplicar_tension(entidades, gravedad);
+            }
+        }
+    }
+
+    void aplicar_correas() {
+        for (auto* e : entidades) {
+            auto* correa = dynamic_cast<Correa*>(e);
+            if (correa) {
+                correa->aplicar_tension_correa(entidades);
             }
         }
     }

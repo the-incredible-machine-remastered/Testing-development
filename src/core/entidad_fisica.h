@@ -179,6 +179,14 @@ public:
     TipoForma get_tipo_forma() const { return tipo_forma; }
     double get_inercia() const { return inercia; }
 
+    virtual Vector2D get_velocidad_en_punto(const Vector2D& punto_mundo) const {
+        double w = velocidad_angular;
+        Vector2D r = punto_mundo - posicion;
+        return velocidad + Vector2D(-w * r.y, w * r.x);
+    }
+
+    virtual double get_radio_eje() const { return 1.0; }
+
     // ---- Setters ----
     void set_posicion(const Vector2D& pos) { posicion = pos; }
     virtual void set_posicion_editor(const Vector2D& pos) { set_posicion(pos); }

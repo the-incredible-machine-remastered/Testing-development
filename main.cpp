@@ -30,6 +30,11 @@
 #include "objetos/seguidor_booster.h"
 #include "objetos/barril_chavo.h"
 #include "objetos/ventilador.h"
+#include "objetos/rueda_hamster.h"
+#include "objetos/polea.h"
+#include "objetos/cinta_transportadora.h"
+#include "objetos/generador_motor.h"
+#include "objetos/correa.h"
 #include "fisica/colisiones.h"
 #include "fisica/motor_fisica.h"
 #include "objetos/catalogo_menu.gen.h"
@@ -159,6 +164,16 @@ Vector2D cuerda_punto_a_preview;
 std::vector<int> cuerda_soportes_id;
 std::vector<Vector2D> cuerda_soportes_preview;
 
+enum class EstadoColocacionCorrea {
+    INACTIVA,
+    ESPERANDO_EJE_A,
+    ESPERANDO_EJE_B
+};
+
+EstadoColocacionCorrea estado_correa = EstadoColocacionCorrea::INACTIVA;
+int correa_eje_a_id = -1;
+Vector2D correa_punto_a_preview;
+
 bool obtener_datos_circulo(const EntidadFisica* e, Vector2D& pos, double& radio) {
     const Bola* bola = dynamic_cast<const Bola*>(e);
     if (bola) {
@@ -171,6 +186,20 @@ bool obtener_datos_circulo(const EntidadFisica* e, Vector2D& pos, double& radio)
     if (rebotadora) {
         pos = rebotadora->get_posicion();
         radio = rebotadora->get_radio();
+        return true;
+    }
+
+    const Polea* polea = dynamic_cast<const Polea*>(e);
+    if (polea) {
+        pos = polea->get_posicion();
+        radio = polea->get_radio();
+        return true;
+    }
+
+    const RuedaHamster* rueda = dynamic_cast<const RuedaHamster*>(e);
+    if (rueda) {
+        pos = rueda->get_posicion();
+        radio = rueda->get_radio();
         return true;
     }
 
@@ -265,12 +294,79 @@ bool detectar_soporte_torque(const MotorFisica& motor, Vector2D mouse_pos,
     return false;
 }
 
+void cancelar_colocacion_correa() {
+    estado_correa = EstadoColocacionCorrea::INACTIVA;
+    correa_eje_a_id = -1;
+    correa_punto_a_preview = Vector2D();
+}
+
 void cancelar_colocacion_cuerda() {
     estado_cuerda = EstadoColocacionCuerda::INACTIVA;
     cuerda_extremo_a = { -1, TipoAnclajeCuerda::Cubeta };
     cuerda_punto_a_preview = Vector2D();
     cuerda_soportes_id.clear();
     cuerda_soportes_preview.clear();
+    cancelar_colocacion_correa();
+}
+
+bool detectar_eje_correa(const MotorFisica& motor, Vector2D mouse_pos,
+                         int& entidad_id_out, Vector2D& punto_out) {
+    const double radio_hit = 25.0;
+    double mejor_dist2 = radio_hit * radio_hit;
+    bool encontrado = false;
+
+    for (const auto* e : motor.get_entidades()) {
+        if (es_borde_nivel(e)) continue;
+
+        bool es_rotativo = (e->get_tipo_entidad() == TipoEntidadJuego::POLEA ||
+                            e->get_tipo_entidad() == TipoEntidadJuego::RUEDA_HAMSTER ||
+                            e->get_tipo_entidad() == TipoEntidadJuego::CINTA_TRANSPORTADORA ||
+                            e->get_tipo_entidad() == TipoEntidadJuego::GENERADOR_MOTOR);
+
+        if (es_rotativo) {
+            Vector2D p = e->get_posicion(); // Center of rotation/axle
+            double d2 = (p - mouse_pos).magnitud_cuadrada();
+            if (d2 <= mejor_dist2) {
+                mejor_dist2 = d2;
+                entidad_id_out = e->get_id();
+                punto_out = p;
+                encontrado = true;
+            }
+        }
+    }
+    return encontrado;
+}
+
+bool manejar_click_colocacion_correa(MotorFisica& motor, Vector2D mouse_pos) {
+    if (estado_correa == EstadoColocacionCorrea::INACTIVA) return false;
+
+    if (estado_correa == EstadoColocacionCorrea::ESPERANDO_EJE_A) {
+        int ent_id = -1;
+        Vector2D punto;
+        if (detectar_eje_correa(motor, mouse_pos, ent_id, punto)) {
+            correa_eje_a_id = ent_id;
+            correa_punto_a_preview = punto;
+            estado_correa = EstadoColocacionCorrea::ESPERANDO_EJE_B;
+        }
+        return true;
+    }
+
+    if (estado_correa == EstadoColocacionCorrea::ESPERANDO_EJE_B) {
+        int ent_id = -1;
+        Vector2D punto;
+        if (detectar_eje_correa(motor, mouse_pos, ent_id, punto)) {
+            if (ent_id == correa_eje_a_id) {
+                return true; // Avoid self connection
+            }
+            motor.agregar_entidad(new Correa(motor.generar_id(), correa_eje_a_id, ent_id));
+            if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
+                inventario_actual[TipoObjetoMenu::CORREA]--;
+            }
+            cancelar_colocacion_cuerda();
+        }
+        return true;
+    }
+    return false;
 }
 
 bool soporte_ya_agregado(int soporte_id) {
@@ -334,6 +430,9 @@ bool manejar_click_colocacion_cuerda(MotorFisica& motor, Vector2D mouse_pos) {
                 double longitud = calcular_longitud_ruta_cuerda(punto_a, cuerda_soportes_preview, punto_b);
                 motor.agregar_entidad(new Cuerda(
                     motor.generar_id(), cuerda_extremo_a, cuerda_soportes_id, extremo_b, longitud));
+                if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
+                    inventario_actual[TipoObjetoMenu::CUERDA]--;
+                }
             }
             cancelar_colocacion_cuerda();
             return true;
@@ -364,6 +463,9 @@ bool manejar_click_colocacion_cuerda(MotorFisica& motor, Vector2D mouse_pos) {
                 double longitud = calcular_longitud_ruta_cuerda(punto_a, cuerda_soportes_preview, punto_b);
                 motor.agregar_entidad(new Cuerda(
                     motor.generar_id(), cuerda_extremo_a, cuerda_soportes_id, extremo_b, longitud));
+                if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
+                    inventario_actual[TipoObjetoMenu::CUERDA]--;
+                }
             }
             cancelar_colocacion_cuerda();
             return true;
@@ -823,6 +925,10 @@ bool crear_seguidor_booster(MotorFisica& motor, Vector2D pos);
 bool crear_barril_chavo(MotorFisica& motor, Vector2D pos);
 bool crear_cubeta(MotorFisica& motor, Vector2D pos);
 bool crear_soporte_torque(MotorFisica& motor, Vector2D pos);
+bool crear_rueda_hamster(MotorFisica& motor, Vector2D pos);
+bool crear_polea(MotorFisica& motor, Vector2D pos);
+bool crear_cinta_transportadora(MotorFisica& motor, Vector2D pos);
+bool crear_generador_motor(MotorFisica& motor, Vector2D pos);
 
 bool crear_zona_meta(MotorFisica& motor, Vector2D pos) {
     motor.agregar_entidad(new ZonaMeta(motor.generar_id(), pos, 80.0, 80.0));
@@ -848,7 +954,11 @@ bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
         case TipoObjetoMenu::CUBETA:            return crear_cubeta(motor, pos);
         case TipoObjetoMenu::SOPORTE_TORQUE:    return crear_soporte_torque(motor, pos);
         case TipoObjetoMenu::ZONA_META:         return crear_zona_meta(motor, pos);
+        case TipoObjetoMenu::RUEDA_HAMSTER:     return crear_rueda_hamster(motor, pos);
+        case TipoObjetoMenu::CINTA_TRANSPORTADORA: return crear_cinta_transportadora(motor, pos);
+        case TipoObjetoMenu::GENERADOR_MOTOR:   return crear_generador_motor(motor, pos);
         case TipoObjetoMenu::CUERDA:            return false;
+        case TipoObjetoMenu::CORREA:            return false;
         default: return false;
     }
 }
@@ -1110,6 +1220,46 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
             DrawRectangleRec({cx - w / 2, cy - h / 2, w, h}, tint(Color{70, 84, 96, 255}));
             DrawCircleLines(static_cast<int>(cx + w / 2), static_cast<int>(cy), 8 * escala,
                             tint(Color{190, 210, 220, 255}));
+            break;
+        }
+        case TipoObjetoMenu::RUEDA_HAMSTER: {
+            float r = 20.0f * escala;
+            DrawLineEx({cx, cy}, {cx - 8.0f * escala, cy + r + 2.0f * escala}, 1.5f * escala, tint(DARKGRAY));
+            DrawLineEx({cx, cy}, {cx + 8.0f * escala, cy + r + 2.0f * escala}, 1.5f * escala, tint(DARKGRAY));
+            DrawRectangle(static_cast<int>(cx - 12.0f * escala), static_cast<int>(cy + r + 2.0f * escala), 24.0f * escala, 2, tint(GRAY));
+            DrawCircleLines(static_cast<int>(cx), static_cast<int>(cy), r, tint(Color{120, 125, 135, 255}));
+            for (int i = 0; i < 4; ++i) {
+                double angle_spoke = i * MathUtils::TIM_PI / 2.0;
+                float sx = cx + r * std::cos(angle_spoke);
+                float sy = cy + r * std::sin(angle_spoke);
+                DrawLineEx({cx, cy}, {sx, sy}, 1.0f * escala, tint(Color{130, 135, 145, 180}));
+            }
+            DrawCircle(static_cast<int>(cx + 10.0f * escala * std::cos(GetTime() * 3.0f)), 
+                       static_cast<int>(cy + 10.0f * escala * std::sin(GetTime() * 3.0f)), 4.0f * escala, tint(ORANGE));
+            break;
+        }
+        case TipoObjetoMenu::CINTA_TRANSPORTADORA: {
+            float w = 44.0f * escala;
+            float h = 10.0f * escala;
+            DrawRectangleRounded({cx - w/2, cy - h/2, w, h}, 0.5f, 4, tint(Color{70, 74, 82, 255}));
+            DrawCircle(static_cast<int>(cx - w/2 + 5.0f * escala), static_cast<int>(cy), h/2 - 1.0f * escala, tint(LIGHTGRAY));
+            DrawCircle(static_cast<int>(cx + w/2 - 5.0f * escala), static_cast<int>(cy), h/2 - 1.0f * escala, tint(LIGHTGRAY));
+            break;
+        }
+        case TipoObjetoMenu::GENERADOR_MOTOR: {
+            float w = 24.0f * escala;
+            float h = 20.0f * escala;
+            DrawRectangleRec({cx - w/2, cy - h/2, w, h}, tint(Color{50, 70, 95, 255}));
+            DrawCircle(static_cast<int>(cx), static_cast<int>(cy), 6.0f * escala, tint(Color{130, 135, 145, 255}));
+            DrawCircle(static_cast<int>(cx), static_cast<int>(cy), 2.0f * escala, tint(DARKGRAY));
+            break;
+        }
+        case TipoObjetoMenu::CORREA: {
+            float d = 12.0f * escala;
+            DrawCircle(static_cast<int>(cx - d), static_cast<int>(cy), 5.0f * escala, tint(GRAY));
+            DrawCircle(static_cast<int>(cx + d), static_cast<int>(cy), 5.0f * escala, tint(GRAY));
+            DrawLineEx({cx - d, cy - 5.0f * escala}, {cx + d, cy - 5.0f * escala}, 1.5f * escala, tint(Color{90, 80, 70, 255}));
+            DrawLineEx({cx - d, cy + 5.0f * escala}, {cx + d, cy + 5.0f * escala}, 1.5f * escala, tint(Color{90, 80, 70, 255}));
             break;
         }
         default:
@@ -1629,6 +1779,157 @@ void dibujar_previsualizacion_cuerda(const MotorFisica& motor) {
     }
 }
 
+bool crear_rueda_hamster(MotorFisica& motor, Vector2D pos) {
+    double radio = 35.0;
+    if (!posicion_valida_para_spawn(motor, pos, TipoForma::CIRCULO, radio, 0.0)) {
+        spawn_error_timer = 0.5f;
+        spawn_error_pos = pos;
+        return false;
+    }
+    motor.agregar_entidad(new RuedaHamster(motor.generar_id(), pos, radio));
+    return true;
+}
+
+bool crear_polea(MotorFisica& motor, Vector2D pos) {
+    double radio = 18.0;
+    if (!posicion_valida_para_spawn(motor, pos, TipoForma::CIRCULO, radio, 0.0)) {
+        spawn_error_timer = 0.5f;
+        spawn_error_pos = pos;
+        return false;
+    }
+    motor.agregar_entidad(new Polea(motor.generar_id(), pos, radio));
+    return true;
+}
+
+bool crear_cinta_transportadora(MotorFisica& motor, Vector2D pos) {
+    double w = 240.0;
+    double h = 18.0;
+    if (!posicion_valida_para_spawn(motor, pos, TipoForma::AABB, w, h)) {
+        spawn_error_timer = 0.5f;
+        spawn_error_pos = pos;
+        return false;
+    }
+    motor.agregar_entidad(new CintaTransportadora(motor.generar_id(), pos, w, h));
+    return true;
+}
+
+bool crear_generador_motor(MotorFisica& motor, Vector2D pos) {
+    double w = 60.0;
+    double h = 50.0;
+    if (!posicion_valida_para_spawn(motor, pos, TipoForma::AABB, w, h)) {
+        spawn_error_timer = 0.5f;
+        spawn_error_pos = pos;
+        return false;
+    }
+    motor.agregar_entidad(new GeneradorMotor(motor.generar_id(), pos, w, h));
+    return true;
+}
+
+void dibujar_correas(const MotorFisica& motor) {
+    for (const auto* e : motor.get_entidades()) {
+        const Correa* correa = dynamic_cast<const Correa*>(e);
+        if (!correa) continue;
+
+        const EntidadFisica* ent_a = nullptr;
+        const EntidadFisica* ent_b = nullptr;
+        for (const auto* ent : motor.get_entidades()) {
+            if (ent->get_id() == correa->get_entidad_a_id()) ent_a = ent;
+            if (ent->get_id() == correa->get_entidad_b_id()) ent_b = ent;
+        }
+
+        if (!ent_a || !ent_b) continue;
+
+        Vector2D ca = ent_a->get_posicion();
+        Vector2D cb = ent_b->get_posicion();
+        double ra = Correa::get_radio_eje(ent_a);
+        double rb = Correa::get_radio_eje(ent_b);
+
+        Vector2D diff = cb - ca;
+        double dist = diff.magnitud();
+        if (dist < MathUtils::EPSILON) continue;
+
+        Vector2D u = diff / dist;
+        Vector2D v(-u.y, u.x);
+
+        Vector2D t_a1 = ca + v * ra;
+        Vector2D t_a2 = ca - v * ra;
+        Vector2D t_b1 = cb + v * rb;
+        Vector2D t_b2 = cb - v * rb;
+
+        Color correa_col = Color{50, 48, 45, 255};
+        Color correa_borde = Color{90, 85, 80, 255};
+        
+        DrawLineEx({(float)t_a1.x, (float)t_a1.y}, {(float)t_b1.x, (float)t_b1.y}, 5.0f, correa_borde);
+        DrawLineEx({(float)t_a1.x, (float)t_a1.y}, {(float)t_b1.x, (float)t_b1.y}, 3.0f, correa_col);
+
+        DrawLineEx({(float)t_a2.x, (float)t_a2.y}, {(float)t_b2.x, (float)t_b2.y}, 5.0f, correa_borde);
+        DrawLineEx({(float)t_a2.x, (float)t_a2.y}, {(float)t_b2.x, (float)t_b2.y}, 3.0f, correa_col);
+
+        double w = ent_a->get_velocidad_angular();
+        double v_tang = w * ra;
+        double time = GetTime();
+        double offset = std::fmod(time * v_tang * 2.0, 16.0);
+
+        Vector2D dir1 = t_b1 - t_a1;
+        double len1 = dir1.magnitud();
+        if (len1 > 0.0) {
+            Vector2D u1 = dir1 / len1;
+            for (double d = std::fmod(offset, 14.0); d < len1; d += 14.0) {
+                if (d < 0.0) continue;
+                Vector2D p = t_a1 + u1 * d;
+                DrawCircle(static_cast<int>(p.x), static_cast<int>(p.y), 1.5f, Color{220, 160, 40, 240});
+            }
+        }
+
+        Vector2D dir2 = t_a2 - t_b2;
+        double len2 = dir2.magnitud();
+        if (len2 > 0.0) {
+            Vector2D u2 = dir2 / len2;
+            for (double d = std::fmod(-offset, 14.0); d < len2; d += 14.0) {
+                if (d < 0.0) continue;
+                Vector2D p = t_b2 + u2 * d;
+                DrawCircle(static_cast<int>(p.x), static_cast<int>(p.y), 1.5f, Color{220, 160, 40, 240});
+            }
+        }
+    }
+}
+
+void dibujar_previsualizacion_correa(const MotorFisica& motor) {
+    if (estado_correa == EstadoColocacionCorrea::INACTIVA) return;
+
+    Vector2D mouse(GetMouseX(), GetMouseY());
+    dibujar_icono_objeto(TipoObjetoMenu::CORREA,
+                         static_cast<float>(mouse.x + 34.0),
+                         static_cast<float>(mouse.y - 28.0),
+                         0.72f, 190);
+
+    if (estado_correa == EstadoColocacionCorrea::ESPERANDO_EJE_A) {
+        int ent_id = -1;
+        Vector2D punto;
+        if (detectar_eje_correa(motor, mouse, ent_id, punto)) {
+            DrawCircleLines(static_cast<int>(punto.x), static_cast<int>(punto.y), 18.0f,
+                            Color{100, 220, 255, 230});
+        }
+        return;
+    }
+
+    if (estado_correa == EstadoColocacionCorrea::ESPERANDO_EJE_B) {
+        DrawLineEx({(float)correa_punto_a_preview.x, (float)correa_punto_a_preview.y},
+                   {(float)mouse.x, (float)mouse.y}, 4.0f, Color{90, 85, 80, 200});
+        DrawCircle(static_cast<int>(correa_punto_a_preview.x), static_cast<int>(correa_punto_a_preview.y),
+                   6.0f, Color{0, 200, 255, 245});
+        DrawCircleLines(static_cast<int>(correa_punto_a_preview.x), static_cast<int>(correa_punto_a_preview.y),
+                        12.0f, Color{100, 220, 255, 245});
+
+        int ent_id = -1;
+        Vector2D punto;
+        if (detectar_eje_correa(motor, mouse, ent_id, punto)) {
+            DrawCircleLines(static_cast<int>(punto.x), static_cast<int>(punto.y),
+                            20.0f, Color{100, 220, 255, 255});
+        }
+    }
+}
+
 bool crear_cubeta(MotorFisica& motor, Vector2D pos) {
     double w = 58.0;
     double h = 52.0;
@@ -1833,7 +2134,8 @@ void dibujar_hud(const MotorFisica& motor) {
     // Indicador de selección
     if (entidad_seleccionada) {
         bool rotable = dynamic_cast<Ventilador*>(entidad_seleccionada) != nullptr ||
-                       dynamic_cast<PlanoInclinado*>(entidad_seleccionada) != nullptr;
+                       dynamic_cast<PlanoInclinado*>(entidad_seleccionada) != nullptr ||
+                       dynamic_cast<RuedaHamster*>(entidad_seleccionada) != nullptr;
         bool redimensionable = dynamic_cast<ParedRectangular*>(entidad_seleccionada) != nullptr &&
                                !es_borde_nivel(entidad_seleccionada);
         const char* rotar_txt = (rotable && (!entidad_seleccionada->get_es_fijo() || estado_actual == EstadoJuego::JUEGO_CREATIVO)) ? "  [F] Rotar" : "";
@@ -2786,6 +3088,19 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                         spawn_error_timer = 0.5f;
                         spawn_error_pos = Vector2D(mx, my);
                     }
+                } else if (tipo == TipoObjetoMenu::CORREA) {
+                    if (motor.get_pausado()) {
+                        if (estado_actual == EstadoJuego::JUEGO_NIVEL && inventario_actual[TipoObjetoMenu::CORREA] <= 0) {
+                            spawn_error_timer = 0.5f;
+                            spawn_error_pos = Vector2D(mx, my);
+                        } else {
+                            cancelar_colocacion_cuerda();
+                            estado_correa = EstadoColocacionCorrea::ESPERANDO_EJE_A;
+                        }
+                    } else {
+                        spawn_error_timer = 0.5f;
+                        spawn_error_pos = Vector2D(mx, my);
+                    }
                 } else if (tipo != TipoObjetoMenu::NINGUNO) {
                     if (!motor.get_pausado()) {
                         spawn_error_timer = 0.5f;
@@ -2804,6 +3119,8 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             if (arrastrando_spawn != TipoObjetoMenu::NINGUNO) {
                 spawn_desde_menu(motor, arrastrando_spawn, mouse_pos);
                 arrastrando_spawn = TipoObjetoMenu::NINGUNO;
+            } else if (manejar_click_colocacion_correa(motor, mouse_pos)) {
+                entidad_arrastrada = nullptr;
             } else if (manejar_click_colocacion_cuerda(motor, mouse_pos)) {
                 entidad_arrastrada = nullptr;
             } else {
@@ -3007,6 +3324,36 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                 spawn_error_pos = entidad_seleccionada->get_posicion();
             } else {
                 int id_eliminar = entidad_seleccionada->get_id();
+
+                // Cleanup attached ropes and belts
+                std::vector<int> a_eliminar;
+                for (const auto* e : motor.get_entidades()) {
+                    const Cuerda* rope = dynamic_cast<const Cuerda*>(e);
+                    if (rope) {
+                        if (rope->get_extremo_a().entidad_id == id_eliminar || rope->get_extremo_b().entidad_id == id_eliminar) {
+                            a_eliminar.push_back(rope->get_id());
+                        }
+                    }
+                    const Correa* belt = dynamic_cast<const Correa*>(e);
+                    if (belt) {
+                        if (belt->get_entidad_a_id() == id_eliminar || belt->get_entidad_b_id() == id_eliminar) {
+                            a_eliminar.push_back(belt->get_id());
+                        }
+                    }
+                }
+                for (int id : a_eliminar) {
+                    if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
+                        auto ptr = motor.transferir_entidad(id);
+                        if (ptr) {
+                            TipoObjetoMenu t_c = ptr->get_tipo_menu();
+                            inventario_actual[t_c]++;
+                            inventario_entidades[t_c].push_back(std::move(ptr));
+                        }
+                    } else {
+                        motor.remover_entidad(id);
+                    }
+                }
+
                 if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
                     TipoObjetoMenu t_menu = entidad_seleccionada->get_tipo_menu();
                     inventario_actual[t_menu]++;
@@ -3038,6 +3385,11 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                 auto* ramp = dynamic_cast<PlanoInclinado*>(entidad_seleccionada);
                 if (ramp) {
                     ramp->invertir();
+                } else {
+                    auto* hamster = dynamic_cast<RuedaHamster*>(entidad_seleccionada);
+                    if (hamster) {
+                        hamster->invertir_sentido();
+                    }
                 }
             }
         }
@@ -3158,6 +3510,7 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     }
 
     dibujar_cuerdas(motor);
+    dibujar_correas(motor);
 
     for (const auto* e : motor.get_entidades()) {
         dibujar_entidad(e);
@@ -3175,13 +3528,13 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                     DrawText("I", static_cast<int>(pos.x - 3), static_cast<int>(pos.y - 5), 10, inv_color);
                 }
             } else if (forma == TipoForma::AABB) {
-                const ParedRectangular* pr = dynamic_cast<const ParedRectangular*>(e);
-                if (pr) {
-                    Vector2D pos = pr->get_posicion();
-                    DrawRectangleLinesEx({(float)pos.x - 2, (float)pos.y - 2,
-                        (float)pr->get_ancho() + 4, (float)pr->get_alto() + 4}, 1.0f, inv_color);
-                    DrawText("I", static_cast<int>(pos.x + 2), static_cast<int>(pos.y + 2), 10, inv_color);
-                }
+                Vector2D min = e->get_min();
+                Vector2D max = e->get_max();
+                float w = static_cast<float>(max.x - min.x);
+                float h = static_cast<float>(max.y - min.y);
+                DrawRectangleLinesEx({(float)min.x - 2, (float)min.y - 2,
+                    w + 4, h + 4}, 1.0f, inv_color);
+                DrawText("I", static_cast<int>(min.x + 2), static_cast<int>(min.y + 2), 10, inv_color);
             } else if (forma == TipoForma::POLIGONO) {
                 const PlanoInclinado* ramp = dynamic_cast<const PlanoInclinado*>(e);
                 if (ramp) {
@@ -3201,6 +3554,7 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
         }
     }
     dibujar_previsualizacion_cuerda(motor);
+    dibujar_previsualizacion_correa(motor);
 
     if (entidad_seleccionada) {
         Color sel_color = {255, 200, 50, 180};
@@ -3247,12 +3601,16 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                 const Ventilador* sv = dynamic_cast<const Ventilador*>(entidad_seleccionada);
                 const SeguidorBooster* ss = dynamic_cast<const SeguidorBooster*>(entidad_seleccionada);
                 const Cubeta* sc = dynamic_cast<const Cubeta*>(entidad_seleccionada);
+                const CintaTransportadora* s_cinta = dynamic_cast<const CintaTransportadora*>(entidad_seleccionada);
+                const GeneradorMotor* s_gen = dynamic_cast<const GeneradorMotor*>(entidad_seleccionada);
                 float sw = 0, sh = 0;
                 if (st) { sw = st->get_ancho(); sh = st->get_alto(); }
                 else if (sb) { sw = sb->get_ancho(); sh = sb->get_alto(); }
                 else if (sv) { sw = sv->get_ancho(); sh = sv->get_alto(); }
                 else if (ss) { sw = ss->get_ancho(); sh = ss->get_alto(); spos.x -= sw/2; spos.y -= sh/2; }
                 else if (sc) { sw = sc->get_ancho(); sh = sc->get_alto(); }
+                else if (s_cinta) { sw = s_cinta->get_ancho(); sh = s_cinta->get_alto(); spos.x -= sw/2; spos.y -= sh/2; }
+                else if (s_gen) { sw = s_gen->get_ancho(); sh = s_gen->get_alto(); spos.x -= sw/2; spos.y -= sh/2; }
                 if (sw > 0) {
                     DrawRectangleLinesEx({(float)spos.x - 3, (float)spos.y - 3,
                         sw + 6, sh + 6}, 2.0f, sel_color);
