@@ -28,6 +28,10 @@
 #include "../objetos/gancho.h"
 #include "../objetos/pistola.h"
 #include "../objetos/soporte_torque.h"
+#include "../objetos/caja_hamster.h"
+#include "../objetos/banda.h"
+#include "../objetos/caja_sorpresa.h"
+#include "../objetos/caminadora.h"
 #include "colisiones.h"
 #include "fisica_ventilador.h"
 #include <vector>
@@ -137,6 +141,21 @@ public:
     const std::vector<RegistroColision>& get_colisiones_frame() const { return colisiones_frame; }
     const std::vector<RegistroEventoEspecial>& get_eventos_especiales_frame() const { return eventos_especiales_frame; }
 
+    void dibujar_bandas(bool mostrar_debug) const {
+        for (auto* e : entidades) {
+            auto* banda = dynamic_cast<Banda*>(e);
+            if (banda) banda->dibujar_con_entidades(entidades, mostrar_debug);
+        }
+    }
+
+    // Forzar una pasada de transmisión de bandas (útil antes del primer frame)
+    void aplicar_transmision_bandas() {
+        for (auto* e : entidades) {
+            auto* banda = dynamic_cast<Banda*>(e);
+            if (banda) banda->aplicar_transmision(entidades);
+        }
+    }
+
     // --- Bucle principal ---
     // Recibe el delta time real (variable) y lo subdivide en pasos fijos.
     // Esto evita inestabilidad numérica por variaciones de frame rate.
@@ -232,6 +251,27 @@ private:
             return true;
         }
 
+        auto* hamster = dynamic_cast<CajaHamster*>(e);
+        if (hamster) {
+            min = hamster->get_min();
+            max = hamster->get_max();
+            return true;
+        }
+
+        auto* caja_s = dynamic_cast<CajaSorpresa*>(e);
+        if (caja_s) {
+            min = caja_s->get_min();
+            max = caja_s->get_max();
+            return true;
+        }
+
+        auto* conv = dynamic_cast<Caminadora*>(e);
+        if (conv) {
+            min = conv->get_min();
+            max = conv->get_max();
+            return true;
+        }
+
         return false;
     }
 
@@ -244,6 +284,21 @@ private:
 
         // 1.5 Aplicar corrientes de aire de ventiladores
         FisicaVentilador::aplicar(entidades);
+
+        // 1.55 Aplicar conveyors activos y animar
+        for (auto* e : entidades) {
+            auto* conv = dynamic_cast<Caminadora*>(e);
+            if (conv) {
+                conv->Caminadora::actualizar_fisica(dt);
+                conv->aplicar_conveyor(entidades);
+            }
+        }
+
+        // 1.6 Transmitir energía de bandas (hámster → ventilador)
+        for (auto* e : entidades) {
+            auto* banda = dynamic_cast<Banda*>(e);
+            if (banda) banda->aplicar_transmision(entidades);
+        }
 
         // 1.6 Aplicar constraints de cuerdas colocadas como herramienta
         aplicar_tensiones_cuerda();
@@ -274,6 +329,7 @@ private:
 
         // 4.6 Pistolas activadas disparan
         disparar_pistolas();
+        lanzar_cajas_sorpresa();
 
         // 5. Recolectar eventos especiales pendientes de todas las entidades
         for (auto* e : entidades) {
@@ -460,6 +516,33 @@ private:
             entidades.push_back(nueva);
     }
 
+    void lanzar_cajas_sorpresa() {
+        for (auto* e : entidades) {
+            auto* caja = dynamic_cast<CajaSorpresa*>(e);
+            if (!caja || !caja->get_activada() || caja->get_ya_lanzo()) continue;
+            caja->set_ya_lanzo();
+
+            // Buscar entidades dinámicas encima/sobre la caja y empujarlas
+            Vector2D cmin = caja->get_min();
+            Vector2D cmax = caja->get_max();
+            double zona_x0 = cmin.x - 10.0;
+            double zona_x1 = cmax.x + 10.0;
+            double zona_y0 = cmin.y - 80.0; // zona de búsqueda encima
+            double zona_y1 = cmax.y + 5.0;
+
+            Vector2D impulso = caja->get_velocidad_lanzamiento(); // (280, -520)
+
+            for (auto* otro : entidades) {
+                if (otro == e || otro->get_es_estatico()) continue;
+                Vector2D pos = otro->get_posicion();
+                if (pos.x >= zona_x0 && pos.x <= zona_x1 &&
+                    pos.y >= zona_y0 && pos.y <= zona_y1) {
+                    otro->set_velocidad(impulso);
+                }
+            }
+        }
+    }
+
     void disparar_pistolas() {
         std::vector<EntidadFisica*> nuevas;
         for (auto* e : entidades) {
@@ -490,19 +573,57 @@ private:
                 EntidadFisica* b = entidades[j];
 
                 if (estado_actual == EstadoJuego::JUEGO_CREATIVO && (!a->get_es_fijo() || !b->get_es_fijo())) continue;
-
-                // Skip si ambos son estáticos
                 if (a->get_es_estatico() && b->get_es_estatico()) continue;
+
+                // Detección especial: círculo vs rueda de hámster
+                {
+                    CajaHamster* hamster = dynamic_cast<CajaHamster*>(a);
+                    EntidadFisica* circ_ent = b;
+                    if (!hamster) { hamster = dynamic_cast<CajaHamster*>(b); circ_ent = a; }
+                    if (hamster && !circ_ent->get_es_estatico()) {
+                        Vector2D pos_circ; double radio = 0.0;
+                        if (obtener_datos_circulo(circ_ent, pos_circ, radio)) {
+                            if (hamster->circulo_toca_rueda(pos_circ, radio)) {
+                                InfoColision info_rueda;
+                                info_rueda.hay_colision = true;
+                                info_rueda.normal = Vector2D(0, -1);
+                                info_rueda.profundidad = 1.0;
+                                info_rueda.punto_contacto = pos_circ;
+                                hamster->on_collision(circ_ent, info_rueda);
+                            }
+                        }
+                    }
+                }
+
+                // Detección especial: círculo vs aros de tijera
+                {
+                    Tijera* tijera = dynamic_cast<Tijera*>(a);
+                    EntidadFisica* circ_ent = b;
+                    if (!tijera) { tijera = dynamic_cast<Tijera*>(b); circ_ent = a; }
+                    if (tijera && !circ_ent->get_es_estatico()) {
+                        Vector2D pos_circ; double radio = 0.0;
+                        if (obtener_datos_circulo(circ_ent, pos_circ, radio)) {
+                            if (tijera->circulo_toca_aros(pos_circ, radio)) {
+                                // Notificar colisión con el aro (activa la tijera)
+                                InfoColision info_aro;
+                                info_aro.hay_colision = true;
+                                info_aro.normal = Vector2D(0, -1);
+                                info_aro.profundidad = 1.0;
+                                info_aro.punto_contacto = pos_circ;
+                                tijera->on_collision(circ_ent, info_aro);
+                                // No resolver físicamente — la bola pasa a través de los aros
+                            }
+                        }
+                    }
+                }
 
                 InfoColision info = detectar_colision(a, b);
                 if (info.hay_colision) {
                     Colisiones::resolver_colision(a, b, info);
-                    
                     colisiones_frame.push_back({
                         a->get_id(), b->get_id(),
                         info.punto_contacto, info.normal, info.profundidad
                     });
-
                     a->on_collision(b, info);
                     Vector2D normal_inv = info.normal * -1.0;
                     b->on_collision(a, InfoColision{info.hay_colision, normal_inv, info.profundidad, info.punto_contacto});
@@ -610,6 +731,14 @@ private:
                 pos_circ, radio,
                 balancin->get_posicion(), balancin->get_angulo(),
                 balancin->get_largo(), balancin->get_espesor());
+        }
+
+        // Tijera cerrada: usar el filo derecho como polígono
+        auto* tijera = dynamic_cast<Tijera*>(poly_ent);
+        if (tijera && !tijera->get_vertices_filo().empty()) {
+            return Colisiones::circulo_vs_poligono(
+                pos_circ, radio,
+                tijera->get_vertices_filo());
         }
 
         return InfoColision{};

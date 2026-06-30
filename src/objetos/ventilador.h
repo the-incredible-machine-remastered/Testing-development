@@ -17,6 +17,8 @@ protected:
     double rango;
     double ancho_corriente;
     double potencia;
+    double potencia_base;   // potencia cuando no hay banda (autónomo)
+    bool controlado_por_banda;
     Vector2D direccion;
     double fase_aspas;
 
@@ -24,7 +26,8 @@ public:
     Ventilador(int id, Vector2D pos, double w = 42.0, double h = 54.0)
         : ObstaculoEstatico(id, pos, TipoForma::AABB),
           ancho(w), alto(h), rango(220.0), ancho_corriente(92.0),
-          potencia(1800.0), direccion(1.0, 0.0), fase_aspas(0.0) {
+          potencia(0.0), potencia_base(1800.0), controlado_por_banda(false),
+          direccion(1.0, 0.0), fase_aspas(0.0) {
         set_restitucion(0.2);
         set_friccion(0.5);
         tipo_menu = TipoObjetoMenu::VENTILADOR;
@@ -62,10 +65,16 @@ public:
     }
 
     void set_potencia(double p) { potencia = p; }
+    bool get_controlado_por_banda() const { return controlado_por_banda; }
+    void set_controlado_por_banda(bool v) {
+        controlado_por_banda = v;
+        if (v) potencia = 0.0; // apagar al conectar
+    }
     void set_direccion(const Vector2D& dir) { direccion = dir.normalizar(); }
 
     void actualizar_fisica(double dt) override {
-        fase_aspas += dt * 18.0;
+        if (potencia <= 0.0) return;
+        fase_aspas += dt * 18.0 * (potencia / 1800.0);
     }
 
     // --- Métodos polimórficos ---
@@ -79,6 +88,7 @@ public:
            << " x=" << posicion.x << " y=" << posicion.y
            << " w=" << ancho << " h=" << alto
            << " der=" << (mira_derecha() ? 1 : 0)
+           << " banda=" << (controlado_por_banda ? 1 : 0)
            << " fijo=" << (es_fijo ? 1 : 0)
            << " tipo_menu=" << static_cast<int>(tipo_menu);
         return ss.str();
@@ -135,20 +145,21 @@ public:
             DrawCircle(static_cast<int>(cx), static_cast<int>(cy), 4.0f, Color{210, 230, 240, 255});
         }
 
-        // 3. Corriente de aire animada en la dirección actual
+        // 3. Corriente de aire — solo si está activo
         bool der = mira_derecha();
-        for (int i = 0; i < 4; ++i) {
-            float y = cy - 24.0f + i * 16.0f;
-            float offset = std::sin(fase + i * 0.5f) * 15.0f;  // Desplazamiento según fase
-            float longitud = 70.0f + std::sin(fase + i * 0.3f) * 25.0f;  // Varía la longitud
-            float opacidad = 90 + std::sin(fase + i * 0.4f) * 50;  // Varía transparencia
-            
-            if (der) {
-                DrawLineEx({px + w + 8.0f + offset, y}, {px + w + 8.0f + longitud, y}, 1.5f,
-                          Color{120, 200, 255, static_cast<unsigned char>(opacidad)});
-            } else {
-                DrawLineEx({px - 8.0f - offset, y}, {px - 8.0f - longitud, y}, 1.5f,
-                          Color{120, 200, 255, static_cast<unsigned char>(opacidad)});
+        if (potencia > 0.0) {
+            for (int i = 0; i < 4; ++i) {
+                float y = cy - 24.0f + i * 16.0f;
+                float offset   = std::sin(fase + i * 0.5f) * 15.0f;
+                float longitud = 70.0f + std::sin(fase + i * 0.3f) * 25.0f;
+                float opacidad = 90 + std::sin(fase + i * 0.4f) * 50;
+                if (der) {
+                    DrawLineEx({px + w + 8.0f + offset, y}, {px + w + 8.0f + longitud, y}, 1.5f,
+                              Color{120, 200, 255, static_cast<unsigned char>(opacidad)});
+                } else {
+                    DrawLineEx({px - 8.0f - offset, y}, {px - 8.0f - longitud, y}, 1.5f,
+                              Color{120, 200, 255, static_cast<unsigned char>(opacidad)});
+                }
             }
         }
 

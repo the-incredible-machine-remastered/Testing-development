@@ -35,6 +35,10 @@
 #include "objetos/pistola.h"
 #include "objetos/tijera.h"
 #include "objetos/bola_beisbol.h"
+#include "objetos/caja_hamster.h"
+#include "objetos/banda.h"
+#include "objetos/caja_sorpresa.h"
+#include "objetos/caminadora.h"
 #include "fisica/colisiones.h"
 #include "fisica/motor_fisica.h"
 #include "objetos/catalogo_menu.gen.h"
@@ -168,6 +172,16 @@ AnclajeCuerda cuerda_extremo_a = { -1, TipoAnclajeCuerda::Cubeta };
 Vector2D cuerda_punto_a_preview;
 std::vector<int> cuerda_soportes_id;
 std::vector<Vector2D> cuerda_soportes_preview;
+
+enum class EstadoConexionBanda {
+    INACTIVA,
+    ESPERANDO_HAMSTER,
+    ESPERANDO_VENTILADOR
+};
+EstadoConexionBanda estado_banda = EstadoConexionBanda::INACTIVA;
+int banda_hamster_id  = -1;
+int banda_ventilador_id = -1;
+Vector2D banda_origen_preview; // posición del hámster seleccionado para preview
 
 bool obtener_datos_circulo(const EntidadFisica* e, Vector2D& pos, double& radio) {
     const Bola* bola = dynamic_cast<const Bola*>(e);
@@ -437,6 +451,69 @@ bool manejar_click_colocacion_cuerda(MotorFisica& motor, Vector2D mouse_pos) {
     return false;
 }
 
+bool manejar_click_conexion_banda(MotorFisica& motor, Vector2D mouse_pos) {
+    if (estado_banda == EstadoConexionBanda::INACTIVA) return false;
+
+    if (!motor.get_pausado()) {
+        estado_banda = EstadoConexionBanda::INACTIVA;
+        banda_hamster_id = -1;
+        return true;
+    }
+
+    const auto& ents = motor.get_entidades();
+
+    if (estado_banda == EstadoConexionBanda::ESPERANDO_HAMSTER) {
+        for (auto* e : ents) {
+            auto* h = dynamic_cast<CajaHamster*>(e);
+            if (!h) continue;
+            if (!e->contiene_punto(mouse_pos)) continue;
+            Vector2D p = e->get_posicion();
+            banda_hamster_id = e->get_id();
+            banda_origen_preview = Vector2D(p.x + h->get_ancho() * 0.5, p.y + h->get_alto() * 0.5);
+            estado_banda = EstadoConexionBanda::ESPERANDO_VENTILADOR;
+            return true;
+        }
+        return true;
+    }
+
+    if (estado_banda == EstadoConexionBanda::ESPERANDO_VENTILADOR) {
+        for (auto* e : ents) {
+            // No conectar con el mismo hámster origen
+            if (e->get_id() == banda_hamster_id) continue;
+
+            if (!e->contiene_punto(mouse_pos)) continue;
+
+            auto* v = dynamic_cast<Ventilador*>(e);
+            if (v) {
+                motor.agregar_entidad(new Banda(motor.generar_id(), banda_hamster_id, e->get_id()));
+                v->set_controlado_por_banda(true);
+                estado_banda = EstadoConexionBanda::INACTIVA;
+                banda_hamster_id = -1;
+                return true;
+            }
+
+            auto* cs = dynamic_cast<CajaSorpresa*>(e);
+            if (cs) {
+                motor.agregar_entidad(new Banda(motor.generar_id(), banda_hamster_id, e->get_id()));
+                estado_banda = EstadoConexionBanda::INACTIVA;
+                banda_hamster_id = -1;
+                return true;
+            }
+
+            auto* conv = dynamic_cast<Caminadora*>(e);
+            if (conv) {
+                motor.agregar_entidad(new Banda(motor.generar_id(), banda_hamster_id, e->get_id()));
+                estado_banda = EstadoConexionBanda::INACTIVA;
+                banda_hamster_id = -1;
+                return true;
+            }
+        }
+        return true;
+    }
+
+    return false;
+}
+
 // ============================================================================
 // Menú lateral derecho — UI y drag-and-drop desde paleta
 // ============================================================================
@@ -511,6 +588,7 @@ Texture2D tex_robote_soporte;  // Soporte de BolaRebotadora (robot rojo)
 Texture2D tex_robote_pelota;   // Pelota roja de BolaRebotadora
 Texture2D tex_ventilador_cuerpo; // Cuerpo del ventilador
 Texture2D tex_ventilador_aspa;   // Aspa del ventilador
+Texture2D tex_caminadora;        // Sprite caminadora/conveyor
 
 // Animaciones del SeguidorBooster
 Animacion* anim_seguidor_corriendo = nullptr;
@@ -855,6 +933,10 @@ bool crear_soporte_torque(MotorFisica& motor, Vector2D pos);
 bool crear_globo(MotorFisica& motor, Vector2D pos);
 bool crear_bola_beisbol(MotorFisica& motor, Vector2D pos);
 bool crear_tijera(MotorFisica& motor, Vector2D pos);
+bool crear_caja_hamster(MotorFisica& motor, Vector2D pos);
+bool crear_banda(MotorFisica& motor, Vector2D pos);
+bool crear_caja_sorpresa(MotorFisica& motor, Vector2D pos);
+bool crear_caminadora(MotorFisica& motor, Vector2D pos);
 
 bool crear_zona_meta(MotorFisica& motor, Vector2D pos) {
     motor.agregar_entidad(new ZonaMeta(motor.generar_id(), pos, 80.0, 80.0));
@@ -883,6 +965,10 @@ bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
         case TipoObjetoMenu::TIJERA:            return crear_tijera(motor, pos);
         case TipoObjetoMenu::ZONA_META:         return crear_zona_meta(motor, pos);
         case TipoObjetoMenu::CUERDA:            return false;
+        case TipoObjetoMenu::CAJA_HAMSTER:      return crear_caja_hamster(motor, pos);
+        case TipoObjetoMenu::BANDA:             return crear_banda(motor, pos);
+        case TipoObjetoMenu::CAJA_SORPRESA:     return crear_caja_sorpresa(motor, pos);
+        case TipoObjetoMenu::CAMINADORA:          return crear_caminadora(motor, pos);
         default: return false;
     }
 }
@@ -1198,6 +1284,53 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
                 }
             }
             DrawRectangleLinesEx({cx - w/2, cy - h/2, w, h}, 1.5f, tint(Color{30, 120, 50, 255}));
+            break;
+        }
+        case TipoObjetoMenu::CAJA_HAMSTER: {
+            // Caja izquierda + rueda derecha
+            float bw = 14.0f * escala, bh = 24.0f * escala;
+            float rr = 12.0f * escala;
+            DrawRectangleRec({cx - 20*escala, cy - bh/2, bw, bh}, tint(Color{140, 100, 50, 255}));
+            DrawCircle((int)(cx + 2*escala), (int)cy, rr, tint(Color{210, 170, 80, 255}));
+            DrawCircleLines((int)(cx + 2*escala), (int)cy, rr, tint(Color{80, 50, 20, 255}));
+            // hámster mini
+            DrawCircle((int)(cx + 2*escala), (int)(cy + rr*0.3f), rr*0.3f, tint(Color{230, 200, 160, 255}));
+            break;
+        }
+        case TipoObjetoMenu::BANDA: {
+            float hw = 22.0f * escala;
+            DrawLineEx({cx - hw, cy - 4*escala}, {cx + hw, cy - 4*escala}, 2.5f*escala, tint(Color{255, 180, 50, 220}));
+            DrawLineEx({cx - hw, cy + 4*escala}, {cx + hw, cy + 4*escala}, 2.5f*escala, tint(Color{255, 180, 50, 220}));
+            DrawCircle((int)(cx), (int)cy, 4*escala, tint(Color{255, 200, 80, 255}));
+            break;
+        }
+        case TipoObjetoMenu::CAJA_SORPRESA: {
+            float bw = 26.0f * escala, bh = 26.0f * escala;
+            // Caja roja con lunares amarillos
+            DrawRectangleRec({cx - bw/2, cy - bh/2 + 4*escala, bw, bh * 0.85f}, tint(Color{210,40,40,255}));
+            DrawCircle((int)(cx - bw*0.25f),(int)(cy + 4*escala), bw*0.1f, tint(Color{255,200,50,255}));
+            DrawCircle((int)(cx + bw*0.25f),(int)(cy + 4*escala), bw*0.1f, tint(Color{255,200,50,255}));
+            // Tapa
+            DrawRectangleRec({cx - bw/2 - 2*escala, cy - bh/2, bw + 4*escala, bh*0.18f}, tint(Color{180,30,30,255}));
+            // Cabeza asomando
+            DrawCircle((int)cx, (int)(cy - bh/2 - 8*escala), 9*escala, tint(Color{255,220,170,255}));
+            DrawCircle((int)cx, (int)(cy - bh/2 - 9*escala), 4*escala, tint(Color{220,40,40,255}));
+            break;
+        }
+        case TipoObjetoMenu::CAMINADORA: {
+            float cw = 40.0f * escala, ch = 10.0f * escala;
+            float rr = ch * 0.5f;
+            // Cuerpo
+            DrawRectangleRec({cx - cw/2 + rr, cy - ch/2, cw - rr*2, ch}, tint(Color{60,80,100,255}));
+            // Cinta central
+            DrawRectangleRec({cx - cw/2 + rr, cy - ch*0.25f, cw - rr*2, ch*0.5f}, tint(Color{80,100,120,255}));
+            // Ruedas
+            DrawCircle((int)(cx - cw/2 + rr), (int)cy, rr, tint(Color{70,70,80,255}));
+            DrawCircle((int)(cx + cw/2 - rr), (int)cy, rr, tint(Color{70,70,80,255}));
+            // Flecha
+            DrawLineEx({cx - 8*escala, cy}, {cx + 8*escala, cy}, 1.5f*escala, tint(Color{255,200,80,220}));
+            DrawLineEx({cx + 8*escala, cy}, {cx + 4*escala, cy - 4*escala}, 1.5f*escala, tint(Color{255,200,80,220}));
+            DrawLineEx({cx + 8*escala, cy}, {cx + 4*escala, cy + 4*escala}, 1.5f*escala, tint(Color{255,200,80,220}));
             break;
         }
         default:
@@ -1719,6 +1852,60 @@ void dibujar_previsualizacion_cuerda(const MotorFisica& motor) {
     }
 }
 
+void dibujar_previsualizacion_banda(const MotorFisica& motor) {
+    if (estado_banda == EstadoConexionBanda::INACTIVA) return;
+
+    Vector2D mouse(GetMouseX(), GetMouseY());
+
+    if (estado_banda == EstadoConexionBanda::ESPERANDO_HAMSTER) {
+        // Highlight hámster bajo el cursor
+        for (const auto* e : motor.get_entidades()) {
+            const auto* h = dynamic_cast<const CajaHamster*>(e);
+            if (!h) continue;
+            Vector2D p = e->get_posicion();
+            if (mouse.x >= p.x && mouse.x <= p.x + h->get_ancho() &&
+                mouse.y >= p.y && mouse.y <= p.y + h->get_alto()) {
+                DrawRectangleLinesEx({(float)p.x, (float)p.y,
+                    (float)h->get_ancho(), (float)h->get_alto()}, 3.0f, Color{255,200,50,230});
+            }
+        }
+        return;
+    }
+
+    if (estado_banda == EstadoConexionBanda::ESPERANDO_VENTILADOR) {
+        // Línea desde el hámster hasta el cursor (como cuerda)
+        Vector2D a = banda_origen_preview;
+        Vector2D b = mouse;
+        Vector2 va = {(float)a.x, (float)a.y};
+        Vector2 vb = {(float)b.x, (float)b.y};
+        DrawLineEx(va, vb, 5.0f, Color{40, 30, 10, 180});
+        DrawLineEx(va, vb, 3.0f, Color{255, 200, 50, 220});
+        DrawCircle((int)a.x, (int)a.y, 7.0f, Color{255, 180, 30, 230});
+
+        // Highlight destinos válidos bajo el cursor
+        for (const auto* e : motor.get_entidades()) {
+            Vector2D p = e->get_posicion();
+            const auto* v = dynamic_cast<const Ventilador*>(e);
+            if (v && mouse.x >= p.x && mouse.x <= p.x + v->get_ancho() &&
+                     mouse.y >= p.y && mouse.y <= p.y + v->get_alto()) {
+                DrawRectangleLinesEx({(float)p.x, (float)p.y,
+                    (float)v->get_ancho(), (float)v->get_alto()}, 3.0f, Color{255,200,50,230});
+            }
+            const auto* cs = dynamic_cast<const CajaSorpresa*>(e);
+            if (cs && mouse.x >= p.x && mouse.x <= p.x + cs->get_ancho() &&
+                      mouse.y >= p.y && mouse.y <= p.y + cs->get_alto()) {
+                DrawRectangleLinesEx({(float)p.x, (float)p.y,
+                    (float)cs->get_ancho(), (float)cs->get_alto()}, 3.0f, Color{255,200,50,230});
+            }
+            const auto* conv = dynamic_cast<const Caminadora*>(e);
+            if (conv && e->contiene_punto(mouse)) {
+                DrawRectangleLinesEx({(float)p.x, (float)p.y,
+                    (float)conv->get_ancho(), (float)conv->get_alto()}, 3.0f, Color{255,200,50,230});
+            }
+        }
+    }
+}
+
 bool crear_cubeta(MotorFisica& motor, Vector2D pos) {
     double w = 58.0;
     double h = 52.0;
@@ -1733,7 +1920,7 @@ bool crear_soporte_torque(MotorFisica& motor, Vector2D pos) {
 }
 
 bool crear_globo(MotorFisica& motor, Vector2D pos) {
-    double radio = 18.0;
+    double radio = 36.0;
     if (!posicion_valida_para_spawn(motor, pos, TipoForma::CIRCULO, radio, 0.0)) {
         spawn_error_timer = 0.5f;
         spawn_error_pos = pos;
@@ -1757,11 +1944,38 @@ bool crear_bola_beisbol(MotorFisica& motor, Vector2D pos) {
 }
 
 bool crear_tijera(MotorFisica& motor, Vector2D pos) {
-    double w = 70.0;
-    double h = 30.0;
+    double w = 100.0;
+    double h = 51.0;
     Vector2D spawn_pos(pos.x - w / 2.0, pos.y - h / 2.0);
     Tijera* t = new Tijera(motor.generar_id(), spawn_pos, w, h);
     motor.agregar_entidad(t);
+    return true;
+}
+
+bool crear_caja_hamster(MotorFisica& motor, Vector2D pos) {
+    double w = 90.0, h = 80.0;
+    Vector2D spawn_pos(pos.x - w / 2.0, pos.y - h / 2.0);
+    CajaHamster* ham = new CajaHamster(motor.generar_id(), spawn_pos, w, h);
+    motor.agregar_entidad(ham);
+    return true;
+}
+
+bool crear_banda(MotorFisica& motor, Vector2D pos) {
+    (void)pos;
+    return false; // se maneja con el flujo de conexión de la banda
+}
+
+bool crear_caja_sorpresa(MotorFisica& motor, Vector2D pos) {
+    double w = 70.0, h = 70.0;
+    Vector2D spawn_pos(pos.x - w / 2.0, pos.y - h / 2.0);
+    motor.agregar_entidad(new CajaSorpresa(motor.generar_id(), spawn_pos, w, h));
+    return true;
+}
+
+bool crear_caminadora(MotorFisica& motor, Vector2D pos) {
+    double w = 150.0, h = 24.0;
+    Vector2D spawn_pos(pos.x - w / 2.0, pos.y - h / 2.0);
+    motor.agregar_entidad(new Caminadora(motor.generar_id(), spawn_pos, w, h, true));
     return true;
 }
 
@@ -1939,6 +2153,13 @@ void dibujar_hud(const MotorFisica& motor) {
         if (estado_cuerda == EstadoColocacionCuerda::ESPERANDO_EXTREMO_B) paso = "Torque extra o extremo final";
         DrawText(TextFormat("Cuerda: %s", paso), margin, y + 110, 14,
                  Color{235, 220, 155, 255});
+    }
+
+    if (estado_banda != EstadoConexionBanda::INACTIVA) {
+        const char* paso_banda = estado_banda == EstadoConexionBanda::ESPERANDO_HAMSTER
+            ? "Banda: Click en la Caja Hamster"
+            : "Banda: Click en Ventilador o CajaSorpresa";
+        DrawText(paso_banda, margin, y + 128, 14, Color{255, 200, 80, 255});
     }
 
     // Indicador de pausa
@@ -2253,6 +2474,7 @@ void cargandoTexturas() {
     } else {
         TraceLog(LOG_INFO, "Textura ventilador aspa cargada: %dx%d", tex_ventilador_aspa.width, tex_ventilador_aspa.height);
     }
+    tex_caminadora = cargar_textura_datos("Assets/caminadora/caminadora1.png");
 
     // Cargar asset de celda de menú
     tex_celda_menu = cargar_textura_datos("Assets/hud/obj-vacio.png");
@@ -3022,6 +3244,7 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             if (CheckCollisionPointRec(mouse_pos, btns.rect_play)) {
                 if (motor.get_pausado()) {
                     guardar_snapshot_simulacion(motor, gestor_eventos);
+                    motor.aplicar_transmision_bandas(); // apagar ventiladores controlados antes del primer frame
                     motor.set_pausado(false);
                     cancelar_colocacion_cuerda();
                 } else {
@@ -3032,6 +3255,7 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             }
             if (CheckCollisionPointRec(mouse_pos, btns.rect_reset)) {
                 restaurar_snapshot_simulacion(motor, gestor_eventos);
+                motor.aplicar_transmision_bandas();
                 motor.set_pausado(true);
                 return;
             }
@@ -3076,6 +3300,14 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                         spawn_error_timer = 0.5f;
                         spawn_error_pos = Vector2D(mx, my);
                     }
+                } else if (tipo == TipoObjetoMenu::BANDA) {
+                    if (motor.get_pausado()) {
+                        estado_banda = EstadoConexionBanda::ESPERANDO_HAMSTER;
+                        banda_hamster_id = -1;
+                    } else {
+                        spawn_error_timer = 0.5f;
+                        spawn_error_pos = Vector2D(mx, my);
+                    }
                 } else if (tipo != TipoObjetoMenu::NINGUNO) {
                     if (!motor.get_pausado()) {
                         spawn_error_timer = 0.5f;
@@ -3091,10 +3323,15 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             }
         } else if (punto_en_area_juego(mx, my)) {
             Vector2D mouse_pos(mx, my);
-            if (arrastrando_spawn != TipoObjetoMenu::NINGUNO) {
+            if (arrastrando_spawn != TipoObjetoMenu::NINGUNO && arrastrando_spawn != TipoObjetoMenu::BANDA) {
                 spawn_desde_menu(motor, arrastrando_spawn, mouse_pos);
                 arrastrando_spawn = TipoObjetoMenu::NINGUNO;
+            } else if (arrastrando_spawn == TipoObjetoMenu::BANDA) {
+                arrastrando_spawn = TipoObjetoMenu::NINGUNO;
+                manejar_click_conexion_banda(motor, mouse_pos);
             } else if (manejar_click_colocacion_cuerda(motor, mouse_pos)) {
+                entidad_arrastrada = nullptr;
+            } else if (manejar_click_conexion_banda(motor, mouse_pos)) {
                 entidad_arrastrada = nullptr;
             } else {
                 bool handle_click_detectado = false;
@@ -3275,10 +3512,12 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     if (IsKeyPressed(KEY_SPACE)) {
         if (motor.get_pausado()) {
             guardar_snapshot_simulacion(motor, gestor_eventos);
+            motor.aplicar_transmision_bandas();
             motor.set_pausado(false);
             cancelar_colocacion_cuerda();
         } else {
             restaurar_snapshot_simulacion(motor, gestor_eventos);
+            motor.aplicar_transmision_bandas();
             motor.set_pausado(true);
         }
     }
@@ -3463,6 +3702,7 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     }
 
     dibujar_cuerdas(motor);
+    motor.dibujar_bandas(modo_debug);
 
     for (const auto* e : motor.get_entidades()) {
         dibujar_entidad(e);
@@ -3506,6 +3746,7 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
         }
     }
     dibujar_previsualizacion_cuerda(motor);
+    dibujar_previsualizacion_banda(motor);
 
     if (entidad_seleccionada) {
         Color sel_color = {255, 200, 50, 180};
@@ -4034,6 +4275,7 @@ int main() {
     if (tex_robote_pelota.id > 0) UnloadTexture(tex_robote_pelota);
     if (tex_ventilador_cuerpo.id > 0) UnloadTexture(tex_ventilador_cuerpo);
     if (tex_ventilador_aspa.id > 0) UnloadTexture(tex_ventilador_aspa);
+    if (tex_caminadora.id > 0) UnloadTexture(tex_caminadora);
     
     if (tex_hud_opciones.id > 0) UnloadTexture(tex_hud_opciones);
     if (tex_hud_opciones_hover.id > 0) UnloadTexture(tex_hud_opciones_hover);

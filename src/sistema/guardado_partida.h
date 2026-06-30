@@ -18,6 +18,13 @@
 #include "../objetos/zona_meta.h"
 #include "../objetos/gancho.h"
 #include "../objetos/pistola.h"
+#include "../objetos/tijera.h"
+#include "../objetos/globo.h"
+#include "../objetos/bola_beisbol.h"
+#include "../objetos/caja_hamster.h"
+#include "../objetos/banda.h"
+#include "../objetos/caja_sorpresa.h"
+#include "../objetos/caminadora.h"
 #include "eventos.h"
 #include "rutas_datos.h"
 #include "../objetos/catalogo_menu.gen.h"
@@ -62,6 +69,13 @@ inline TipoObjetoMenu mapear_tipo_entidad_a_menu(TipoEntidadJuego t, const Entid
         case TipoEntidadJuego::SOPORTE: return TipoObjetoMenu::SOPORTE_TORQUE;
         case TipoEntidadJuego::ZONA_META: return TipoObjetoMenu::ZONA_META;
         case TipoEntidadJuego::CUERDA: return TipoObjetoMenu::CUERDA;
+        case TipoEntidadJuego::TIJERA: return TipoObjetoMenu::TIJERA;
+        case TipoEntidadJuego::GLOBO: return TipoObjetoMenu::GLOBO;
+        case TipoEntidadJuego::BOLA_BEISBOL: return TipoObjetoMenu::BOLA_BEISBOL;
+        case TipoEntidadJuego::CAJA_HAMSTER: return TipoObjetoMenu::CAJA_HAMSTER;
+        case TipoEntidadJuego::BANDA: return TipoObjetoMenu::BANDA;
+        case TipoEntidadJuego::CAJA_SORPRESA: return TipoObjetoMenu::CAJA_SORPRESA;
+        case TipoEntidadJuego::CAMINADORA: return TipoObjetoMenu::CAMINADORA;
         case TipoEntidadJuego::PARED: {
             const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
             if (p) {
@@ -284,6 +298,7 @@ inline const std::unordered_map<std::string, CreadorEntidad>& obtener_registro_f
                 Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
                 leer_valor(linea, "w=", 42), leer_valor(linea, "h=", 54));
             if (leer_valor_i(linea, "der=", 1) == 0) v->invertir_direccion();
+            if (leer_valor_i(linea, "banda=", 0) == 1) v->set_controlado_por_banda(true);
             return v;
         }},
         {"SEGUIDOR", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
@@ -339,6 +354,58 @@ inline const std::unordered_map<std::string, CreadorEntidad>& obtener_registro_f
             return std::make_unique<ZonaMeta>(id,
                 Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
                 leer_valor(linea, "w=", 80), leer_valor(linea, "h=", 80));
+        }},
+        {"TIJERA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Tijera>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 119.0), leer_valor(linea, "h=", 51.0));
+        }},
+        {"GLOBO", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            auto g = std::make_unique<Globo>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "r=", 36.0));
+            g->set_velocidad(Vector2D(leer_valor(linea, "vx=", 0), leer_valor(linea, "vy=", 0)));
+            return g;
+        }},
+        {"BOLA_BEISBOL", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            auto b = std::make_unique<BolaBeisbol>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "r=", 24.0));
+            b->set_velocidad(Vector2D(leer_valor(linea, "vx=", 0), leer_valor(linea, "vy=", 0)));
+            b->set_velocidad_angular(leer_valor(linea, "omega=", 0));
+            return b;
+        }},
+        {"CAJA_HAMSTER", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            auto h = std::make_unique<CajaHamster>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 90.0), leer_valor(linea, "h=", 80.0));
+            // Leer IDs de ventiladores conectados
+            size_t pv = linea.find("vents=");
+            if (pv != std::string::npos) {
+                std::string lista = linea.substr(pv + 6);
+                std::stringstream ls(lista);
+                std::string item;
+                while (std::getline(ls, item, ',')) {
+                    try { if (!item.empty()) h->agregar_ventilador(std::stoi(item)); } catch(...) {}
+                }
+            }
+            return h;
+        }},
+        {"BANDA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            int orig = leer_valor_i(linea, "orig=", 0);
+            int dest = leer_valor_i(linea, "dest=", 0);
+            return std::make_unique<Banda>(id, orig, dest);
+        }},
+        {"CAJA_SORPRESA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<CajaSorpresa>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 70.0), leer_valor(linea, "h=", 70.0));
+        }},
+        {"CONVEYOR", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Caminadora>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 150.0), leer_valor(linea, "h=", 24.0),
+                leer_valor_i(linea, "der=", 1) != 0);
         }}
     };
     return registro;
@@ -522,6 +589,21 @@ inline bool cargar_partida(MotorFisica& motor, GestorEventos& gestor, const std:
         e->set_velocidad_angular(0.0);
     }
     
+    // Apagar ventiladores que están controlados por una Banda
+    {
+        const auto& ents = motor.get_entidades();
+        for (auto* e : ents) {
+            auto* banda = dynamic_cast<Banda*>(e);
+            if (!banda) continue;
+            for (auto* e2 : ents) {
+                if (e2->get_id() != banda->get_id_destino()) continue;
+                auto* vent = dynamic_cast<Ventilador*>(e2);
+                if (vent) vent->set_controlado_por_banda(true);
+                break;
+            }
+        }
+    }
+
     mensaje_guardado = "Partida cargada";
     mensaje_guardado_timer = 3.0f;
     motor.set_pausado(true);
@@ -679,6 +761,22 @@ inline void restaurar_snapshot_simulacion(MotorFisica& motor, GestorEventos& ges
     motor.set_gravedad(Vector2D(0, gravedad_y));
     motor.set_siguiente_id(max_id + 1);
     limpiar_estado_tras_cargar_partida();
+
+    // Apagar ventiladores controlados por Banda
+    {
+        const auto& ents = motor.get_entidades();
+        for (auto* e : ents) {
+            auto* banda = dynamic_cast<Banda*>(e);
+            if (!banda) continue;
+            for (auto* e2 : ents) {
+                if (e2->get_id() != banda->get_id_destino()) continue;
+                auto* vent = dynamic_cast<Ventilador*>(e2);
+                if (vent) vent->set_controlado_por_banda(true);
+                break;
+            }
+        }
+    }
+
     TraceLog(LOG_INFO, "Snapshot de simulación restaurado.");
 }
 

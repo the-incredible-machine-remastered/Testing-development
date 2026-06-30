@@ -10,7 +10,7 @@ private:
     static constexpr double FUERZA_FLOTACION = 4500.0;
 
 public:
-    Globo(int id, Vector2D pos, double r = 18.0, double m = 2.0)
+    Globo(int id, Vector2D pos, double r = 36.0, double m = 2.0)
         : EntidadFisica(id, pos, m, TipoForma::CIRCULO, false),
           radio(r), reventado(false) {
         set_restitucion(0.02);

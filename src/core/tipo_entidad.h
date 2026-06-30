@@ -27,7 +27,11 @@ enum class TipoEntidadJuego {
     ZONA_META,
     CUERDA,
     GANCHO,
-    PISTOLA
+    PISTOLA,
+    CAJA_HAMSTER,
+    BANDA,
+    CAJA_SORPRESA,
+    CAMINADORA
 };
 
 inline const char* nombre_tipo_entidad(TipoEntidadJuego t) {
@@ -51,6 +55,10 @@ inline const char* nombre_tipo_entidad(TipoEntidadJuego t) {
         case TipoEntidadJuego::CUERDA:           return "Cuerda";
         case TipoEntidadJuego::GANCHO:           return "Gancho";
         case TipoEntidadJuego::PISTOLA:          return "Pistola";
+        case TipoEntidadJuego::CAJA_HAMSTER:     return "Hamster";
+        case TipoEntidadJuego::BANDA:            return "Banda";
+        case TipoEntidadJuego::CAJA_SORPRESA:   return "CajaSorpresa";
+        case TipoEntidadJuego::CAMINADORA:        return "Caminadora";
         default: return "???";
     }
 }

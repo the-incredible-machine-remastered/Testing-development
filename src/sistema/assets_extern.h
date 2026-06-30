@@ -16,6 +16,7 @@ extern Texture2D tex_robote_soporte;
 extern Texture2D tex_robote_pelota;
 extern Texture2D tex_ventilador_cuerpo;
 extern Texture2D tex_ventilador_aspa;
+extern Texture2D tex_caminadora;
 extern Texture2D tex_seguidor_quieto;
 extern Texture2D tex_seguidor_corriendo;
 extern Texture2D tex_seguidor_cabezazo;
