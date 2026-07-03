@@ -32,6 +32,15 @@
 #include "../objetos/banda.h"
 #include "../objetos/caja_sorpresa.h"
 #include "../objetos/caminadora.h"
+#include "../objetos/foco.h"
+#include "../objetos/lupa.h"
+#include "../objetos/canon.h"
+#include "../objetos/ladrillo.h"
+#include "../objetos/dinamita.h"
+#include "../objetos/dinamita_detonador.h"
+#include "../objetos/explosion.h"
+#include "../objetos/raton.h"
+#include "../objetos/gato.h"
 #include "colisiones.h"
 #include "fisica_ventilador.h"
 #include <vector>
@@ -281,6 +290,34 @@ private:
             return true;
         }
 
+        auto* ladrillo = dynamic_cast<Ladrillo*>(e);
+        if (ladrillo) {
+            min = ladrillo->get_min();
+            max = ladrillo->get_max();
+            return true;
+        }
+
+        auto* dinamita = dynamic_cast<Dinamita*>(e);
+        if (dinamita) {
+            min = dinamita->get_min();
+            max = dinamita->get_max();
+            return true;
+        }
+
+        auto* raton = dynamic_cast<Raton*>(e);
+        if (raton) {
+            min = raton->get_min();
+            max = raton->get_max();
+            return true;
+        }
+
+        auto* gato = dynamic_cast<Gato*>(e);
+        if (gato) {
+            min = gato->get_min();
+            max = gato->get_max();
+            return true;
+        }
+
         return false;
     }
 
@@ -319,6 +356,9 @@ private:
                 seg->actualizar_comportamiento(entidades, dt);
             }
         }
+
+        // 2.5 Gato persigue al ratón; ratón huye; gato atrapa (elimina) al ratón.
+        actualizar_gato_raton(dt);
  
         // 3. Integrar todas las entidades (cada una usa RK4)
         // paso_fisico() solo corre cuando la simulación NO está pausada, así que aquí
@@ -334,9 +374,16 @@ private:
         // 4.5 Tijeras activadas cortan cuerdas que pasan por su zona
         cortar_cuerdas_con_tijeras();
 
+        // 4.55 Cadena de luz: foco encendido activa lupa; haz de lupa enciende mecha del cañón
+        procesar_luz_focos_lupas();
+
         // 4.6 Pistolas activadas disparan
         disparar_pistolas();
+        disparar_canones();
         lanzar_cajas_sorpresa();
+
+        // 4.7 Dinamitas que explotaron: destruyen ladrillos y empujan dinámicos
+        procesar_explosiones();
 
         // 5. Recolectar eventos especiales pendientes de todas las entidades
         for (auto* e : entidades) {
@@ -596,6 +643,144 @@ private:
             pistola->resetear_disparo();
         }
         for (auto* n : nuevas) entidades.push_back(n);
+    }
+
+    // Cadena de luz estilo TIM:
+    //   1. Un Foco ENCENDIDO cerca de una Lupa la activa (proximidad).
+    //   2. El haz direccional de una Lupa activa, si su línea alcanza un Cañón
+    //      dentro de su rango, le enciende la mecha.
+    void procesar_luz_focos_lupas() {
+        // 1. Foco encendido -> activa lupas cercanas y orienta su haz ALEJÁNDOSE del
+        //    foco (si la lupa está a la izquierda del foco, el haz va a la izquierda).
+        const double RADIO_FOCO_LUPA = 140.0;
+        for (auto* e : entidades) {
+            auto* foco = dynamic_cast<Foco*>(e);
+            if (!foco || !foco->get_encendido()) continue;
+            for (auto* e2 : entidades) {
+                auto* lupa = dynamic_cast<Lupa*>(e2);
+                if (!lupa) continue;
+                if ((lupa->get_posicion() - foco->get_posicion()).magnitud() <= RADIO_FOCO_LUPA) {
+                    // dx = posición de la lupa relativa al foco: negativo = lupa a la izq.
+                    lupa->set_dir_haz(lupa->get_posicion().x - foco->get_posicion().x);
+                    lupa->activar();
+                }
+            }
+        }
+
+        // 2. Haz de lupa activa -> enciende la mecha de cañones que cruce.
+        for (auto* e : entidades) {
+            auto* lupa = dynamic_cast<Lupa*>(e);
+            if (!lupa || !lupa->get_activa()) continue;
+            Vector2D origen = lupa->get_posicion();
+            Vector2D fin = lupa->get_punto_final(); // origen + dir*rango
+            for (auto* e2 : entidades) {
+                auto* canon = dynamic_cast<Canon*>(e2);
+                if (!canon || canon->get_ya_disparo()) continue;
+                if (segmento_cruza_aabb(origen, fin, canon->get_min(), canon->get_max()))
+                    canon->encender_mecha();
+            }
+        }
+    }
+
+    void disparar_canones() {
+        std::vector<EntidadFisica*> nuevas;
+        for (auto* e : entidades) {
+            auto* canon = dynamic_cast<Canon*>(e);
+            if (!canon || !canon->tiene_disparo_pendiente()) continue;
+            nuevas.push_back(canon->crear_bala(generar_id()));
+        }
+        for (auto* n : nuevas) agregar_entidad(n); // usa entidades_owner, no fuga
+    }
+
+    void actualizar_gato_raton(double dt) {
+        // Para cada gato: el ratón más cercano en rango → perseguir/atrapar.
+        // Para cada ratón: el gato más cercano en rango → huir.
+        std::vector<int> ratones_atrapados;
+
+        for (auto* e : entidades) {
+            auto* gato = dynamic_cast<Gato*>(e);
+            if (!gato) continue;
+            int mejor_id = -1; double mejor_d = 1e18; Vector2D mejor_pos;
+            for (auto* e2 : entidades) {
+                auto* raton = dynamic_cast<Raton*>(e2);
+                if (!raton) continue;
+                double d = Vector2D::distancia(gato->get_posicion(), raton->get_posicion());
+                if (d < mejor_d) { mejor_d = d; mejor_id = raton->get_id(); mejor_pos = raton->get_posicion(); }
+            }
+            gato->actualizar_comportamiento(mejor_id != -1, mejor_id, mejor_pos, mejor_d, dt);
+            int atrapado = gato->consumir_raton_atrapado();
+            if (atrapado != -1) ratones_atrapados.push_back(atrapado);
+        }
+
+        for (auto* e : entidades) {
+            auto* raton = dynamic_cast<Raton*>(e);
+            if (!raton) continue;
+            double mejor_d = 1e18; Vector2D mejor_pos; bool hay = false;
+            for (auto* e2 : entidades) {
+                auto* gato = dynamic_cast<Gato*>(e2);
+                if (!gato) continue;
+                double d = Vector2D::distancia(raton->get_posicion(), gato->get_posicion());
+                if (d < mejor_d) { mejor_d = d; mejor_pos = gato->get_posicion(); hay = true; }
+            }
+            raton->actualizar_comportamiento(hay, mejor_pos, mejor_d, dt);
+        }
+
+        // Eliminar los ratones atrapados (el gato los "comió").
+        for (int id : ratones_atrapados) remover_entidad(id);
+    }
+
+    void procesar_explosiones() {
+        std::vector<int> ids_a_eliminar;
+        std::vector<EntidadFisica*> nuevas;
+        for (auto* e : entidades) {
+            auto* dina = dynamic_cast<Dinamita*>(e);
+            if (!dina || !dina->get_pendiente_boom()) continue;
+            dina->consumir_boom();
+
+            Vector2D centro = dina->get_centro();
+            double R = dina->get_radio_explosion();
+            double R2 = R * R;
+
+            // Efecto visual "boom" en el centro.
+            nuevas.push_back(new Explosion(generar_id(), centro, R));
+
+            for (auto* otro : entidades) {
+                if (otro == e) continue;
+
+                // Destruir ladrillos cuyo centro esté dentro del radio (solo la dinamita puede).
+                if (auto* lad = dynamic_cast<Ladrillo*>(otro)) {
+                    if ((lad->get_centro() - centro).magnitud_cuadrada() <= R2) {
+                        lad->destruir();
+                        ids_a_eliminar.push_back(lad->get_id());
+                    }
+                    continue;
+                }
+
+                // Empujar objetos dinámicos cercanos (impulso radial que decae con la distancia).
+                if (!otro->get_es_estatico()) {
+                    Vector2D d = otro->get_posicion() - centro;
+                    double dist2 = d.magnitud_cuadrada();
+                    if (dist2 <= R2) {
+                        double dist = std::sqrt(dist2);
+                        Vector2D dir = (dist > MathUtils::EPSILON) ? d / dist : Vector2D(0, -1);
+                        double factor = 1.0 - dist / R; // 1 en el centro, 0 en el borde
+                        otro->set_velocidad(otro->get_velocidad() + dir * (dina->get_fuerza_empuje() * factor));
+                    }
+                }
+            }
+
+            // La dinamita se consume al explotar.
+            ids_a_eliminar.push_back(dina->get_id());
+        }
+
+        // Eliminar explosiones cuya animación ya terminó.
+        for (auto* e : entidades) {
+            auto* exp = dynamic_cast<Explosion*>(e);
+            if (exp && exp->termino()) ids_a_eliminar.push_back(exp->get_id());
+        }
+
+        for (int id : ids_a_eliminar) remover_entidad(id);
+        for (auto* n : nuevas) agregar_entidad(n);
     }
 
     // ========================================================================

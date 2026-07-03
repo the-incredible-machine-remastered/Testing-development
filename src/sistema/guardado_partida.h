@@ -27,6 +27,12 @@
 #include "../objetos/caminadora.h"
 #include "../objetos/foco.h"
 #include "../objetos/lupa.h"
+#include "../objetos/canon.h"
+#include "../objetos/ladrillo.h"
+#include "../objetos/dinamita.h"
+#include "../objetos/dinamita_detonador.h"
+#include "../objetos/raton.h"
+#include "../objetos/gato.h"
 #include "eventos.h"
 #include "rutas_datos.h"
 #include "../objetos/catalogo_menu.gen.h"
@@ -80,6 +86,12 @@ inline TipoObjetoMenu mapear_tipo_entidad_a_menu(TipoEntidadJuego t, const Entid
         case TipoEntidadJuego::CAMINADORA: return TipoObjetoMenu::CAMINADORA;
         case TipoEntidadJuego::FOCO: return TipoObjetoMenu::FOCO;
         case TipoEntidadJuego::LUPA: return TipoObjetoMenu::LUPA;
+        case TipoEntidadJuego::CANON: return TipoObjetoMenu::CANON;
+        case TipoEntidadJuego::LADRILLO: return TipoObjetoMenu::LADRILLO;
+        case TipoEntidadJuego::DINAMITA: return TipoObjetoMenu::DINAMITA;
+        case TipoEntidadJuego::DINAMITA_DETONADOR: return TipoObjetoMenu::DINAMITA_DETONADOR;
+        case TipoEntidadJuego::GATO: return TipoObjetoMenu::GATO;
+        case TipoEntidadJuego::RATON: return TipoObjetoMenu::RATON;
         case TipoEntidadJuego::PARED: {
             const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
             if (p) {
@@ -363,6 +375,36 @@ inline const std::unordered_map<std::string, CreadorEntidad>& obtener_registro_f
             return std::make_unique<Lupa>(id,
                 Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
                 leer_valor(linea, "ang=", 0.0), leer_valor(linea, "rango=", 200.0));
+        }},
+        {"CANON", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Canon>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "ang=", 180.0));
+        }},
+        {"LADRILLO", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Ladrillo>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 60.0), leer_valor(linea, "h=", 40.0));
+        }},
+        {"DINAMITA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Dinamita>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 26.0), leer_valor(linea, "h=", 46.0));
+        }},
+        {"DINAMITA_DETONADOR", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<DinamitaDetonador>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 26.0), leer_valor(linea, "h=", 46.0));
+        }},
+        {"GATO", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Gato>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 54.0), leer_valor(linea, "h=", 40.0));
+        }},
+        {"RATON", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Raton>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 22.0), leer_valor(linea, "h=", 12.0));
         }},
         {"ZONA_META", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
             return std::make_unique<ZonaMeta>(id,

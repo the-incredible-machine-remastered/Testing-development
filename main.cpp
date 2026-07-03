@@ -41,6 +41,12 @@
 #include "objetos/caminadora.h"
 #include "objetos/foco.h"
 #include "objetos/lupa.h"
+#include "objetos/canon.h"
+#include "objetos/ladrillo.h"
+#include "objetos/dinamita.h"
+#include "objetos/dinamita_detonador.h"
+#include "objetos/raton.h"
+#include "objetos/gato.h"
 #include "fisica/colisiones.h"
 #include "fisica/motor_fisica.h"
 #include "objetos/catalogo_menu.gen.h"
@@ -948,6 +954,39 @@ bool crear_lupa(MotorFisica& motor, Vector2D pos) {
     return true;
 }
 
+bool crear_canon(MotorFisica& motor, Vector2D pos) {
+    motor.agregar_entidad(new Canon(motor.generar_id(), pos, 180.0)); // apunta izquierda
+    return true;
+}
+
+bool crear_ladrillo(MotorFisica& motor, Vector2D pos) {
+    Vector2D spawn(pos.x - 30.0, pos.y - 20.0);
+    motor.agregar_entidad(new Ladrillo(motor.generar_id(), spawn, 60.0, 40.0));
+    return true;
+}
+
+bool crear_dinamita(MotorFisica& motor, Vector2D pos) {
+    Vector2D spawn(pos.x - 13.0, pos.y - 23.0);
+    motor.agregar_entidad(new Dinamita(motor.generar_id(), spawn, 26.0, 46.0));
+    return true;
+}
+
+bool crear_dinamita_detonador(MotorFisica& motor, Vector2D pos) {
+    Vector2D spawn(pos.x - 13.0, pos.y - 23.0);
+    motor.agregar_entidad(new DinamitaDetonador(motor.generar_id(), spawn, 26.0, 46.0));
+    return true;
+}
+
+bool crear_gato(MotorFisica& motor, Vector2D pos) {
+    motor.agregar_entidad(new Gato(motor.generar_id(), pos, 54.0, 40.0));
+    return true;
+}
+
+bool crear_raton(MotorFisica& motor, Vector2D pos) {
+    motor.agregar_entidad(new Raton(motor.generar_id(), pos, 22.0, 12.0));
+    return true;
+}
+
 bool crear_rampa(MotorFisica& motor, Vector2D pos, bool invertido) {
     double b = 160.0;
     double h = 120.0;
@@ -1000,6 +1039,12 @@ bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
         case TipoObjetoMenu::PISTOLA:           return crear_pistola(motor, pos);
         case TipoObjetoMenu::FOCO:              return crear_foco(motor, pos);
         case TipoObjetoMenu::LUPA:              return crear_lupa(motor, pos);
+        case TipoObjetoMenu::CANON:             return crear_canon(motor, pos);
+        case TipoObjetoMenu::LADRILLO:          return crear_ladrillo(motor, pos);
+        case TipoObjetoMenu::DINAMITA:          return crear_dinamita(motor, pos);
+        case TipoObjetoMenu::DINAMITA_DETONADOR: return crear_dinamita_detonador(motor, pos);
+        case TipoObjetoMenu::GATO:              return crear_gato(motor, pos);
+        case TipoObjetoMenu::RATON:             return crear_raton(motor, pos);
         case TipoObjetoMenu::GLOBO:             return crear_globo(motor, pos);
         case TipoObjetoMenu::BOLA_BEISBOL:      return crear_bola_beisbol(motor, pos);
         case TipoObjetoMenu::TIJERA:            return crear_tijera(motor, pos);
@@ -1283,12 +1328,107 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
             break;
         }
         case TipoObjetoMenu::LUPA: {
-            float r = 9.0f * escala;
-            float lx = cx - 3*escala, ly = cy - 3*escala;
-            DrawLineEx({lx, ly}, {cx + 16*escala, cy + 10*escala}, 2.0f, tint(Color{255,240,150,160}));
-            DrawLineEx({lx, ly}, {lx - 9*escala, ly - 9*escala}, 3.0f, tint(Color{110,90,60,255}));
-            DrawCircle((int)lx, (int)ly, r, tint(Color{200,230,255,120}));
-            DrawCircleLines((int)lx, (int)ly, r, tint(Color{110,90,60,255}));
+            // Lente vertical + rayo horizontal
+            float rx = 6.0f * escala, ry = 11.0f * escala;
+            DrawLineEx({cx, cy}, {cx + 16*escala, cy}, 2.0f, tint(Color{255,240,150,160}));
+            DrawEllipse((int)cx, (int)cy, rx, ry, tint(Color{200,230,255,120}));
+            DrawEllipseLines((int)cx, (int)cy, rx, ry, tint(Color{110,90,60,255}));
+            DrawLineEx({cx, cy + ry}, {cx, cy + ry + 6*escala}, 2.5f, tint(Color{110,90,60,255}));
+            break;
+        }
+        case TipoObjetoMenu::CANON: {
+            float s = escala;
+            Color metal = tint(Color{70, 75, 82, 255});
+            Color metal2 = tint(Color{45, 48, 54, 255});
+            Color madera = tint(Color{110, 70, 35, 255});
+            // base
+            DrawRectangleRec({cx - 12*s, cy + 4*s, 24*s, 7*s}, madera);
+            DrawCircle((int)(cx - 7*s), (int)(cy + 11*s), 3.5f*s, metal2);
+            DrawCircle((int)(cx + 7*s), (int)(cy + 11*s), 3.5f*s, metal2);
+            // tubo apuntando a la izquierda
+            DrawLineEx({cx + 4*s, cy - 2*s}, {cx - 16*s, cy - 2*s}, 11*s, metal);
+            DrawCircle((int)(cx - 16*s), (int)(cy - 2*s), 5.5f*s, metal);
+            DrawCircle((int)(cx - 16*s), (int)(cy - 2*s), 3*s, tint(Color{20,20,24,255}));
+            // mecha atras con chispa
+            DrawLineEx({cx + 8*s, cy - 4*s}, {cx + 14*s, cy - 10*s}, 1.8f, tint(Color{60,45,30,255}));
+            DrawCircle((int)(cx + 14*s), (int)(cy - 10*s), 2.5f*s, tint(Color{255,200,60,255}));
+            break;
+        }
+        case TipoObjetoMenu::LADRILLO: {
+            float w = 28.0f * escala, h = 20.0f * escala;
+            float x0 = cx - w/2, y0 = cy - h/2;
+            DrawRectangleRec({x0, y0, w, h}, tint(Color{205,195,180,255}));
+            // ladrillos rojos con junta desfasada
+            for (int fila=0; fila<3; ++fila) {
+                float ry = y0 + fila*(h/3.0f);
+                float off = (fila%2==0)?0.0f:w*0.25f;
+                for (float bx=x0-off; bx<x0+w; bx+=w*0.5f) {
+                    float a=fmaxf(bx,x0), b=fminf(bx+w*0.5f-1.5f, x0+w);
+                    if (b>a) DrawRectangleRec({a, ry+1, b-a, h/3.0f-2}, tint(Color{170,70,55,255}));
+                }
+            }
+            DrawRectangleLinesEx({x0,y0,w,h}, 1.5f, tint(Color{110,45,35,255}));
+            break;
+        }
+        case TipoObjetoMenu::DINAMITA: {
+            float w = 16.0f*escala, h = 24.0f*escala;
+            float x0 = cx - w/2, y0 = cy - h/2 + 2*escala;
+            for (int i=0;i<3;++i) {
+                float bx = x0 + i*(w/3.0f);
+                DrawRectangleRec({bx+0.5f, y0, w/3.0f-1.0f, h}, tint(Color{190,55,45,255}));
+            }
+            DrawRectangleRec({x0, y0 + h*0.45f, w, 3.0f}, tint(Color{90,60,30,255}));
+            // mecha con chispa
+            DrawLineEx({cx, y0}, {cx + 4*escala, y0 - 6*escala}, 1.6f, tint(Color{70,55,35,255}));
+            DrawCircle((int)(cx + 4*escala), (int)(y0 - 6*escala), 2.2f*escala, tint(Color{255,200,60,255}));
+            break;
+        }
+        case TipoObjetoMenu::DINAMITA_DETONADOR: {
+            float w = 12.0f*escala, h = 22.0f*escala;
+            float x0 = cx - 10*escala, y0 = cy - h/2 + 2*escala;
+            for (int i=0;i<3;++i) {
+                float bx = x0 + i*(w/3.0f);
+                DrawRectangleRec({bx+0.5f, y0, w/3.0f-1.0f, h}, tint(Color{190,55,45,255}));
+            }
+            // cable + detonador (émbolo) a la derecha
+            float dx = cx + 12*escala, dy = cy;
+            DrawLineBezier({x0+w, y0+h*0.5f}, {dx, dy}, 1.8f, tint(Color{40,40,45,255}));
+            DrawRectangleRec({dx-5*escala, dy-3*escala, 10*escala, 8*escala}, tint(Color{120,70,30,255}));
+            DrawRectangleRec({dx-1*escala, dy-9*escala, 2*escala, 6*escala}, tint(Color{150,155,160,255}));
+            DrawRectangleRec({dx-4*escala, dy-10*escala, 8*escala, 2*escala}, tint(Color{150,155,160,255}));
+            break;
+        }
+        case TipoObjetoMenu::GATO: {
+            Color c = tint(Color{235,235,240,255});
+            Color o = tint(Color{170,170,180,255});
+            float bw = 16*escala, bh = 11*escala;
+            // cola
+            DrawLineBezier({cx - bw*0.6f, cy}, {cx - bw*0.9f, cy - bh*1.2f}, 2.5f, c);
+            // cuerpo
+            DrawEllipse((int)cx, (int)(cy+2*escala), bw*0.6f, bh*0.5f, c);
+            // cabeza
+            float hx = cx + bw*0.4f, hy = cy - bh*0.3f;
+            DrawCircle((int)hx, (int)hy, bh*0.55f, c);
+            DrawTriangle({hx-4*escala, hy-3*escala},{hx-1*escala,hy-8*escala},{hx+1*escala,hy-2*escala}, c);
+            DrawTriangle({hx+4*escala, hy-3*escala},{hx+2*escala,hy-8*escala},{hx-1*escala,hy-2*escala}, c);
+            DrawCircle((int)(hx+2*escala),(int)hy, 1.5f, tint(Color{80,150,90,255}));
+            DrawEllipseLines((int)cx, (int)(cy+2*escala), bw*0.6f, bh*0.5f, o);
+            break;
+        }
+        case TipoObjetoMenu::RATON: {
+            Color c = tint(Color{150,150,158,255});
+            Color rosa = tint(Color{235,150,160,255});
+            float bw = 15*escala, bh = 8*escala;
+            // cola
+            DrawLineBezier({cx - bw*0.5f, cy}, {cx - bw*0.8f, cy - bh}, 1.5f, rosa);
+            // cuerpo
+            DrawEllipse((int)cx, (int)cy, bw*0.5f, bh*0.5f, c);
+            // cabeza + oreja
+            float hx = cx + bw*0.4f;
+            DrawCircle((int)hx, (int)cy, bh*0.5f, c);
+            DrawCircle((int)(hx - 2*escala), (int)(cy - bh*0.5f), bh*0.4f, c);
+            DrawCircle((int)(hx - 2*escala), (int)(cy - bh*0.5f), bh*0.22f, rosa);
+            DrawCircle((int)(hx + bh*0.4f), (int)cy, 1.2f, rosa);
             break;
         }
         case TipoObjetoMenu::GLOBO: {
@@ -3633,8 +3773,9 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                         auto* pist = dynamic_cast<Pistola*>(entidad_seleccionada);
                         if (pist) pist->invertir();
                         else {
-                            auto* lup = dynamic_cast<Lupa*>(entidad_seleccionada);
-                            if (lup) lup->invertir();
+                            // La lupa NO rota (su haz depende del foco). El cañón sí.
+                            auto* can = dynamic_cast<Canon*>(entidad_seleccionada);
+                            if (can) can->invertir();
                         }
                     }
                 }

@@ -33,7 +33,14 @@ enum class TipoEntidadJuego {
     CAJA_SORPRESA,
     CAMINADORA,
     FOCO,
-    LUPA
+    LUPA,
+    CANON,
+    LADRILLO,
+    DINAMITA,
+    DINAMITA_DETONADOR,
+    EXPLOSION,
+    GATO,
+    RATON
 };
 
 inline const char* nombre_tipo_entidad(TipoEntidadJuego t) {
@@ -63,6 +70,13 @@ inline const char* nombre_tipo_entidad(TipoEntidadJuego t) {
         case TipoEntidadJuego::CAMINADORA:        return "Caminadora";
         case TipoEntidadJuego::FOCO:              return "Foco";
         case TipoEntidadJuego::LUPA:              return "Lupa";
+        case TipoEntidadJuego::CANON:            return "Canon";
+        case TipoEntidadJuego::LADRILLO:         return "Ladrillo";
+        case TipoEntidadJuego::DINAMITA:         return "Dinamita";
+        case TipoEntidadJuego::DINAMITA_DETONADOR: return "Dina Detonador";
+        case TipoEntidadJuego::EXPLOSION:        return "Explosion";
+        case TipoEntidadJuego::GATO:             return "Gato";
+        case TipoEntidadJuego::RATON:            return "Raton";
         default: return "???";
     }
 }

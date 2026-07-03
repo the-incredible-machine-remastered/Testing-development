@@ -94,5 +94,5 @@ public:
 
 // TIM_MENU_SPAWN id=PLATAFORMA etiqueta="Plataforma" tab=0 categoria=0 variante=plataforma
 // TIM_MENU_SPAWN id=PARED_LARGA etiqueta="Pared" tab=0 categoria=0 variante=pared
-// TIM_MENU_SPAWN id=PLATAFORMA_DECOR etiqueta="Ladrillo" tab=1 categoria=0 variante=decor_plataforma
+// TIM_MENU_SPAWN id=PLATAFORMA_DECOR etiqueta="Deco" tab=1 categoria=0 variante=decor_plataforma
 
