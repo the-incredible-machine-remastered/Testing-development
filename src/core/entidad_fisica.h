@@ -213,6 +213,13 @@ public:
     }
     virtual void on_collision(EntidadFisica* otro, const InfoColision& info) {}
 
+    // ---- Activación por tensión de cuerda / golpe de balancín ----
+    // Las subclases activables (pistola, foco, lupa, cañón, etc.) sobreescriben esto
+    // para reaccionar cuando una cuerda conectada las activa. El motor de física no
+    // necesita conocer el tipo concreto de la entidad.
+    virtual bool es_activable_por_tension() const { return false; }
+    virtual void activar_por_tension() {}
+
 protected:
     std::vector<RegistroEventoEspecial> eventos_pendientes;
 

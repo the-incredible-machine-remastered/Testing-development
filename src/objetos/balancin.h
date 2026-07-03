@@ -17,11 +17,12 @@ protected:
     double angulo_limite;
     double resistencia_pivote;
     double angulo_inicial;
+    bool impacto_brusco;
 
 public:
     Balancin(int id, Vector2D pos_pivot, double length = 200.0, double thickness = 6.0, double m = 8.0)
         : EntidadFisica(id, pos_pivot, m, TipoForma::POLIGONO, false),
-          largo(length), espesor(thickness), resistencia_pivote(1200.0) {
+          largo(length), espesor(thickness), resistencia_pivote(1200.0), impacto_brusco(false) {
 
         // Barra + herrajes/base: mas inercia para que una carga colgada incline,
         // pero no haga girar el balancin demasiado facil.
@@ -43,6 +44,22 @@ public:
     double get_angulo_limite() const { return angulo_limite; }
     double get_resistencia_pivote() const { return resistencia_pivote; }
     double get_angulo_inicial() const { return angulo_inicial; }
+
+    // Se consume tras leerse: true una sola vez, el frame en que hubo un giro brusco.
+    bool consumir_impacto_brusco() {
+        bool v = impacto_brusco;
+        impacto_brusco = false;
+        return v;
+    }
+
+    // Marca que hubo un giro brusco (llamar justo cuando un impulso de colisión
+    // cambia la velocidad angular). Permite a otros sistemas (ej. pistolas/focos
+    // conectados) reaccionar sin depender de que el giro se traduzca en tensión.
+    void marcar_impacto_si_brusco() {
+        if (std::abs(velocidad_angular) >= 1.5) {
+            impacto_brusco = true;
+        }
+    }
 
     void ciclar_inclinacion() {
         if (angulo_inicial == 0.0)       angulo_inicial = angulo_limite;

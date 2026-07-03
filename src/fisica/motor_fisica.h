@@ -130,8 +130,17 @@ public:
     // --- Control de simulación ---
 
     void set_pausado(bool p) {
-        if (pausado && !p)
-            resetear_tensiones_cuerdas = true; // resetear tras los primeros 2 pasos
+        if (pausado && !p) {
+            // Al reanudar (Play): en edición el usuario pudo mover objetos, así que
+            // recalibramos la longitud de reposo de cada cuerda a su geometría actual
+            // (para no arrancar pre-tensada). La línea base de tensión se fija con el
+            // sistema resetear_tensiones_cuerdas en los primeros pasos.
+            for (auto* e : entidades) {
+                auto* c = dynamic_cast<Cuerda*>(e);
+                if (c) c->sincronizar_reposo(entidades);
+            }
+            resetear_tensiones_cuerdas = true; // resetear tras los primeros pasos
+        }
         pausado = p;
     }
     bool get_pausado() const { return pausado; }
@@ -312,12 +321,10 @@ private:
         }
  
         // 3. Integrar todas las entidades (cada una usa RK4)
+        // paso_fisico() solo corre cuando la simulación NO está pausada, así que aquí
+        // siempre estamos "corriendo" — la física es idéntica en CREATIVO y NIVEL. La
+        // edición (objetos quietos) ocurre estando pausado, cuando esto ni se ejecuta.
         for (auto* e : entidades) {
-            if (estado_actual == EstadoJuego::JUEGO_CREATIVO && !e->get_es_fijo()) {
-                e->set_velocidad(Vector2D(0.0, 0.0));
-                e->set_velocidad_angular(0.0);
-                continue;
-            }
             e->actualizar_fisica(dt);
         }
  
@@ -345,7 +352,6 @@ private:
 
     void aplicar_gravedad() {
         for (auto* e : entidades) {
-            if (estado_actual == EstadoJuego::JUEGO_CREATIVO && !e->get_es_fijo()) continue;
             if (!e->get_es_estatico() && e->get_masa() > MathUtils::EPSILON) {
                 if (dynamic_cast<Balancin*>(e)) continue; // El balancín está pivotado y fijo linealmente
                 // F = m * g
@@ -368,26 +374,57 @@ private:
             }
         }
 
+        // Fuente de verdad única para "el balancín recibió un golpe brusco este frame".
+        // Se consume el flag de CADA balancín una sola vez, antes de recorrer cuerdas,
+        // para que el resultado no dependa del orden ni se pierda con varias cuerdas.
+        std::vector<Balancin*> balancines_golpeados;
+        for (auto* e : entidades) {
+            auto* bal = dynamic_cast<Balancin*>(e);
+            if (bal && bal->consumir_impacto_brusco())
+                balancines_golpeados.push_back(bal);
+        }
+        // Un balancín golpeado activa cualquier activable parado sobre su tabla.
+        for (auto* bal : balancines_golpeados) {
+            for (auto* e3 : entidades) {
+                if (e3->es_activable_por_tension() && bal->contiene_punto(e3->get_posicion()))
+                    e3->activar_por_tension();
+            }
+        }
+
         for (auto* e : entidades) {
             auto* cuerda = dynamic_cast<Cuerda*>(e);
             if (!cuerda) continue;
             cuerda->aplicar_tension(entidades, gravedad);
 
-            // Activar pistola solo si la tensión aumentó bruscamente
             if (resetear_tensiones_cuerdas) continue; // aún estabilizando
-            double delta = cuerda->get_delta_tension();
-            if (delta < 60.0) continue;
 
-            auto activar_si_pistola = [&](int id) {
-                for (auto* e2 : entidades) {
-                    if (e2->get_id() != id) continue;
-                    auto* pistola = dynamic_cast<Pistola*>(e2);
-                    if (pistola) pistola->activar_por_tension();
-                    break;
-                }
+            int id_a = cuerda->get_extremo_a().entidad_id;
+            int id_b = cuerda->get_extremo_b().entidad_id;
+            EntidadFisica* ent_a = nullptr;
+            EntidadFisica* ent_b = nullptr;
+            for (auto* e2 : entidades) {
+                if (e2->get_id() == id_a) ent_a = e2;
+                if (e2->get_id() == id_b) ent_b = e2;
+            }
+
+            auto fue_golpeado = [&](EntidadFisica* e2) {
+                for (auto* bal : balancines_golpeados)
+                    if (static_cast<EntidadFisica*>(bal) == e2) return true;
+                return false;
             };
-            activar_si_pistola(cuerda->get_extremo_a().entidad_id);
-            activar_si_pistola(cuerda->get_extremo_b().entidad_id);
+
+            // Un extremo activable (pistola/foco/lupa) se activa si:
+            //  - la tensión de la cuerda tuvo un pico brusco (delta >= 60), o
+            //  - el OTRO extremo es un balancín que recibió un golpe brusco
+            //    (fuente de verdad robusta, ignora la geometría frágil de la tensión).
+            double delta = cuerda->get_delta_tension();
+            auto activar_extremo = [&](EntidadFisica* e2, EntidadFisica* otro) {
+                if (!e2 || !e2->es_activable_por_tension()) return;
+                if (delta >= 60.0 || fue_golpeado(otro))
+                    e2->activar_por_tension();
+            };
+            activar_extremo(ent_a, ent_b);
+            activar_extremo(ent_b, ent_a);
         }
     }
 
@@ -513,7 +550,7 @@ private:
         for (int id : ids_a_eliminar)
             remover_entidad(id);
         for (auto* nueva : entidades_nuevas)
-            entidades.push_back(nueva);
+            agregar_entidad(nueva); // usa entidades_owner para no fugar memoria
     }
 
     void lanzar_cajas_sorpresa() {
@@ -572,7 +609,6 @@ private:
                 EntidadFisica* a = entidades[i];
                 EntidadFisica* b = entidades[j];
 
-                if (estado_actual == EstadoJuego::JUEGO_CREATIVO && (!a->get_es_fijo() || !b->get_es_fijo())) continue;
                 if (a->get_es_estatico() && b->get_es_estatico()) continue;
 
                 // Detección especial: círculo vs rueda de hámster

@@ -31,7 +31,9 @@ enum class TipoEntidadJuego {
     CAJA_HAMSTER,
     BANDA,
     CAJA_SORPRESA,
-    CAMINADORA
+    CAMINADORA,
+    FOCO,
+    LUPA
 };
 
 inline const char* nombre_tipo_entidad(TipoEntidadJuego t) {
@@ -59,6 +61,8 @@ inline const char* nombre_tipo_entidad(TipoEntidadJuego t) {
         case TipoEntidadJuego::BANDA:            return "Banda";
         case TipoEntidadJuego::CAJA_SORPRESA:   return "CajaSorpresa";
         case TipoEntidadJuego::CAMINADORA:        return "Caminadora";
+        case TipoEntidadJuego::FOCO:              return "Foco";
+        case TipoEntidadJuego::LUPA:              return "Lupa";
         default: return "???";
     }
 }

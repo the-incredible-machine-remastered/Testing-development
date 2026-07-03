@@ -18,30 +18,27 @@ private:
     std::vector<Vector2D> vertices_filo;
 
     void recalcular_vertices_filo() {
-        // Triángulo rampa: punta izquierda en el centro-izquierdo de la tijera,
-        // punta derecha en la esquina derecha.
-        // La arista superior va de izquierda-abajo a derecha-arriba (rampa /)
-        // → normal apunta arriba-derecha → bola que cae sobre ella sale a la DERECHA.
+        // Al cerrarse, la tijera actúa como RAMPA cuya cara superior SIGUE la hoja
+        // superior de la tijera dibujada: baja del aro superior-izquierdo a la punta
+        // derecha-centro. Así el hitbox coincide con lo que se ve (no una cuña que
+        // llena el rectángulo).
         //
-        //              T (der-arriba)
-        //             /
-        //   P (izq-centro)
-        //             \
-        //              B (der-abajo)
-        double cx = posicion.x + ancho * 0.5;
-        double cy = posicion.y + alto  * 0.5;
+        //   A (sobre el aro sup-izq)
+        //    \____
+        //         \___ hipotenusa = hoja superior (baja hacia la derecha)
+        //   C----------T (punta der-centro)
+        //
+        // La bola cae sobre A→T y resbala hacia T (derecha).
+        double r  = get_radio_aro();
+        double ax = posicion.x + r + 1.0;                 // x de los aros (borde izq)
+        double mid_y = posicion.y + alto * 0.5;           // centro vertical
+        double ay_sup = mid_y - r;                        // centro aro superior
 
-        Vector2D P(posicion.x,         cy);                 // pivote izq-centro
-        Vector2D T(posicion.x + ancho, posicion.y);         // punta der-arriba
-        Vector2D B(posicion.x + ancho, posicion.y + alto);  // punta der-abajo
+        Vector2D A(ax, ay_sup - r);                       // cresta: tope del aro superior
+        Vector2D T(posicion.x + ancho, mid_y);            // punta derecha (donde se juntan las hojas)
+        Vector2D C(ax, mid_y + r * 0.4);                  // base bajo el arranque, da grosor a la cuña
 
-        // Orden antihorario en Y-down (= horario en Y-up) para que las normales
-        // de circulo_vs_poligono apunten hacia afuera (hacia el círculo que cae).
-        // Arista P→T: va de izq-centro a der-arriba (sube hacia la derecha).
-        // perp(T-P) = perp(+dx, -dy) = (dy, dx) → apunta abajo-derecha.
-        // Pero la bola viene de arriba y está FUERA → la normal real es pos_circ-closest,
-        // que apunta arriba. La componente horizontal del filo P→T empuja a la derecha.
-        vertices_filo = { P, T, B };
+        vertices_filo = { A, T, C };
     }
 
 public:
@@ -97,24 +94,33 @@ public:
     bool get_ya_corto_cuerdas() const { return ya_corto_cuerdas; }
     void set_ya_corto_cuerdas() { ya_corto_cuerdas = true; }
 
-    void on_collision(EntidadFisica* otro, const InfoColision& info) override {
-        if (!otro || otro->get_es_estatico()) return;
-
+    // Al cerrarse fija la forma de colisión como el triángulo-rampa (POLIGONO) para
+    // que el motor deje de usar el AABB rectangular grande y la bola resbale.
+    void cerrar() {
         if (!permanentemente_activada) {
             fue_activada = true;
             permanentemente_activada = true;
+            recalcular_vertices_filo();
+            tipo_forma = TipoForma::POLIGONO; // el motor usará vertices_filo como rampa
         }
+    }
 
-        // Solo desviar una vez por entidad
+    void on_collision(EntidadFisica* otro, const InfoColision& info) override {
+        if (!otro || otro->get_es_estatico()) return;
+
+        bool estaba_abierta = !permanentemente_activada;
+        cerrar();
+
+        // Empujón inicial abajo-derecha SOLO en el instante del cierre (una vez por
+        // entidad) para arrancar el deslizamiento; ya cerrada, la rampa física lo hace.
         int id = otro->get_id();
-        if (ids_desviados.count(id)) return;
-        ids_desviados.insert(id);
-
-        Vector2D vel = otro->get_velocidad();
-        double speed = vel.magnitud();
-        if (speed < 80.0) speed = 80.0;
-        // Dirección: abajo-derecha, conservando algo de la velocidad original
-        otro->set_velocidad(Vector2D(speed * 0.85, speed * 0.5));
+        if (estaba_abierta && !ids_desviados.count(id)) {
+            ids_desviados.insert(id);
+            Vector2D vel = otro->get_velocidad();
+            double speed = vel.magnitud();
+            if (speed < 80.0) speed = 80.0;
+            otro->set_velocidad(Vector2D(speed * 0.85, speed * 0.5));
+        }
     }
 
     bool contiene_punto(const Vector2D& p) const override {
@@ -173,10 +179,19 @@ public:
         DrawCircle(static_cast<int>(tip_x - w * 0.15f), static_cast<int>(mid_y), 3.5f, col2);
 
         if (debug) {
-            // AABB completo (verde) — es también la hitbox activa
-            DrawRectangleLines(static_cast<int>(px), static_cast<int>(py),
-                               static_cast<int>(w),  static_cast<int>(h), GREEN);
-            // Círculos de los aros
+            if (cerrada && vertices_filo.size() == 3) {
+                // Hitbox real cerrada: el triángulo-rampa (lo que colisiona de verdad).
+                for (int i = 0; i < 3; ++i) {
+                    const Vector2D& v0 = vertices_filo[i];
+                    const Vector2D& v1 = vertices_filo[(i + 1) % 3];
+                    DrawLineEx({(float)v0.x, (float)v0.y}, {(float)v1.x, (float)v1.y}, 1.5f, GREEN);
+                }
+            } else {
+                // Abierta: AABB (hitbox de colisión).
+                DrawRectangleLines(static_cast<int>(px), static_cast<int>(py),
+                                   static_cast<int>(w),  static_cast<int>(h), GREEN);
+            }
+            // Círculos de los aros (activación / corte de cuerda) siempre.
             DrawCircleLines(static_cast<int>(ax), static_cast<int>(ay_sup), r, GREEN);
             DrawCircleLines(static_cast<int>(ax), static_cast<int>(ay_inf), r, GREEN);
         }

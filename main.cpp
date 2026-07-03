@@ -39,6 +39,8 @@
 #include "objetos/banda.h"
 #include "objetos/caja_sorpresa.h"
 #include "objetos/caminadora.h"
+#include "objetos/foco.h"
+#include "objetos/lupa.h"
 #include "fisica/colisiones.h"
 #include "fisica/motor_fisica.h"
 #include "objetos/catalogo_menu.gen.h"
@@ -290,6 +292,32 @@ bool detectar_anclaje_cuerda(const MotorFisica& motor, Vector2D mouse_pos,
             if (d2 <= mejor_dist2) {
                 mejor_dist2 = d2;
                 out = { pistola_anc->get_id(), TipoAnclajeCuerda::Gancho };
+                punto_out = p;
+                encontrado = true;
+            }
+        }
+
+        // Foco y Lupa: activables como la pistola; se anclan con el mismo tipo
+        // de anclaje genérico (Gancho, punto = posición, masa 0).
+        const Foco* foco_anc = dynamic_cast<const Foco*>(e);
+        if (foco_anc) {
+            Vector2D p = foco_anc->get_posicion();
+            double d2 = (p - mouse_pos).magnitud_cuadrada();
+            if (d2 <= mejor_dist2) {
+                mejor_dist2 = d2;
+                out = { foco_anc->get_id(), TipoAnclajeCuerda::Gancho };
+                punto_out = p;
+                encontrado = true;
+            }
+        }
+
+        const Lupa* lupa_anc = dynamic_cast<const Lupa*>(e);
+        if (lupa_anc) {
+            Vector2D p = lupa_anc->get_posicion();
+            double d2 = (p - mouse_pos).magnitud_cuadrada();
+            if (d2 <= mejor_dist2) {
+                mejor_dist2 = d2;
+                out = { lupa_anc->get_id(), TipoAnclajeCuerda::Gancho };
                 punto_out = p;
                 encontrado = true;
             }
@@ -910,6 +938,16 @@ bool crear_pistola(MotorFisica& motor, Vector2D pos) {
     return true;
 }
 
+bool crear_foco(MotorFisica& motor, Vector2D pos) {
+    motor.agregar_entidad(new Foco(motor.generar_id(), pos));
+    return true;
+}
+
+bool crear_lupa(MotorFisica& motor, Vector2D pos) {
+    motor.agregar_entidad(new Lupa(motor.generar_id(), pos, 0.0, 200.0));
+    return true;
+}
+
 bool crear_rampa(MotorFisica& motor, Vector2D pos, bool invertido) {
     double b = 160.0;
     double h = 120.0;
@@ -960,6 +998,8 @@ bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
         case TipoObjetoMenu::SOPORTE_TORQUE:    return crear_soporte_torque(motor, pos);
         case TipoObjetoMenu::GANCHO:            return crear_gancho(motor, pos);
         case TipoObjetoMenu::PISTOLA:           return crear_pistola(motor, pos);
+        case TipoObjetoMenu::FOCO:              return crear_foco(motor, pos);
+        case TipoObjetoMenu::LUPA:              return crear_lupa(motor, pos);
         case TipoObjetoMenu::GLOBO:             return crear_globo(motor, pos);
         case TipoObjetoMenu::BOLA_BEISBOL:      return crear_bola_beisbol(motor, pos);
         case TipoObjetoMenu::TIJERA:            return crear_tijera(motor, pos);
@@ -1230,6 +1270,25 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
             DrawRectangleRec({cx + 6*s, cy - 5*s, 20*s, 8*s}, pml);
             // aros rojos (gatillo)
             DrawCircle((int)(cx - 2*s), (int)(cy + 4*s), 4*s, tint(Color{200, 40, 40, 255}));
+            break;
+        }
+        case TipoObjetoMenu::FOCO: {
+            float r = 11.0f * escala;
+            DrawCircle((int)cx, (int)(cy - 2*escala), r * 1.5f, tint(Color{255, 230, 120, 70}));
+            DrawCircle((int)cx, (int)(cy - 2*escala), r, tint(Color{255, 235, 130, 255}));
+            DrawCircleLines((int)cx, (int)(cy - 2*escala), r, tint(Color{210, 170, 40, 255}));
+            DrawLineEx({cx - r*0.35f, cy - escala}, {cx, cy - r*0.4f - 2*escala}, 1.6f, tint(Color{255,150,30,255}));
+            DrawLineEx({cx, cy - r*0.4f - 2*escala}, {cx + r*0.35f, cy - escala}, 1.6f, tint(Color{255,150,30,255}));
+            DrawRectangleRec({cx - r*0.45f, cy + r*0.7f - 2*escala, r*0.9f, r*0.55f}, tint(Color{150,155,160,255}));
+            break;
+        }
+        case TipoObjetoMenu::LUPA: {
+            float r = 9.0f * escala;
+            float lx = cx - 3*escala, ly = cy - 3*escala;
+            DrawLineEx({lx, ly}, {cx + 16*escala, cy + 10*escala}, 2.0f, tint(Color{255,240,150,160}));
+            DrawLineEx({lx, ly}, {lx - 9*escala, ly - 9*escala}, 3.0f, tint(Color{110,90,60,255}));
+            DrawCircle((int)lx, (int)ly, r, tint(Color{200,230,255,120}));
+            DrawCircleLines((int)lx, (int)ly, r, tint(Color{110,90,60,255}));
             break;
         }
         case TipoObjetoMenu::GLOBO: {
@@ -3573,6 +3632,10 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                     else {
                         auto* pist = dynamic_cast<Pistola*>(entidad_seleccionada);
                         if (pist) pist->invertir();
+                        else {
+                            auto* lup = dynamic_cast<Lupa*>(entidad_seleccionada);
+                            if (lup) lup->invertir();
+                        }
                     }
                 }
             }

@@ -25,6 +25,8 @@
 #include "../objetos/banda.h"
 #include "../objetos/caja_sorpresa.h"
 #include "../objetos/caminadora.h"
+#include "../objetos/foco.h"
+#include "../objetos/lupa.h"
 #include "eventos.h"
 #include "rutas_datos.h"
 #include "../objetos/catalogo_menu.gen.h"
@@ -76,6 +78,8 @@ inline TipoObjetoMenu mapear_tipo_entidad_a_menu(TipoEntidadJuego t, const Entid
         case TipoEntidadJuego::BANDA: return TipoObjetoMenu::BANDA;
         case TipoEntidadJuego::CAJA_SORPRESA: return TipoObjetoMenu::CAJA_SORPRESA;
         case TipoEntidadJuego::CAMINADORA: return TipoObjetoMenu::CAMINADORA;
+        case TipoEntidadJuego::FOCO: return TipoObjetoMenu::FOCO;
+        case TipoEntidadJuego::LUPA: return TipoObjetoMenu::LUPA;
         case TipoEntidadJuego::PARED: {
             const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
             if (p) {
@@ -349,6 +353,16 @@ inline const std::unordered_map<std::string, CreadorEntidad>& obtener_registro_f
             return std::make_unique<Pistola>(id,
                 Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
                 leer_valor(linea, "ang=", 0.0));
+        }},
+        {"FOCO", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Foco>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "r=", 18.0));
+        }},
+        {"LUPA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Lupa>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "ang=", 0.0), leer_valor(linea, "rango=", 200.0));
         }},
         {"ZONA_META", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
             return std::make_unique<ZonaMeta>(id,
