@@ -4,6 +4,7 @@
 #include "../sistema/assets_extern.h"
 #include <cmath>
 #include <sstream>
+#include <algorithm>
 
 // ============================================================================
 // Caminadora — Banda transportadora horizontal.
@@ -24,7 +25,7 @@ public:
     Caminadora(int id, Vector2D pos, double w = 150.0, double h = 24.0, bool derecha = true)
         : ObstaculoEstatico(id, pos, TipoForma::AABB),
           ancho(w), alto(h), va_derecha(derecha),
-          activo(false), velocidad_cinta(320.0), fase_anim(0.0) {
+          activo(false), velocidad_cinta(400.0), fase_anim(0.0) {
         set_restitucion(0.05);
         set_friccion(0.1);
         tipo_menu = TipoObjetoMenu::CAMINADORA;
@@ -38,6 +39,17 @@ public:
 
     void set_activo(bool v) { activo = v; }
     void invertir() { va_derecha = !va_derecha; }
+
+    // Velocidad de la cinta ajustable (px/s que empuja los objetos al activarse).
+    void set_velocidad_cinta(double v) { velocidad_cinta = std::max(0.0, v); }
+    void ajustar_velocidad(double delta) { set_velocidad_cinta(velocidad_cinta + delta); }
+
+    // Solo se expande en el eje X (ancho), con LÍMITE máximo. El alto es fijo.
+    static constexpr double ANCHO_MIN = 80.0;
+    static constexpr double ANCHO_MAX = 400.0;
+    void set_dimensiones(double w, double /*h ignorado: alto fijo*/) {
+        ancho = std::max(ANCHO_MIN, std::min(ANCHO_MAX, w));
+    }
 
     Vector2D get_min() const override { return posicion; }
     Vector2D get_max() const override { return Vector2D(posicion.x + ancho, posicion.y + alto); }
@@ -89,7 +101,8 @@ public:
         ss << "ent CONVEYOR id=" << get_id() << serializar_base()
            << " w=" << ancho << " h=" << alto
            << " der=" << (va_derecha ? 1 : 0)
-           << " act=" << (activo ? 1 : 0);
+           << " act=" << (activo ? 1 : 0)
+           << " vel=" << velocidad_cinta;
         return ss.str();
     }
 

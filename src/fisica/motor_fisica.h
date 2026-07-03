@@ -692,9 +692,22 @@ private:
         for (auto* n : nuevas) agregar_entidad(n); // usa entidades_owner, no fuga
     }
 
+    // ¿Hay un obstáculo sólido (Ladrillo o Pared) entre a y b que bloquee la vista?
+    bool hay_obstaculo_entre(const Vector2D& a, const Vector2D& b) {
+        for (auto* e : entidades) {
+            // Ladrillo hereda de ParedRectangular, así que este cast cubre ambos.
+            auto* pared = dynamic_cast<ParedRectangular*>(e);
+            if (!pared) continue;
+            if (segmento_cruza_aabb(a, b, pared->get_min(), pared->get_max())) return true;
+        }
+        return false;
+    }
+
     void actualizar_gato_raton(double dt) {
-        // Para cada gato: el ratón más cercano en rango → perseguir/atrapar.
-        // Para cada ratón: el gato más cercano en rango → huir.
+        // El campo de visión es una FRANJA HORIZONTAL (misma plataforma) Y con LÍNEA DE
+        // VISTA: si un Ladrillo/Pared cruza la línea gato↔ratón, no se ven. Así el gato
+        // no persigue al ratón de otro piso ni a través de un muro.
+        const double MARGEN_ALTURA = 55.0;
         std::vector<int> ratones_atrapados;
 
         for (auto* e : entidades) {
@@ -704,6 +717,8 @@ private:
             for (auto* e2 : entidades) {
                 auto* raton = dynamic_cast<Raton*>(e2);
                 if (!raton) continue;
+                if (std::abs(gato->get_posicion().y - raton->get_posicion().y) > MARGEN_ALTURA) continue;
+                if (hay_obstaculo_entre(gato->get_posicion(), raton->get_posicion())) continue;
                 double d = Vector2D::distancia(gato->get_posicion(), raton->get_posicion());
                 if (d < mejor_d) { mejor_d = d; mejor_id = raton->get_id(); mejor_pos = raton->get_posicion(); }
             }
@@ -719,6 +734,8 @@ private:
             for (auto* e2 : entidades) {
                 auto* gato = dynamic_cast<Gato*>(e2);
                 if (!gato) continue;
+                if (std::abs(raton->get_posicion().y - gato->get_posicion().y) > MARGEN_ALTURA) continue;
+                if (hay_obstaculo_entre(raton->get_posicion(), gato->get_posicion())) continue;
                 double d = Vector2D::distancia(raton->get_posicion(), gato->get_posicion());
                 if (d < mejor_d) { mejor_d = d; mejor_pos = gato->get_posicion(); hay = true; }
             }

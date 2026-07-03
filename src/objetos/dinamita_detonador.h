@@ -32,11 +32,22 @@ public:
         return Vector2D(posicion.x + ancho + dist_detonador, posicion.y + alto * 0.5);
     }
 
-    // Hitbox ampliado para incluir la zona del detonador (a la derecha).
-    Vector2D get_min() const override { return posicion; }
-    Vector2D get_max() const override {
-        return Vector2D(posicion.x + ancho + dist_detonador + 18.0, posicion.y + alto);
+    // Medio-tamaño de la CAJA del detonador (émbolo). El hitbox de colisión es SOLO
+    // esta caja: golpear los cartuchos o el cable NO activa; solo el detonador explota.
+    static constexpr double DET_HW = 14.0; // medio ancho
+    static constexpr double DET_HH = 16.0; // medio alto (incluye el émbolo/mango)
+
+    // Hitbox = SOLO la caja del detonador (centrada en get_pos_detonador).
+    Vector2D get_min() const override {
+        Vector2D d = get_pos_detonador();
+        return Vector2D(d.x - DET_HW, d.y - DET_HH);
     }
+    Vector2D get_max() const override {
+        Vector2D d = get_pos_detonador();
+        return Vector2D(d.x + DET_HW, d.y + DET_HH);
+    }
+    // get_centro() (heredado de Dinamita) = centro de los cartuchos → la explosión
+    // ocurre en la dinamita, no en el detonador. Correcto para el daño/empuje.
 
     std::string serializar() const override {
         std::stringstream ss;

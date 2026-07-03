@@ -43,10 +43,13 @@
 #include "objetos/lupa.h"
 #include "objetos/canon.h"
 #include "objetos/ladrillo.h"
+#include "objetos/ladrillo_vertical.h"
+#include "objetos/ladrillo_horizontal.h"
 #include "objetos/dinamita.h"
 #include "objetos/dinamita_detonador.h"
 #include "objetos/raton.h"
 #include "objetos/gato.h"
+#include "objetos/escalon.h"
 #include "fisica/colisiones.h"
 #include "fisica/motor_fisica.h"
 #include "objetos/catalogo_menu.gen.h"
@@ -694,12 +697,8 @@ struct InfoHandles {
     Rectangle rects[8];
     HandleResize tipos[8];
 };
-InfoHandles calcular_handles(const ParedRectangular* p) {
+InfoHandles calcular_handles_xywh(float x, float y, float w, float h) {
     const float S = 10.0f;
-    float x = (float)p->get_posicion().x;
-    float y = (float)p->get_posicion().y;
-    float w = (float)p->get_ancho();
-    float h = (float)p->get_alto();
     float hs = S / 2.0f;
     InfoHandles out;
     out.tipos[0] = HandleResize::TOP_LEFT;    out.rects[0] = {x-hs,       y-hs,       S,S};
@@ -711,6 +710,10 @@ InfoHandles calcular_handles(const ParedRectangular* p) {
     out.tipos[6] = HandleResize::BOT_CENTER;  out.rects[6] = {x+w/2-hs,   y+h-hs,     S,S};
     out.tipos[7] = HandleResize::BOT_RIGHT;   out.rects[7] = {x+w-hs,     y+h-hs,     S,S};
     return out;
+}
+InfoHandles calcular_handles(const ParedRectangular* p) {
+    return calcular_handles_xywh((float)p->get_posicion().x, (float)p->get_posicion().y,
+                                 (float)p->get_ancho(), (float)p->get_alto());
 }
 
 // Obtener qué objeto está debajo del cursor del mouse (incluye estáticos)
@@ -959,15 +962,22 @@ bool crear_canon(MotorFisica& motor, Vector2D pos) {
     return true;
 }
 
-bool crear_ladrillo(MotorFisica& motor, Vector2D pos) {
-    Vector2D spawn(pos.x - 30.0, pos.y - 20.0);
-    motor.agregar_entidad(new Ladrillo(motor.generar_id(), spawn, 60.0, 40.0));
-    return true;
-}
 
 bool crear_dinamita(MotorFisica& motor, Vector2D pos) {
     Vector2D spawn(pos.x - 13.0, pos.y - 23.0);
     motor.agregar_entidad(new Dinamita(motor.generar_id(), spawn, 26.0, 46.0));
+    return true;
+}
+
+bool crear_ladrillo_vertical(MotorFisica& motor, Vector2D pos) {
+    Vector2D spawn(pos.x - 20.0, pos.y - 60.0);
+    motor.agregar_entidad(new LadrilloVertical(motor.generar_id(), spawn, 40.0, 120.0));
+    return true;
+}
+
+bool crear_ladrillo_horizontal(MotorFisica& motor, Vector2D pos) {
+    Vector2D spawn(pos.x - 60.0, pos.y - 20.0);
+    motor.agregar_entidad(new LadrilloHorizontal(motor.generar_id(), spawn, 120.0, 40.0));
     return true;
 }
 
@@ -978,12 +988,18 @@ bool crear_dinamita_detonador(MotorFisica& motor, Vector2D pos) {
 }
 
 bool crear_gato(MotorFisica& motor, Vector2D pos) {
-    motor.agregar_entidad(new Gato(motor.generar_id(), pos, 54.0, 40.0));
+    motor.agregar_entidad(new Gato(motor.generar_id(), pos, 54.0, 58.0));
     return true;
 }
 
 bool crear_raton(MotorFisica& motor, Vector2D pos) {
     motor.agregar_entidad(new Raton(motor.generar_id(), pos, 22.0, 12.0));
+    return true;
+}
+
+bool crear_escalon(MotorFisica& motor, Vector2D pos) {
+    Vector2D spawn(pos.x - 25.0, pos.y - 13.0);
+    motor.agregar_entidad(new Escalon(motor.generar_id(), spawn, 50.0, 26.0));
     return true;
 }
 
@@ -1040,11 +1056,13 @@ bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
         case TipoObjetoMenu::FOCO:              return crear_foco(motor, pos);
         case TipoObjetoMenu::LUPA:              return crear_lupa(motor, pos);
         case TipoObjetoMenu::CANON:             return crear_canon(motor, pos);
-        case TipoObjetoMenu::LADRILLO:          return crear_ladrillo(motor, pos);
+        case TipoObjetoMenu::LADRILLO_VERTICAL:  return crear_ladrillo_vertical(motor, pos);
+        case TipoObjetoMenu::LADRILLO_HORIZONTAL: return crear_ladrillo_horizontal(motor, pos);
         case TipoObjetoMenu::DINAMITA:          return crear_dinamita(motor, pos);
         case TipoObjetoMenu::DINAMITA_DETONADOR: return crear_dinamita_detonador(motor, pos);
         case TipoObjetoMenu::GATO:              return crear_gato(motor, pos);
         case TipoObjetoMenu::RATON:             return crear_raton(motor, pos);
+        case TipoObjetoMenu::ESCALON:           return crear_escalon(motor, pos);
         case TipoObjetoMenu::GLOBO:             return crear_globo(motor, pos);
         case TipoObjetoMenu::BOLA_BEISBOL:      return crear_bola_beisbol(motor, pos);
         case TipoObjetoMenu::TIJERA:            return crear_tijera(motor, pos);
@@ -1160,6 +1178,16 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
                 DrawTriangle(v1, v2, v3, tint(COLOR_RAMPA));
                 DrawTriangleLines(v1, v2, v3, tint(COLOR_RAMPA_BORDE));
             }
+            break;
+        }
+        case TipoObjetoMenu::ESCALON: {
+            // Triángulo pequeño (rampita)
+            float s = 13.0f * escala;
+            Vector2 v1 = {cx - s, cy + s*0.6f};
+            Vector2 v2 = {cx + s, cy + s*0.6f};
+            Vector2 v3 = {cx + s, cy - s*0.9f};
+            DrawTriangle(v1, v2, v3, tint(COLOR_RAMPA));
+            DrawTriangleLines(v1, v2, v3, tint(COLOR_RAMPA_BORDE));
             break;
         }
         case TipoObjetoMenu::PLATAFORMA:
@@ -1354,20 +1382,42 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
             DrawCircle((int)(cx + 14*s), (int)(cy - 10*s), 2.5f*s, tint(Color{255,200,60,255}));
             break;
         }
-        case TipoObjetoMenu::LADRILLO: {
-            float w = 28.0f * escala, h = 20.0f * escala;
+        case TipoObjetoMenu::LADRILLO_VERTICAL: {
+            float w = 14.0f * escala, h = 30.0f * escala;
             float x0 = cx - w/2, y0 = cy - h/2;
             DrawRectangleRec({x0, y0, w, h}, tint(Color{205,195,180,255}));
-            // ladrillos rojos con junta desfasada
-            for (int fila=0; fila<3; ++fila) {
-                float ry = y0 + fila*(h/3.0f);
-                float off = (fila%2==0)?0.0f:w*0.25f;
-                for (float bx=x0-off; bx<x0+w; bx+=w*0.5f) {
-                    float a=fmaxf(bx,x0), b=fminf(bx+w*0.5f-1.5f, x0+w);
-                    if (b>a) DrawRectangleRec({a, ry+1, b-a, h/3.0f-2}, tint(Color{170,70,55,255}));
+            int filas = 5;
+            for (int fila=0; fila<filas; ++fila) {
+                float ry = y0 + fila*(h/filas);
+                float off = (fila%2==0)?0.0f:w*0.5f;
+                for (float bx=x0-off; bx<x0+w; bx+=w) {
+                    float a=fmaxf(bx,x0), b=fminf(bx+w-1.5f, x0+w);
+                    if (b>a) DrawRectangleRec({a, ry+1, b-a, h/filas-2}, tint(Color{170,70,55,255}));
                 }
             }
             DrawRectangleLinesEx({x0,y0,w,h}, 1.5f, tint(Color{110,45,35,255}));
+            // flechas verticales (indica que crece en alto)
+            DrawLineEx({cx, y0-4*escala},{cx, y0-1*escala}, 1.5f, tint(Color{60,60,70,255}));
+            DrawLineEx({cx, y0+h+1*escala},{cx, y0+h+4*escala}, 1.5f, tint(Color{60,60,70,255}));
+            break;
+        }
+        case TipoObjetoMenu::LADRILLO_HORIZONTAL: {
+            float w = 34.0f * escala, h = 14.0f * escala;
+            float x0 = cx - w/2, y0 = cy - h/2;
+            DrawRectangleRec({x0, y0, w, h}, tint(Color{205,195,180,255}));
+            int filas = 2;
+            for (int fila=0; fila<filas; ++fila) {
+                float ry = y0 + fila*(h/filas);
+                float off = (fila%2==0)?0.0f:w*0.16f;
+                for (float bx=x0-off; bx<x0+w; bx+=w*0.33f) {
+                    float a=fmaxf(bx,x0), b=fminf(bx+w*0.33f-1.5f, x0+w);
+                    if (b>a) DrawRectangleRec({a, ry+1, b-a, h/filas-2}, tint(Color{170,70,55,255}));
+                }
+            }
+            DrawRectangleLinesEx({x0,y0,w,h}, 1.5f, tint(Color{110,45,35,255}));
+            // flechas horizontales (indica que crece en ancho)
+            DrawLineEx({x0-4*escala, cy},{x0-1*escala, cy}, 1.5f, tint(Color{60,60,70,255}));
+            DrawLineEx({x0+w+1*escala, cy},{x0+w+4*escala, cy}, 1.5f, tint(Color{60,60,70,255}));
             break;
         }
         case TipoObjetoMenu::DINAMITA: {
@@ -3536,6 +3586,7 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                 bool handle_click_detectado = false;
                 if (estado_actual == EstadoJuego::JUEGO_CREATIVO && entidad_seleccionada && motor.get_pausado()) {
                     ParedRectangular* p = dynamic_cast<ParedRectangular*>(entidad_seleccionada);
+                    Caminadora* camh = dynamic_cast<Caminadora*>(entidad_seleccionada);
                     if (p && !es_borde_nivel(p)) {
                         auto handles = calcular_handles(p);
                         for (int i = 0; i < 8; ++i) {
@@ -3545,6 +3596,20 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                                 handle_w_inicial = p->get_ancho();
                                 handle_h_inicial = p->get_alto();
                                 handle_pos_inicial_ent = p->get_posicion();
+                                handle_click_detectado = true;
+                                break;
+                            }
+                        }
+                    } else if (camh) {
+                        auto handles = calcular_handles_xywh((float)camh->get_posicion().x, (float)camh->get_posicion().y,
+                                                             (float)camh->get_ancho(), (float)camh->get_alto());
+                        for (int i = 0; i < 8; ++i) {
+                            if (CheckCollisionPointRec({(float)mx, (float)my}, handles.rects[i])) {
+                                handle_activo = handles.tipos[i];
+                                handle_pos_inicial_mouse = Vector2D(mx, my);
+                                handle_w_inicial = camh->get_ancho();
+                                handle_h_inicial = camh->get_alto();
+                                handle_pos_inicial_ent = camh->get_posicion();
                                 handle_click_detectado = true;
                                 break;
                             }
@@ -3600,6 +3665,21 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             if (arr)  { nh = std::max(8.0, handle_h_inicial - dy); npos.y = handle_pos_inicial_ent.y + (handle_h_inicial - nh); }
             p->set_posicion(npos);
             p->set_dimensiones(nw, nh);
+        } else if (Caminadora* camd = dynamic_cast<Caminadora*>(entidad_seleccionada)) {
+            // La caminadora SOLO cambia el ancho (con su límite interno). Alto y Y fijos.
+            double dx = mx - handle_pos_inicial_mouse.x;
+            double nw = handle_w_inicial;
+            Vector2D npos = handle_pos_inicial_ent;
+            bool izq = handle_activo==HandleResize::TOP_LEFT||handle_activo==HandleResize::MID_LEFT||handle_activo==HandleResize::BOT_LEFT;
+            bool der = handle_activo==HandleResize::TOP_RIGHT||handle_activo==HandleResize::MID_RIGHT||handle_activo==HandleResize::BOT_RIGHT;
+            if (der) nw = handle_w_inicial + dx;
+            if (izq) { nw = handle_w_inicial - dx; }
+            double antes = camd->get_ancho();
+            camd->set_dimensiones(nw, camd->get_alto());
+            // Si se arrastró el lado izquierdo, mover x para que el borde derecho quede fijo.
+            if (izq) npos.x = handle_pos_inicial_ent.x + (handle_w_inicial - camd->get_ancho());
+            camd->set_posicion(npos);
+            (void)antes;
         }
     } else if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && entidad_arrastrada != nullptr) {
         Vector2D mouse_pos(mx, my);
@@ -3834,6 +3914,14 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                 if (cambiado) {
                     ramp->set_dimensiones(nb, nh);
                 }
+            } else if (Caminadora* cam = dynamic_cast<Caminadora*>(entidad_seleccionada)) {
+                // Caminadora: RIGHT/LEFT expanden el ANCHO (con límite interno);
+                // UP/DOWN ajustan la VELOCIDAD de la cinta.
+                double paso = (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)) ? 1.0 : 10.0;
+                if (IsKeyPressed(KEY_RIGHT)) cam->set_dimensiones(cam->get_ancho() + paso, cam->get_alto());
+                if (IsKeyPressed(KEY_LEFT))  cam->set_dimensiones(cam->get_ancho() - paso, cam->get_alto());
+                if (IsKeyPressed(KEY_UP))    cam->ajustar_velocidad(20.0);
+                if (IsKeyPressed(KEY_DOWN))  cam->ajustar_velocidad(-20.0);
             }
         }
     }
@@ -3984,6 +4072,23 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                 if (estado_actual == EstadoJuego::JUEGO_CREATIVO && motor.get_pausado() && !es_borde_nivel(sp)) {
                     auto handles = calcular_handles(sp);
                     for (int i = 0; i < 8; ++i) {
+                        bool activo = (handle_activo == handles.tipos[i]);
+                        Color col = activo ? Color{255, 200, 50, 255} : Color{80, 160, 255, 200};
+                        DrawRectangleRec(handles.rects[i], col);
+                        DrawRectangleLinesEx(handles.rects[i], 1.5f, {20, 80, 200, 255});
+                    }
+                }
+            } else if (const Caminadora* scam = dynamic_cast<const Caminadora*>(entidad_seleccionada)) {
+                // Caminadora: contorno + handles (redimensionable con el mouse, solo ancho).
+                Vector2D spos = scam->get_posicion();
+                float sw = (float)scam->get_ancho(), sh = (float)scam->get_alto();
+                DrawRectangleLinesEx({(float)spos.x - 3, (float)spos.y - 3, sw + 6, sh + 6}, 2.0f, sel_color);
+                if (estado_actual == EstadoJuego::JUEGO_CREATIVO && motor.get_pausado()) {
+                    auto handles = calcular_handles_xywh((float)spos.x, (float)spos.y, sw, sh);
+                    for (int i = 0; i < 8; ++i) {
+                        // Solo los handles laterales (izq/der) son útiles (solo ancho).
+                        bool lateral = handles.tipos[i]==HandleResize::MID_LEFT || handles.tipos[i]==HandleResize::MID_RIGHT;
+                        if (!lateral) continue;
                         bool activo = (handle_activo == handles.tipos[i]);
                         Color col = activo ? Color{255, 200, 50, 255} : Color{80, 160, 255, 200};
                         DrawRectangleRec(handles.rects[i], col);

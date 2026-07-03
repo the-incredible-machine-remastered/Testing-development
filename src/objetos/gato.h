@@ -28,7 +28,7 @@ protected:
     double lengua_timer;     // animación al atrapar
 
 public:
-    Gato(int id, Vector2D pos, double w = 54.0, double h = 40.0)
+    Gato(int id, Vector2D pos, double w = 54.0, double h = 58.0)
         : EntidadFisica(id, pos, 6.0, TipoForma::AABB, false),
           ancho(w), alto(h), rango_vision(340.0),
           velocidad_caza(210.0), velocidad_paseo(55.0),
@@ -165,7 +165,11 @@ public:
 
         if (debug) {
             DrawRectangleLines((int)(px - w/2), (int)(py - h/2), (int)w, (int)h, GREEN);
-            DrawCircleLines((int)px, (int)py, (float)rango_vision, Color{255,120,0,60});
+            // Campo de visión = FRANJA horizontal (alto = 2*MARGEN_ALTURA=110), no círculo.
+            float rx = (float)rango_vision;
+            float franja = 110.0f;
+            DrawRectangleRec({px - rx, py - franja/2, rx*2, franja}, Color{255,120,0,20});
+            DrawRectangleLinesEx({px - rx, py - franja/2, rx*2, franja}, 1.0f, Color{255,120,0,70});
         }
     }
 };

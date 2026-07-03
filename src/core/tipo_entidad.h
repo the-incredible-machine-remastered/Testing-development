@@ -40,7 +40,10 @@ enum class TipoEntidadJuego {
     DINAMITA_DETONADOR,
     EXPLOSION,
     GATO,
-    RATON
+    RATON,
+    ESCALON,
+    LADRILLO_VERTICAL,
+    LADRILLO_HORIZONTAL
 };
 
 inline const char* nombre_tipo_entidad(TipoEntidadJuego t) {
@@ -77,6 +80,9 @@ inline const char* nombre_tipo_entidad(TipoEntidadJuego t) {
         case TipoEntidadJuego::EXPLOSION:        return "Explosion";
         case TipoEntidadJuego::GATO:             return "Gato";
         case TipoEntidadJuego::RATON:            return "Raton";
+        case TipoEntidadJuego::ESCALON:          return "Escalon";
+        case TipoEntidadJuego::LADRILLO_VERTICAL:   return "Ladrillo V";
+        case TipoEntidadJuego::LADRILLO_HORIZONTAL: return "Ladrillo H";
         default: return "???";
     }
 }

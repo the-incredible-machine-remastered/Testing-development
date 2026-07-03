@@ -15,8 +15,11 @@ private:
     bool destruido;
 
 public:
+    // Clase BASE de LadrilloVertical/Horizontal. El "Ladrillo" normal ya no se coloca en
+    // el menú; solo existen las variantes V y H, que fijan su propio tipo_menu en su
+    // constructor. Aquí tipo_menu queda NINGUNO por defecto.
     Ladrillo(int id, Vector2D pos, double w = 60.0, double h = 40.0)
-        : ParedRectangular(id, pos, w, h, TipoObjetoMenu::LADRILLO), destruido(false) {
+        : ParedRectangular(id, pos, w, h, TipoObjetoMenu::NINGUNO), destruido(false) {
         set_restitucion(0.1);
         set_friccion(0.6);
     }
@@ -77,4 +80,4 @@ public:
     }
 };
 
-// TIM_MENU_SPAWN etiqueta="Ladrillo" tab=1 categoria=0
+// (El "Ladrillo" normal ya no está en el menú; solo Ladrillo V y H, en sus propios headers.)

@@ -29,10 +29,13 @@
 #include "../objetos/lupa.h"
 #include "../objetos/canon.h"
 #include "../objetos/ladrillo.h"
+#include "../objetos/ladrillo_vertical.h"
+#include "../objetos/ladrillo_horizontal.h"
 #include "../objetos/dinamita.h"
 #include "../objetos/dinamita_detonador.h"
 #include "../objetos/raton.h"
 #include "../objetos/gato.h"
+#include "../objetos/escalon.h"
 #include "eventos.h"
 #include "rutas_datos.h"
 #include "../objetos/catalogo_menu.gen.h"
@@ -87,11 +90,13 @@ inline TipoObjetoMenu mapear_tipo_entidad_a_menu(TipoEntidadJuego t, const Entid
         case TipoEntidadJuego::FOCO: return TipoObjetoMenu::FOCO;
         case TipoEntidadJuego::LUPA: return TipoObjetoMenu::LUPA;
         case TipoEntidadJuego::CANON: return TipoObjetoMenu::CANON;
-        case TipoEntidadJuego::LADRILLO: return TipoObjetoMenu::LADRILLO;
         case TipoEntidadJuego::DINAMITA: return TipoObjetoMenu::DINAMITA;
         case TipoEntidadJuego::DINAMITA_DETONADOR: return TipoObjetoMenu::DINAMITA_DETONADOR;
         case TipoEntidadJuego::GATO: return TipoObjetoMenu::GATO;
         case TipoEntidadJuego::RATON: return TipoObjetoMenu::RATON;
+        case TipoEntidadJuego::ESCALON: return TipoObjetoMenu::ESCALON;
+        case TipoEntidadJuego::LADRILLO_VERTICAL: return TipoObjetoMenu::LADRILLO_VERTICAL;
+        case TipoEntidadJuego::LADRILLO_HORIZONTAL: return TipoObjetoMenu::LADRILLO_HORIZONTAL;
         case TipoEntidadJuego::PARED: {
             const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
             if (p) {
@@ -381,10 +386,15 @@ inline const std::unordered_map<std::string, CreadorEntidad>& obtener_registro_f
                 Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
                 leer_valor(linea, "ang=", 180.0));
         }},
-        {"LADRILLO", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
-            return std::make_unique<Ladrillo>(id,
+        {"LADRILLO_VERTICAL", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<LadrilloVertical>(id,
                 Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
-                leer_valor(linea, "w=", 60.0), leer_valor(linea, "h=", 40.0));
+                leer_valor(linea, "w=", 40.0), leer_valor(linea, "h=", 120.0));
+        }},
+        {"LADRILLO_HORIZONTAL", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<LadrilloHorizontal>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 120.0), leer_valor(linea, "h=", 40.0));
         }},
         {"DINAMITA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
             return std::make_unique<Dinamita>(id,
@@ -399,7 +409,7 @@ inline const std::unordered_map<std::string, CreadorEntidad>& obtener_registro_f
         {"GATO", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
             return std::make_unique<Gato>(id,
                 Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
-                leer_valor(linea, "w=", 54.0), leer_valor(linea, "h=", 40.0));
+                leer_valor(linea, "w=", 54.0), leer_valor(linea, "h=", 58.0));
         }},
         {"RATON", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
             return std::make_unique<Raton>(id,
@@ -458,10 +468,18 @@ inline const std::unordered_map<std::string, CreadorEntidad>& obtener_registro_f
                 leer_valor(linea, "w=", 70.0), leer_valor(linea, "h=", 70.0));
         }},
         {"CONVEYOR", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
-            return std::make_unique<Caminadora>(id,
+            auto c = std::make_unique<Caminadora>(id,
                 Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
                 leer_valor(linea, "w=", 150.0), leer_valor(linea, "h=", 24.0),
                 leer_valor_i(linea, "der=", 1) != 0);
+            c->set_velocidad_cinta(leer_valor(linea, "vel=", 320.0));
+            return c;
+        }},
+        {"ESCALON", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Escalon>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "b=", 50.0), leer_valor(linea, "h=", 26.0),
+                leer_valor_i(linea, "inv=", 0) != 0);
         }}
     };
     return registro;
