@@ -1,11 +1,6 @@
 #pragma once
-// ============================================================================
-// DinamitaDetonador — dinamita conectada por un cable a un DETONADOR (émbolo).
-// A diferencia de la Dinamita normal (mecha de ~1s), explota INMEDIATAMENTE
-// cuando algo golpea la zona del detonador. Mismo daño/empuje que la dinamita.
-// ============================================================================
-
 #include "dinamita.h"
+#include "../sistema/assets_extern.h"
 #include <algorithm>
 
 class DinamitaDetonador : public Dinamita {
@@ -65,38 +60,53 @@ public:
         float w  = static_cast<float>(ancho);
         float h  = static_cast<float>(alto);
 
-        // --- Cartuchos de dinamita (rojos) ---
-        Color rojo  = encendida ? Color{225, 70, 55, 255} : Color{190, 55, 45, 255};
-        Color rojo2 = Color{140, 35, 28, 255};
-        float cw = w / 3.0f;
-        for (int i = 0; i < 3; ++i) {
-            float bx = px + i * cw;
-            DrawRectangleRec({bx + 1.0f, py + 6.0f, cw - 2.0f, h - 6.0f}, rojo);
-            DrawRectangleLinesEx({bx + 1.0f, py + 6.0f, cw - 2.0f, h - 6.0f}, 1.0f, rojo2);
+        // --- Cartuchos de dinamita ---
+        if (tex_dinamita.id > 0) {
+            Rectangle src = {0.0f, 0.0f, (float)tex_dinamita.width, (float)tex_dinamita.height};
+            Rectangle dst = {px, py, w, h};
+            Color tint = encendida ? RED : WHITE;
+            DrawTexturePro(tex_dinamita, src, dst, {0,0}, 0.0f, tint);
+        } else {
+            Color rojo  = encendida ? Color{225, 70, 55, 255} : Color{190, 55, 45, 255};
+            Color rojo2 = Color{140, 35, 28, 255};
+            float cw = w / 3.0f;
+            for (int i = 0; i < 3; ++i) {
+                float bx = px + i * cw;
+                DrawRectangleRec({bx + 1.0f, py + 6.0f, cw - 2.0f, h - 6.0f}, rojo);
+                DrawRectangleLinesEx({bx + 1.0f, py + 6.0f, cw - 2.0f, h - 6.0f}, 1.0f, rojo2);
+            }
+            DrawRectangleRec({px, py + h * 0.45f, w, 5.0f}, Color{90, 60, 30, 255});
         }
-        DrawRectangleRec({px, py + h * 0.45f, w, 5.0f}, Color{90, 60, 30, 255});
 
         // --- Cable curvo hacia el detonador ---
         Vector2D det = get_pos_detonador();
         Vector2D salida(px + w, py + h * 0.5f);
         Color cable = Color{40, 40, 45, 255};
-        // dos segmentos con una comba
         Vector2D medio((salida.x + det.x) * 0.5, std::max(salida.y, det.y) + 14.0);
         DrawLineBezier({(float)salida.x, (float)salida.y}, {(float)det.x, (float)det.y}, 2.5f, cable);
         (void)medio;
 
         // --- Detonador (caja + émbolo tipo T) ---
         float dx = (float)det.x, dy = (float)det.y;
-        Color caja  = Color{120, 70, 30, 255};
-        Color caja2 = Color{80, 45, 18, 255};
-        Color metal = Color{150, 155, 160, 255};
-        DrawRectangleRec({dx - 12.0f, dy - 8.0f, 24.0f, 20.0f}, caja);
-        DrawRectangleLinesEx({dx - 12.0f, dy - 8.0f, 24.0f, 20.0f}, 2.0f, caja2);
-        // Émbolo (vástago + mango en T)
-        DrawRectangleRec({dx - 2.0f, dy - 22.0f, 4.0f, 16.0f}, metal);
-        DrawRectangleRec({dx - 9.0f, dy - 24.0f, 18.0f, 4.0f}, metal);
+        if (tex_caja_dinamita.id > 0) {
+            float det_w = 28.0f;
+            float det_h = 32.0f;
+            Rectangle src = {0.0f, 0.0f, (float)tex_caja_dinamita.width, (float)tex_caja_dinamita.height};
+            Rectangle dst = {dx, dy, det_w, det_h};
+            Vector2 origin = {det_w / 2.0f, det_h / 2.0f};
+            DrawTexturePro(tex_caja_dinamita, src, dst, origin, 0.0f, WHITE);
+        } else {
+            Color caja  = Color{120, 70, 30, 255};
+            Color caja2 = Color{80, 45, 18, 255};
+            Color metal = Color{150, 155, 160, 255};
+            DrawRectangleRec({dx - 12.0f, dy - 8.0f, 24.0f, 20.0f}, caja);
+            DrawRectangleLinesEx({dx - 12.0f, dy - 8.0f, 24.0f, 20.0f}, 2.0f, caja2);
+            // Émbolo (vástago + mango en T)
+            DrawRectangleRec({dx - 2.0f, dy - 22.0f, 4.0f, 16.0f}, metal);
+            DrawRectangleRec({dx - 9.0f, dy - 24.0f, 18.0f, 4.0f}, metal);
+        }
 
-        // Mecha/chispa (feedback si ya se activó, dura 1 tick pero se ve el flash)
+        // Mecha/chispa
         if (encendida) {
             DrawCircle((int)dx, (int)(dy - 22.0f), 4.0f, Color{255, 200, 60, 235});
         }

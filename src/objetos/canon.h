@@ -102,6 +102,7 @@ public:
                p.y >= posicion.y - 34 && p.y <= posicion.y + 34;
     }
 
+    
     std::string serializar() const override {
         std::stringstream ss;
         ss << "ent CANON id=" << get_id()
@@ -116,49 +117,91 @@ public:
         bool apunta_izq = (std::cos(angulo) < 0);
         float d = apunta_izq ? -1.0f : 1.0f;
 
-        Color metal  = Color{70, 75, 82, 255};
-        Color metal2 = Color{45, 48, 54, 255};
-        Color madera = Color{110, 70, 35, 255};
+        if (tex_canon_tubo.id > 0 && tex_canon_base.id > 0) {
+            // 2. Dibujar el tubo del cañón (rotado y/o espejado según su dirección)
+            float w_tubo = 110.0f;
+            float h_tubo = w_tubo * ((float)tex_canon_tubo.height / (float)tex_canon_tubo.width);
+            float flip_tubo = apunta_izq ? -1.0f : 1.0f;
+            Vector2 origin_tubo = apunta_izq ? Vector2{w_tubo -30.0f, h_tubo / 2.0f} : Vector2{0.0f, h_tubo / 2.0f};
+            float angulo_rot = apunta_izq ? (float)(angulo - MathUtils::TIM_PI) : (float)angulo;
+            float rotacion_grados = angulo_rot * (180.0f / (float)MathUtils::TIM_PI);
 
-        // Base/cureña (madera) — cañón grande
-        DrawRectangleRec({px - 28.0f, py + 10.0f, 56.0f, 16.0f}, madera);
-        DrawRectangleLinesEx({px - 28.0f, py + 10.0f, 56.0f, 16.0f}, 2.0f, Color{70, 45, 22, 255});
-        DrawCircle((int)(px - 17.0f), (int)(py + 27.0f), 8.0f, metal2);
-        DrawCircle((int)(px + 17.0f), (int)(py + 27.0f), 8.0f, metal2);
-        DrawCircle((int)(px - 17.0f), (int)(py + 27.0f), 3.0f, metal);
-        DrawCircle((int)(px + 17.0f), (int)(py + 27.0f), 3.0f, metal);
+            Rectangle src_tubo = {0.0f, 0.0f, (float)tex_canon_tubo.width * flip_tubo, (float)tex_canon_tubo.height};
+            Rectangle dst_tubo = {px, py, w_tubo, h_tubo};
+            DrawTexturePro(tex_canon_tubo, src_tubo, dst_tubo, origin_tubo, rotacion_grados, WHITE);
+            
+            // 1. Dibujar la base (cureña)
+            float w_base = 88.0f;
+            float h_base = w_base * ((float)tex_canon_base.height / (float)tex_canon_base.width);
+            float flip_base = apunta_izq ? -1.0f : 1.0f;
+            Rectangle src_base = {0.0f, 0.0f, (float)tex_canon_base.width * flip_base, (float)tex_canon_base.height};
+            Rectangle dst_base = {px, py + 30.0f - h_base / 2.0f, w_base, h_base};
+            Vector2 origin_base = {w_base / 2.0f, h_base / 2.0f};
+            DrawTexturePro(tex_canon_base, src_base, dst_base, origin_base, 0.0f, WHITE);
 
-        // Tubo del cañón (apuntando en la dirección)
-        Vector2D dir = get_dir_disparo();
-        Vector2D boca = get_punto_boca();
-        DrawLineEx({px, py}, {(float)boca.x, (float)boca.y}, 28.0f, metal);
-        DrawLineEx({px, py}, {(float)boca.x, (float)boca.y}, 18.0f, metal2);
-        // Aro de la boca
-        DrawCircle((int)boca.x, (int)boca.y, 14.0f, metal);
-        DrawCircle((int)boca.x, (int)boca.y, 9.0f, Color{20, 20, 24, 255});
-        // Culata
-        DrawCircle((int)px, (int)py, 17.0f, metal);
-        DrawCircle((int)px, (int)py, 6.0f, metal2);
+            // 3. Dibujar la mecha (soga) y chispa encima
+            if (!ya_disparo) {
+                Vector2D dir = get_dir_disparo();
+                Vector2D atras = posicion - dir * 22.0;
+                Vector2D fin_mecha = atras - dir * 20.0 + Vector2D(0, -18);
+                
+                DrawLineEx({(float)atras.x, (float)atras.y}, {(float)fin_mecha.x, (float)fin_mecha.y}, 4.0f, Color{60, 45, 30, 255});
+                if (mecha_encendida) {
+                    double t = get_progreso_mecha();
+                    Vector2D chispa = fin_mecha + (atras - fin_mecha) * t;
+                    float sr = 6.0f + 3.0f * (float)std::sin(tiempo_mecha * 30.0);
+                    DrawCircle((int)chispa.x, (int)chispa.y, sr, Color{255, 200, 60, 230});
+                    DrawCircle((int)chispa.x, (int)chispa.y, sr * 0.5f, Color{255, 255, 210, 255});
+                    DrawLineEx({(float)fin_mecha.x, (float)fin_mecha.y}, {(float)chispa.x, (float)chispa.y}, 4.0f, Color{30, 25, 20, 255});
+                }
+            }
+        } else {
+            Color metal  = Color{70, 75, 82, 255};
+            Color metal2 = Color{45, 48, 54, 255};
+            Color madera = Color{110, 70, 35, 255};
 
-        // --- Mecha (atrás, opuesto a la boca) ---
-        Vector2D atras = posicion - dir * 22.0;
-        Vector2D fin_mecha = atras - dir * 20.0 + Vector2D(0, -18);
-        DrawLineEx({(float)atras.x, (float)atras.y}, {(float)fin_mecha.x, (float)fin_mecha.y}, 4.0f,
-                   Color{60, 45, 30, 255});
-        if (mecha_encendida) {
-            // Chispa que avanza desde la punta de la mecha hacia el cañón.
-            double t = get_progreso_mecha();
-            Vector2D chispa = fin_mecha + (atras - fin_mecha) * t;
-            float sr = 6.0f + 3.0f * (float)std::sin(tiempo_mecha * 30.0);
-            DrawCircle((int)chispa.x, (int)chispa.y, sr, Color{255, 200, 60, 230});
-            DrawCircle((int)chispa.x, (int)chispa.y, sr * 0.5f, Color{255, 255, 210, 255});
-            DrawLineEx({(float)fin_mecha.x, (float)fin_mecha.y}, {(float)chispa.x, (float)chispa.y}, 4.0f,
-                       Color{30, 25, 20, 255});
+            // Base/cureña (madera) — cañón grande
+            DrawRectangleRec({px - 28.0f, py + 10.0f, 56.0f, 16.0f}, madera);
+            DrawRectangleLinesEx({px - 28.0f, py + 10.0f, 56.0f, 16.0f}, 2.0f, Color{70, 45, 22, 255});
+            DrawCircle((int)(px - 17.0f), (int)(py + 27.0f), 8.0f, metal2);
+            DrawCircle((int)(px + 17.0f), (int)(py + 27.0f), 8.0f, metal2);
+            DrawCircle((int)(px - 17.0f), (int)(py + 27.0f), 3.0f, metal);
+            DrawCircle((int)(px + 17.0f), (int)(py + 27.0f), 3.0f, metal);
+
+            // Tubo del cañón (apuntando en la dirección)
+            Vector2D dir = get_dir_disparo();
+            Vector2D boca = get_punto_boca();
+            DrawLineEx({px, py}, {(float)boca.x, (float)boca.y}, 28.0f, metal);
+            DrawLineEx({px, py}, {(float)boca.x, (float)boca.y}, 18.0f, metal2);
+            // Aro de la boca
+            DrawCircle((int)boca.x, (int)boca.y, 14.0f, metal);
+            DrawCircle((int)boca.x, (int)boca.y, 9.0f, Color{20, 20, 24, 255});
+            // Culata
+            DrawCircle((int)px, (int)py, 17.0f, metal);
+            DrawCircle((int)px, (int)py, 6.0f, metal2);
+
+            // --- Mecha (atrás, opuesto a la boca) ---
+            Vector2D atras = posicion - dir * 22.0;
+            Vector2D fin_mecha = atras - dir * 20.0 + Vector2D(0, -18);
+            if (!ya_disparo) {
+                DrawLineEx({(float)atras.x, (float)atras.y}, {(float)fin_mecha.x, (float)fin_mecha.y}, 4.0f,
+                           Color{60, 45, 30, 255});
+                if (mecha_encendida) {
+                    // Chispa que avanza desde la punta de la mecha hacia el cañón.
+                    double t = get_progreso_mecha();
+                    Vector2D chispa = fin_mecha + (atras - fin_mecha) * t;
+                    float sr = 6.0f + 3.0f * (float)std::sin(tiempo_mecha * 30.0);
+                    DrawCircle((int)chispa.x, (int)chispa.y, sr, Color{255, 200, 60, 230});
+                    DrawCircle((int)chispa.x, (int)chispa.y, sr * 0.5f, Color{255, 255, 210, 255});
+                    DrawLineEx({(float)fin_mecha.x, (float)fin_mecha.y}, {(float)chispa.x, (float)chispa.y}, 4.0f,
+                               Color{30, 25, 20, 255});
+                }
+            }
         }
 
         if (debug) {
             DrawRectangleLines((int)(px - 48), (int)(py - 34), 96, 68, GREEN);
-            DrawLine((int)px, (int)py, (int)boca.x, (int)boca.y, GREEN);
+            DrawLine((int)px, (int)py, (int)get_punto_boca().x, (int)get_punto_boca().y, GREEN);
         }
     }
 };

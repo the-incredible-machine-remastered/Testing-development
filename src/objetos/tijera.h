@@ -1,5 +1,6 @@
 #pragma once
 #include "obstaculo_estatico.h"
+#include "../sistema/assets_extern.h"
 #include <vector>
 #include <unordered_set>
 
@@ -136,7 +137,6 @@ public:
         ss << "ent TIJERA id=" << get_id() << serializar_base() << " w=" << ancho << " h=" << alto;
         return ss.str();
     }
-
     void dibujar(bool debug) const override {
         float px = static_cast<float>(posicion.x);
         float py = static_cast<float>(posicion.y);
@@ -146,11 +146,10 @@ public:
         float mid_y = py + h * 0.5f;
 
         bool cerrada = permanentemente_activada;
-        Color col  = cerrada ? Color{255, 80, 80, 255} : Color{175, 182, 195, 255};
-        Color col2 = cerrada ? Color{200, 30, 30, 255} : Color{130, 138, 150, 255};
-        Color col_aro = cerrada ? Color{255, 80, 80, 255} : Color{200, 40, 40, 255};
+        Texture2D tex = cerrada ? tex_tijera_cerrada : tex_tijera_abierta;
 
-        // Obtenemos los centros reales de los aros (misma fuente que el hitbox)
+        
+        // Obtenemos los centros reales de los aros (usados para debug y dibujo procedural)
         Vector2D cs, ci; double ra;
         get_aro_superior(cs, ra);
         get_aro_inferior(ci, ra);
@@ -159,25 +158,35 @@ public:
         float ay_sup = static_cast<float>(cs.y);
         float ay_inf = static_cast<float>(ci.y);
 
-        if (!cerrada) {
-            // Hojas en X: parten de los centros de los aros y se cruzan en la punta
-            DrawLineEx({ax, ay_sup}, {tip_x, mid_y + h * 0.3f}, 2.8f, col);
-            DrawLineEx({ax, ay_inf}, {tip_x, mid_y - h * 0.3f}, 2.8f, col);
+        if (tex.id > 0) {
+            Rectangle src = {0.0f, 0.0f, (float)tex.width, (float)tex.height};
+            Rectangle dst = {px + w / 2.0f, py + h / 2.0f, w, h};
+            Vector2 origin = {w / 2.0f, h / 2.0f};
+            DrawTexturePro(tex, src, dst, origin, 0.0f, WHITE);
         } else {
-            // Hojas cerradas: casi paralelas apuntando a la derecha
-            DrawLineEx({ax, ay_sup}, {tip_x, mid_y - 2.0f}, 3.0f, col);
-            DrawLineEx({ax, ay_inf}, {tip_x, mid_y + 2.0f}, 3.0f, col);
+            Color col  = cerrada ? Color{255, 80, 80, 255} : Color{175, 182, 195, 255};
+            Color col2 = cerrada ? Color{200, 30, 30, 255} : Color{130, 138, 150, 255};
+            Color col_aro = cerrada ? Color{255, 80, 80, 255} : Color{200, 40, 40, 255};
+
+            if (!cerrada) {
+                // Hojas en X: parten de los centros de los aros y se cruzan en la punta
+                DrawLineEx({ax, ay_sup}, {tip_x, mid_y + h * 0.3f}, 2.8f, col);
+                DrawLineEx({ax, ay_inf}, {tip_x, mid_y - h * 0.3f}, 2.8f, col);
+            } else {
+                // Hojas cerradas: casi paralelas apuntando a la derecha
+                DrawLineEx({ax, ay_sup}, {tip_x, mid_y - 2.0f}, 3.0f, col);
+                DrawLineEx({ax, ay_inf}, {tip_x, mid_y + 2.0f}, 3.0f, col);
+            }
+
+            // Aros (siempre en la posición del hitbox)
+            DrawCircle(static_cast<int>(ax), static_cast<int>(ay_sup), r, col_aro);
+            DrawCircleLines(static_cast<int>(ax), static_cast<int>(ay_sup), r, col2);
+            DrawCircle(static_cast<int>(ax), static_cast<int>(ay_inf), r, col_aro);
+            DrawCircleLines(static_cast<int>(ax), static_cast<int>(ay_inf), r, col2);
+
+            // Pivote en la punta donde se juntan las hojas
+            DrawCircle(static_cast<int>(tip_x - w * 0.15f), static_cast<int>(mid_y), 3.5f, col2);
         }
-
-        // Aros (siempre en la posición del hitbox)
-        DrawCircle(static_cast<int>(ax), static_cast<int>(ay_sup), r, col_aro);
-        DrawCircleLines(static_cast<int>(ax), static_cast<int>(ay_sup), r, col2);
-        DrawCircle(static_cast<int>(ax), static_cast<int>(ay_inf), r, col_aro);
-        DrawCircleLines(static_cast<int>(ax), static_cast<int>(ay_inf), r, col2);
-
-        // Pivote en la punta donde se juntan las hojas
-        DrawCircle(static_cast<int>(tip_x - w * 0.15f), static_cast<int>(mid_y), 3.5f, col2);
-
         if (debug) {
             if (cerrada && vertices_filo.size() == 3) {
                 // Hitbox real cerrada: el triángulo-rampa (lo que colisiona de verdad).

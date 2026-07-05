@@ -7,6 +7,7 @@
 // ============================================================================
 
 #include "pared_rectangular.h"
+#include "../sistema/assets_extern.h"
 #include <cmath>
 #include <algorithm>
 
@@ -53,28 +54,43 @@ public:
         float w  = static_cast<float>(ancho);
         float h  = static_cast<float>(alto);
 
-        Color rojo   = Color{170, 70, 55, 255};
-        Color mortero = Color{205, 195, 180, 255};
-        Color borde  = Color{110, 45, 35, 255};
-
-        DrawRectangleRec({px, py, w, h}, mortero);
-
-        // Filas de ladrillos con junta desfasada (tamaño de ladrillo ~fijo)
-        float bh = 14.0f;                        // alto de fila objetivo
-        int filas = std::max(1, (int)std::round(h / bh));
-        bh = h / filas;
-        float bw = 30.0f;                        // ancho de ladrillo objetivo
-        for (int fila = 0; fila < filas; ++fila) {
-            float ry = py + fila * bh;
-            float offset = (fila % 2 == 0) ? 0.0f : bw * 0.5f;
-            for (float bx = px - offset; bx < px + w; bx += bw) {
-                float x0 = std::max(bx, px);
-                float x1 = std::min(bx + bw - 2.0f, px + w);
-                if (x1 > x0)
-                    DrawRectangleRec({x0, ry + 1.0f, x1 - x0, bh - 2.0f}, rojo);
-            }
+        Texture2D tex;
+        if (w > h * 1.5f) {
+            tex = tex_ladrillos_horizontal;
+        } else if (h > w * 1.5f) {
+            tex = tex_ladrillos_vertical;
+        } else {
+            tex = tex_ladrillos_cuadrado;
         }
-        DrawRectangleLinesEx({px, py, w, h}, 2.0f, borde);
+
+        if (tex.id > 0) {
+            Rectangle src = {0.0f, 0.0f, (float)tex.width, (float)tex.height};
+            Rectangle dst = {px, py, w, h};
+            DrawTexturePro(tex, src, dst, {0,0}, 0.0f, WHITE);
+        } else {
+            Color rojo   = Color{170, 70, 55, 255};
+            Color mortero = Color{205, 195, 180, 255};
+            Color borde  = Color{110, 45, 35, 255};
+
+            DrawRectangleRec({px, py, w, h}, mortero);
+
+            // Filas de ladrillos con junta desfasada (tamaño de ladrillo ~fijo)
+            float bh = 14.0f;                        // alto de fila objetivo
+            int filas = std::max(1, (int)std::round(h / bh));
+            bh = h / filas;
+            float bw = 30.0f;                        // ancho de ladrillo objetivo
+            for (int fila = 0; fila < filas; ++fila) {
+                float ry = py + fila * bh;
+                float offset = (fila % 2 == 0) ? 0.0f : bw * 0.5f;
+                for (float bx = px - offset; bx < px + w; bx += bw) {
+                    float x0 = std::max(bx, px);
+                    float x1 = std::min(bx + bw - 2.0f, px + w);
+                    if (x1 > x0)
+                        DrawRectangleRec({x0, ry + 1.0f, x1 - x0, bh - 2.0f}, rojo);
+                }
+            }
+            DrawRectangleLinesEx({px, py, w, h}, 2.0f, borde);
+        }
 
         if (debug) DrawRectangleLines((int)px, (int)py, (int)w, (int)h, GREEN);
     }

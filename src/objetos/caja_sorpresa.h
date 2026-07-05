@@ -1,5 +1,6 @@
 #pragma once
 #include "obstaculo_estatico.h"
+#include "../sistema/assets_extern.h"
 #include <cmath>
 #include <sstream>
 
@@ -90,51 +91,63 @@ public:
         bool abierta = ya_lanzo || (activada && tapa_angulo < -45.0f);
 
         // --- Cuerpo de la caja ---
-        Color col_caja   = Color{210, 40, 40, 255};   // rojo
-        Color col_borde  = Color{140, 20, 20, 255};
-        Color col_deco   = Color{255, 200, 50, 255};  // amarillo decoración
-
-        DrawRectangleRec({px, py + h * 0.15f, w, h * 0.85f}, col_caja);
-        DrawRectangleLinesEx({px, py + h * 0.15f, w, h * 0.85f}, 2.5f, col_borde);
-
-        // Lunares decorativos
-        int lunares[][2] = {{(int)(px+w*0.25f),(int)(py+h*0.45f)},
-                            {(int)(px+w*0.75f),(int)(py+h*0.45f)},
-                            {(int)(px+w*0.5f), (int)(py+h*0.65f)},
-                            {(int)(px+w*0.25f),(int)(py+h*0.75f)},
-                            {(int)(px+w*0.75f),(int)(py+h*0.75f)}};
-        for (auto& l : lunares)
-            DrawCircle(l[0], l[1], w * 0.07f, col_deco);
-
-        // Cruz central
-        DrawRectangleRec({cx - 2.0f, py + h*0.25f, 4.0f, h*0.65f}, col_deco);
-        DrawRectangleRec({px + 4.0f, py + h*0.55f - 2.0f, w - 8.0f, 4.0f}, col_deco);
+        if (tex_caja_base.id > 0) {
+            Rectangle src = {0.0f, 0.0f, (float)tex_caja_base.width, (float)tex_caja_base.height};
+            Rectangle dst = {px, py + h * 0.15f, w, h * 0.85f};
+            DrawTexturePro(tex_caja_base, src, dst, {0,0}, 0.0f, WHITE);
+        } else {
+            Color col_caja   = Color{210, 40, 40, 255};   // rojo
+            Color col_borde  = Color{140, 20, 20, 255};
+            Color col_deco   = Color{255, 200, 50, 255};  // amarillo decoración
+            DrawRectangleRec({px, py + h * 0.15f, w, h * 0.85f}, col_caja);
+            DrawRectangleLinesEx({px, py + h * 0.15f, w, h * 0.85f}, 2.5f, col_borde);
+            int lunares[][2] = {{(int)(px+w*0.25f),(int)(py+h*0.45f)},
+                                {(int)(px+w*0.75f),(int)(py+h*0.45f)},
+                                {(int)(px+w*0.5f), (int)(py+h*0.65f)},
+                                {(int)(px+w*0.25f),(int)(py+h*0.75f)},
+                                {(int)(px+w*0.75f),(int)(py+h*0.75f)}};
+            for (auto& l : lunares)
+                DrawCircle(l[0], l[1], w * 0.07f, col_deco);
+            DrawRectangleRec({cx - 2.0f, py + h*0.25f, 4.0f, h*0.65f}, col_deco);
+            DrawRectangleRec({px + 4.0f, py + h*0.55f - 2.0f, w - 8.0f, 4.0f}, col_deco);
+        }
 
         // --- Tapa ---
         if (!abierta) {
-            // Tapa cerrada: rectángulo encima
-            DrawRectangleRec({px - 3.0f, py, w + 6.0f, h * 0.18f}, Color{180, 30, 30, 255});
-            DrawRectangleLinesEx({px - 3.0f, py, w + 6.0f, h * 0.18f}, 2.0f, col_borde);
-
+            if (tex_caja_tapa.id > 0) {
+                Rectangle src = {0.0f, 0.0f, (float)tex_caja_tapa.width, (float)tex_caja_tapa.height};
+                Rectangle dst = {px - 3.0f, py, w + 6.0f, h * 0.18f};
+                DrawTexturePro(tex_caja_tapa, src, dst, {0,0}, 0.0f, WHITE);
+            } else {
+                DrawRectangleRec({px - 3.0f, py, w + 6.0f, h * 0.18f}, Color{180, 30, 30, 255});
+                DrawRectangleLinesEx({px - 3.0f, py, w + 6.0f, h * 0.18f}, 2.0f, Color{140, 20, 20, 255});
+            }
             // Resorte (espiral) visible a través de la ranura
             for (int i = 0; i < 4; i++) {
                 float sy = py + h * 0.20f + i * h * 0.08f;
                 DrawLineEx({cx - w*0.08f, sy}, {cx + w*0.08f, sy + h*0.04f}, 1.5f, Color{180,180,180,200});
             }
         } else {
-            // Tapa abierta: rotada hacia la izquierda desde la bisagra derecha
-            float ang = tapa_angulo; // negativo = abre hacia la izq
-            float rad = ang * MathUtils::TIM_PI / 180.0f;
+            // Tapa abierta
             float bisagra_x = px + w + 3.0f;
             float bisagra_y = py + h * 0.15f;
             float tapa_w    = w + 6.0f;
             float tapa_h    = h * 0.18f;
-            // Extremo de la tapa rotado
-            float tip_x = bisagra_x + std::cos(MathUtils::TIM_PI + rad) * tapa_w;
-            float tip_y = bisagra_y + std::sin(MathUtils::TIM_PI + rad) * tapa_w;
-            DrawLineEx({bisagra_x, bisagra_y}, {tip_x, tip_y}, tapa_h, Color{180,30,30,200});
 
-            // Cabeza de payaso animada (solo si ya no fue lanzada, o durante primer segundo)
+            if (tex_caja_tapa.id > 0) {
+                Rectangle src = {0.0f, 0.0f, (float)tex_caja_tapa.width, (float)tex_caja_tapa.height};
+                Rectangle dst = {bisagra_x, bisagra_y, tapa_w, tapa_h};
+                Vector2 origin = {tapa_w, tapa_h * 0.5f};
+                DrawTexturePro(tex_caja_tapa, src, dst, origin, tapa_angulo, WHITE);
+            } else {
+                float ang = tapa_angulo;
+                float rad = ang * MathUtils::TIM_PI / 180.0f;
+                float tip_x = bisagra_x + std::cos(MathUtils::TIM_PI + rad) * tapa_w;
+                float tip_y = bisagra_y + std::sin(MathUtils::TIM_PI + rad) * tapa_w;
+                DrawLineEx({bisagra_x, bisagra_y}, {tip_x, tip_y}, tapa_h, Color{180,30,30,200});
+            }
+
+            // Cabeza de payaso animada
             if (!ya_lanzo || tiempo_abierta < 0.15f) {
                 float spring_ext = std::min(tiempo_abierta / 0.15f, 1.0f);
                 float head_y = py - h * 0.25f * spring_ext;
@@ -151,18 +164,21 @@ public:
                     DrawLineEx({sx0,sy0},{sx1,sy1}, 2.0f, Color{160,160,160,220});
                 }
                 // Cara del payaso
-                DrawCircle((int)cx, (int)(head_y), hr, Color{255, 220, 170, 255});
-                DrawCircleLines((int)cx, (int)(head_y), hr, Color{180, 130, 60, 255});
-                // Ojos
-                DrawCircle((int)(cx - hr*0.35f), (int)(head_y - hr*0.2f), hr*0.15f, BLACK);
-                DrawCircle((int)(cx + hr*0.35f), (int)(head_y - hr*0.2f), hr*0.15f, BLACK);
-                // Nariz roja
-                DrawCircle((int)cx, (int)(head_y + hr*0.1f), hr*0.2f, Color{220,40,40,255});
-                // Sonrisa
-                DrawCircleLines((int)cx, (int)(head_y + hr*0.15f), hr*0.3f, Color{80,40,10,255});
-                // Sombrero
-                DrawRectangleRec({cx - hr*0.4f, head_y - hr*1.35f, hr*0.8f, hr*0.5f}, Color{80,20,120,255});
-                DrawRectangleRec({cx - hr*0.55f, head_y - hr*1.05f, hr*1.1f, hr*0.15f}, Color{80,20,120,255});
+                if (tex_payaso.id > 0) {
+                    Rectangle src = {0.0f, 0.0f, (float)tex_payaso.width, (float)tex_payaso.height};
+                    Rectangle dst = {cx, head_y, hr * 2.0f, hr * 2.0f};
+                    Vector2 origin = {hr, hr};
+                    DrawTexturePro(tex_payaso, src, dst, origin, 0.0f, WHITE);
+                } else {
+                    DrawCircle((int)cx, (int)(head_y), hr, Color{255, 220, 170, 255});
+                    DrawCircleLines((int)cx, (int)(head_y), hr, Color{180, 130, 60, 255});
+                    DrawCircle((int)(cx - hr*0.35f), (int)(head_y - hr*0.2f), hr*0.15f, BLACK);
+                    DrawCircle((int)(cx + hr*0.35f), (int)(head_y - hr*0.2f), hr*0.15f, BLACK);
+                    DrawCircle((int)cx, (int)(head_y + hr*0.1f), hr*0.2f, Color{220,40,40,255});
+                    DrawCircleLines((int)cx, (int)(head_y + hr*0.15f), hr*0.3f, Color{80,40,10,255});
+                    DrawRectangleRec({cx - hr*0.4f, head_y - hr*1.35f, hr*0.8f, hr*0.5f}, Color{80,20,120,255});
+                    DrawRectangleRec({cx - hr*0.55f, head_y - hr*1.05f, hr*1.1f, hr*0.15f}, Color{80,20,120,255});
+                }
             }
         }
 

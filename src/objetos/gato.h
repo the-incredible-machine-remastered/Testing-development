@@ -118,50 +118,64 @@ public:
         float h  = static_cast<float>(alto);
         float d  = (dir_x < 0.0) ? -1.0f : 1.0f;
 
-        Color cuerpo = Color{235, 235, 240, 255}; // gato blanco (como la captura)
-        Color oscuro = Color{170, 170, 180, 255};
-        Color rosa   = Color{235, 150, 160, 255};
+        bool esta_quieto = (std::abs(velocidad.x) < 5.0);
 
-        // Sombra
-        DrawEllipse((int)px, (int)(py + h*0.5f), w*0.55f, 4.0f, Color{0,0,0,70});
+        if (esta_quieto && tex_gato_quieto.id > 0) {
+            Rectangle src = {0.0f, 0.0f, (float)tex_gato_quieto.width * d, (float)tex_gato_quieto.height};
+            Rectangle dst = {px, py, w, h};
+            Vector2 origin = {w / 2.0f, h / 2.0f};
+            DrawTexturePro(tex_gato_quieto, src, dst, origin, 0.0f, WHITE);
+        } else if (cazando && tex_gato_caminando.id > 0) {
+            int frame = ((int)patas_fase) % 8;
+            int frame_w = tex_gato_caminando.width / 8;
+            int frame_h = tex_gato_caminando.height;
+            Rectangle src = {(float)(frame * frame_w), 0.0f, (float)frame_w * d, (float)frame_h};
+            Rectangle dst = {px, py, w, h};
+            Vector2 origin = {w / 2.0f, h / 2.0f};
+            DrawTexturePro(tex_gato_caminando, src, dst, origin, 0.0f, WHITE);
 
-        // Cola curvada (lado opuesto a la mirada)
-        float colax = px - d * w*0.45f;
-        DrawLineBezier({colax, py + h*0.1f}, {colax - d*w*0.3f, py - h*0.5f}, 5.0f, cuerpo);
+        } else if (!esta_quieto && tex_gato_caminando.id > 0) {
+            int frame = ((int)patas_fase) % 8;
+            int frame_w = tex_gato_caminando.width / 8;
+            int frame_h = tex_gato_caminando.height;
+            Rectangle src = {(float)(frame * frame_w), 0.0f, (float)frame_w * d, (float)frame_h};
+            Rectangle dst = {px, py, w, h};
+            Vector2 origin = {w / 2.0f, h / 2.0f};
+            DrawTexturePro(tex_gato_caminando, src, dst, origin, 0.0f, WHITE);
+        } else {
+            Color cuerpo = Color{235, 235, 240, 255}; // gato blanco
+            Color oscuro = Color{170, 170, 180, 255};
+            Color rosa   = Color{235, 150, 160, 255};
 
-        // Patas
-        float paso = std::sin((float)patas_fase) * 3.0f;
-        for (int i=-1;i<=1;i+=2) {
-            float lx = px + i * w*0.28f;
-            DrawLineEx({lx, py + h*0.25f}, {lx + paso*i, py + h*0.5f}, 4.0f, cuerpo);
+            DrawEllipse((int)px, (int)(py + h*0.5f), w*0.55f, 4.0f, Color{0,0,0,70});
+            float colax = px - d * w*0.45f;
+            DrawLineBezier({colax, py + h*0.1f}, {colax - d*w*0.3f, py - h*0.5f}, 5.0f, cuerpo);
+
+            float paso = std::sin((float)patas_fase) * 3.0f;
+            for (int i=-1;i<=1;i+=2) {
+                float lx = px + i * w*0.28f;
+                DrawLineEx({lx, py + h*0.25f}, {lx + paso*i, py + h*0.5f}, 4.0f, cuerpo);
+            }
+
+            DrawEllipse((int)px, (int)py, w*0.5f, h*0.42f, cuerpo);
+
+            float hx = px + d * w*0.32f;
+            float hy = py - h*0.18f;
+            DrawCircle((int)hx, (int)hy, h*0.34f, cuerpo);
+            DrawTriangle({hx - d*h*0.28f, hy - h*0.18f}, {hx - d*h*0.05f, hy - h*0.55f}, {hx + d*h*0.02f, hy - h*0.2f}, cuerpo);
+            DrawTriangle({hx + d*h*0.28f, hy - h*0.18f}, {hx + d*h*0.18f, hy - h*0.55f}, {hx - d*h*0.02f, hy - h*0.2f}, cuerpo);
+            DrawCircle((int)(hx + d*h*0.05f), (int)(hy - h*0.05f), 3.0f, Color{80,150,90,255});
+            DrawCircle((int)(hx + d*h*0.22f), (int)(hy - h*0.05f), 3.0f, Color{80,150,90,255});
+            DrawCircle((int)(hx + d*h*0.05f), (int)(hy - h*0.05f), 1.2f, BLACK);
+            DrawCircle((int)(hx + d*h*0.22f), (int)(hy - h*0.05f), 1.2f, BLACK);
+            DrawCircle((int)(hx + d*h*0.15f), (int)(hy + h*0.12f), 2.0f, rosa);
+            DrawLineEx({hx + d*h*0.15f, hy+h*0.12f}, {hx + d*h*0.7f, hy}, 0.9f, oscuro);
+            DrawLineEx({hx + d*h*0.15f, hy+h*0.12f}, {hx + d*h*0.7f, hy+h*0.25f}, 0.9f, oscuro);
+            if (lengua_timer > 0.0)
+                DrawCircle((int)(hx + d*h*0.2f), (int)(hy + h*0.2f), 3.0f, rosa);
+
+            DrawEllipseLines((int)px, (int)py, w*0.5f, h*0.42f, oscuro);
         }
-
-        // Cuerpo ovalado
-        DrawEllipse((int)px, (int)py, w*0.5f, h*0.42f, cuerpo);
-
-        // Cabeza (hacia la dirección)
-        float hx = px + d * w*0.32f;
-        float hy = py - h*0.18f;
-        DrawCircle((int)hx, (int)hy, h*0.34f, cuerpo);
-        // Orejas triangulares
-        DrawTriangle({hx - d*h*0.28f, hy - h*0.18f}, {hx - d*h*0.05f, hy - h*0.55f}, {hx + d*h*0.02f, hy - h*0.2f}, cuerpo);
-        DrawTriangle({hx + d*h*0.28f, hy - h*0.18f}, {hx + d*h*0.18f, hy - h*0.55f}, {hx - d*h*0.02f, hy - h*0.2f}, cuerpo);
-        // Ojos (miran hacia la dirección)
-        DrawCircle((int)(hx + d*h*0.05f), (int)(hy - h*0.05f), 3.0f, Color{80,150,90,255});
-        DrawCircle((int)(hx + d*h*0.22f), (int)(hy - h*0.05f), 3.0f, Color{80,150,90,255});
-        DrawCircle((int)(hx + d*h*0.05f), (int)(hy - h*0.05f), 1.2f, BLACK);
-        DrawCircle((int)(hx + d*h*0.22f), (int)(hy - h*0.05f), 1.2f, BLACK);
-        // Nariz + boca
-        DrawCircle((int)(hx + d*h*0.15f), (int)(hy + h*0.12f), 2.0f, rosa);
-        // Bigotes
-        DrawLineEx({hx + d*h*0.15f, hy+h*0.12f}, {hx + d*h*0.7f, hy}, 0.9f, oscuro);
-        DrawLineEx({hx + d*h*0.15f, hy+h*0.12f}, {hx + d*h*0.7f, hy+h*0.25f}, 0.9f, oscuro);
-        // Lengua al atrapar
-        if (lengua_timer > 0.0)
-            DrawCircle((int)(hx + d*h*0.2f), (int)(hy + h*0.2f), 3.0f, rosa);
-
-        // Contorno sutil
-        DrawEllipseLines((int)px, (int)py, w*0.5f, h*0.42f, oscuro);
 
         if (debug) {
             DrawRectangleLines((int)(px - w/2), (int)(py - h/2), (int)w, (int)h, GREEN);

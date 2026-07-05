@@ -743,6 +743,32 @@ Texture2D tex_pistola_gira;      // Textura del círculo giratorio
 Texture2D tex_tv_play;           // Textura de la televisión en play
 Texture2D tex_tv_pause;          // Textura de la televisión en pausa
 
+// Nuevas texturas de objetos agregados
+Texture2D tex_globo;
+Texture2D tex_beisbol;
+Texture2D tex_caja_dinamita;
+Texture2D tex_caja_base;
+Texture2D tex_caja_tapa;
+Texture2D tex_canon_tubo;
+Texture2D tex_canon_base;
+Texture2D tex_dinamita;
+Texture2D tex_foco_apagado;
+Texture2D tex_foco_prendido;
+Texture2D tex_ladrillos_cuadrado;
+Texture2D tex_ladrillos_horizontal;
+Texture2D tex_ladrillos_vertical;
+Texture2D tex_payaso;
+Texture2D tex_rueda_hamster_externa;
+Texture2D tex_rueda_hamster_rueda;
+Texture2D tex_cubo;
+Texture2D tex_tijera_cerrada;
+Texture2D tex_tijera_abierta;
+Texture2D tex_gato_quieto;
+Texture2D tex_gato_caminando;
+Texture2D tex_gato_corriendo;
+Texture2D tex_rata_quieta;
+Texture2D tex_rata_caminando;
+
 // Animaciones del SeguidorBooster
 Animacion* anim_seguidor_corriendo = nullptr;
 Texture2D tex_menu_inicio_anim;
@@ -1705,13 +1731,22 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
             break;
         }
         case TipoObjetoMenu::FOCO: {
-            float r = 11.0f * escala;
-            DrawCircle((int)cx, (int)(cy - 2*escala), r * 1.5f, tint(Color{255, 230, 120, 70}));
-            DrawCircle((int)cx, (int)(cy - 2*escala), r, tint(Color{255, 235, 130, 255}));
-            DrawCircleLines((int)cx, (int)(cy - 2*escala), r, tint(Color{210, 170, 40, 255}));
-            DrawLineEx({cx - r*0.35f, cy - escala}, {cx, cy - r*0.4f - 2*escala}, 1.6f, tint(Color{255,150,30,255}));
-            DrawLineEx({cx, cy - r*0.4f - 2*escala}, {cx + r*0.35f, cy - escala}, 1.6f, tint(Color{255,150,30,255}));
-            DrawRectangleRec({cx - r*0.45f, cy + r*0.7f - 2*escala, r*0.9f, r*0.55f}, tint(Color{150,155,160,255}));
+            if (tex_foco_apagado.id > 0) {
+                float w = 18.0f * escala;
+                float h = w * ((float)tex_foco_apagado.height / (float)tex_foco_apagado.width);
+                Rectangle src = {0.0f, 0.0f, (float)tex_foco_apagado.width, (float)tex_foco_apagado.height};
+                Rectangle dst = {cx, cy - 2.0f * escala, w, h};
+                Vector2 origin = {w / 2.0f, h / 2.0f};
+                DrawTexturePro(tex_foco_apagado, src, dst, origin, 0.0f, tint(WHITE));
+            } else {
+                float r = 11.0f * escala;
+                DrawCircle((int)cx, (int)(cy - 2*escala), r * 1.5f, tint(Color{255, 230, 120, 70}));
+                DrawCircle((int)cx, (int)(cy - 2*escala), r, tint(Color{255, 235, 130, 255}));
+                DrawCircleLines((int)cx, (int)(cy - 2*escala), r, tint(Color{210, 170, 40, 255}));
+                DrawLineEx({cx - r*0.35f, cy - escala}, {cx, cy - r*0.4f - 2*escala}, 1.6f, tint(Color{255,150,30,255}));
+                DrawLineEx({cx, cy - r*0.4f - 2*escala}, {cx + r*0.35f, cy - escala}, 1.6f, tint(Color{255,150,30,255}));
+                DrawRectangleRec({cx - r*0.45f, cy + r*0.7f - 2*escala, r*0.9f, r*0.55f}, tint(Color{150,155,160,255}));
+            }
             break;
         }
         case TipoObjetoMenu::LUPA: {
@@ -1725,36 +1760,69 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
         }
         case TipoObjetoMenu::CANON: {
             float s = escala;
-            Color metal = tint(Color{70, 75, 82, 255});
-            Color metal2 = tint(Color{45, 48, 54, 255});
-            Color madera = tint(Color{110, 70, 35, 255});
-            // base
-            DrawRectangleRec({cx - 12*s, cy + 4*s, 24*s, 7*s}, madera);
-            DrawCircle((int)(cx - 7*s), (int)(cy + 11*s), 3.5f*s, metal2);
-            DrawCircle((int)(cx + 7*s), (int)(cy + 11*s), 3.5f*s, metal2);
-            // tubo apuntando a la izquierda
-            DrawLineEx({cx + 4*s, cy - 2*s}, {cx - 16*s, cy - 2*s}, 11*s, metal);
-            DrawCircle((int)(cx - 16*s), (int)(cy - 2*s), 5.5f*s, metal);
-            DrawCircle((int)(cx - 16*s), (int)(cy - 2*s), 3*s, tint(Color{20,20,24,255}));
-            // mecha atras con chispa
-            DrawLineEx({cx + 8*s, cy - 4*s}, {cx + 14*s, cy - 10*s}, 1.8f, tint(Color{60,45,30,255}));
-            DrawCircle((int)(cx + 14*s), (int)(cy - 10*s), 2.5f*s, tint(Color{255,200,60,255}));
+            if (tex_canon_tubo.id > 0 && tex_canon_base.id > 0) {
+                // Dibujamos la base
+                float w_base = 32.0f * s;
+                float h_base = w_base * ((float)tex_canon_base.height / (float)tex_canon_base.width);
+                Rectangle src_base = {0.0f, 0.0f, (float)tex_canon_base.width, (float)tex_canon_base.height};
+                Rectangle dst_base = {cx, cy + 12.0f * s - h_base / 2.0f, w_base, h_base};
+                Vector2 origin_base = {w_base / 2.0f, h_base / 2.0f};
+                DrawTexturePro(tex_canon_base, src_base, dst_base, origin_base, 0.0f, tint(WHITE));
+
+                // Dibujamos el tubo apuntando a la izquierda (volteado)
+                float w_tubo = 28.0f * s;
+                float h_tubo = w_tubo * ((float)tex_canon_tubo.height / (float)tex_canon_tubo.width);
+                Rectangle src_tubo = {0.0f, 0.0f, -(float)tex_canon_tubo.width, (float)tex_canon_tubo.height};
+                Rectangle dst_tubo = {cx, cy, w_tubo, h_tubo};
+                Vector2 origin_tubo = {w_tubo, h_tubo / 2.0f};
+                DrawTexturePro(tex_canon_tubo, src_tubo, dst_tubo, origin_tubo, 0.0f, tint(WHITE));
+
+                // Dibujamos la mecha procedimental
+                DrawLineEx({cx + 8.0f * s, cy - 4.0f * s}, {cx + 14.0f * s, cy - 10.0f * s}, 1.8f, tint(Color{60, 45, 30, 255}));
+                DrawCircle((int)(cx + 14.0f * s), (int)(cy - 10.0f * s), 2.5f * s, tint(Color{255, 200, 60, 255}));
+            } else {
+                Color metal = tint(Color{70, 75, 82, 255});
+                Color metal2 = tint(Color{45, 48, 54, 255});
+                Color madera = tint(Color{110, 70, 35, 255});
+                // base
+                DrawRectangleRec({cx - 12*s, cy + 4*s, 24*s, 7*s}, madera);
+                DrawCircle((int)(cx - 7*s), (int)(cy + 11*s), 3.5f*s, metal2);
+                DrawCircle((int)(cx + 7*s), (int)(cy + 11*s), 3.5f*s, metal2);
+                // tubo apuntando a la izquierda
+                DrawLineEx({cx + 4*s, cy - 2*s}, {cx - 16*s, cy - 2*s}, 11*s, metal);
+                DrawCircle((int)(cx - 16*s), (int)(cy - 2*s), 5.5f*s, metal);
+                DrawCircle((int)(cx - 16*s), (int)(cy - 2*s), 3*s, tint(Color{20,20,24,255}));
+                // mecha atras con chispa
+                DrawLineEx({cx + 8*s, cy - 4*s}, {cx + 14*s, cy - 10*s}, 1.8f, tint(Color{60,45,30,255}));
+                DrawCircle((int)(cx + 14*s), (int)(cy - 10*s), 2.5f*s, tint(Color{255,200,60,255}));
+            }
             break;
         }
         case TipoObjetoMenu::LADRILLO_VERTICAL: {
             float w = 14.0f * escala, h = 30.0f * escala;
             float x0 = cx - w/2, y0 = cy - h/2;
-            DrawRectangleRec({x0, y0, w, h}, tint(Color{205,195,180,255}));
-            int filas = 5;
-            for (int fila=0; fila<filas; ++fila) {
-                float ry = y0 + fila*(h/filas);
-                float off = (fila%2==0)?0.0f:w*0.5f;
-                for (float bx=x0-off; bx<x0+w; bx+=w) {
-                    float a=fmaxf(bx,x0), b=fminf(bx+w-1.5f, x0+w);
-                    if (b>a) DrawRectangleRec({a, ry+1, b-a, h/filas-2}, tint(Color{170,70,55,255}));
+            if (tex_ladrillos_vertical.id > 0) {
+                DrawTexturePro(
+                    tex_ladrillos_vertical,
+                    {0.0f, 0.0f, (float)tex_ladrillos_vertical.width, (float)tex_ladrillos_vertical.height},
+                    {x0, y0, w, h},
+                    {0, 0},
+                    0.0f,
+                    tint(WHITE)
+                );
+            } else {
+                DrawRectangleRec({x0, y0, w, h}, tint(Color{205,195,180,255}));
+                int filas = 5;
+                for (int fila=0; fila<filas; ++fila) {
+                    float ry = y0 + fila*(h/filas);
+                    float off = (fila%2==0)?0.0f:w*0.5f;
+                    for (float bx=x0-off; bx<x0+w; bx+=w) {
+                        float a=fmaxf(bx,x0), b=fminf(bx+w-1.5f, x0+w);
+                        if (b>a) DrawRectangleRec({a, ry+1, b-a, h/filas-2}, tint(Color{170,70,55,255}));
+                    }
                 }
+                DrawRectangleLinesEx({x0,y0,w,h}, 1.5f, tint(Color{110,45,35,255}));
             }
-            DrawRectangleLinesEx({x0,y0,w,h}, 1.5f, tint(Color{110,45,35,255}));
             // flechas verticales (indica que crece en alto)
             DrawLineEx({cx, y0-4*escala},{cx, y0-1*escala}, 1.5f, tint(Color{60,60,70,255}));
             DrawLineEx({cx, y0+h+1*escala},{cx, y0+h+4*escala}, 1.5f, tint(Color{60,60,70,255}));
@@ -1763,120 +1831,212 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
         case TipoObjetoMenu::LADRILLO_HORIZONTAL: {
             float w = 34.0f * escala, h = 14.0f * escala;
             float x0 = cx - w/2, y0 = cy - h/2;
-            DrawRectangleRec({x0, y0, w, h}, tint(Color{205,195,180,255}));
-            int filas = 2;
-            for (int fila=0; fila<filas; ++fila) {
-                float ry = y0 + fila*(h/filas);
-                float off = (fila%2==0)?0.0f:w*0.16f;
-                for (float bx=x0-off; bx<x0+w; bx+=w*0.33f) {
-                    float a=fmaxf(bx,x0), b=fminf(bx+w*0.33f-1.5f, x0+w);
-                    if (b>a) DrawRectangleRec({a, ry+1, b-a, h/filas-2}, tint(Color{170,70,55,255}));
+            if (tex_ladrillos_horizontal.id > 0) {
+                DrawTexturePro(
+                    tex_ladrillos_horizontal,
+                    {0.0f, 0.0f, (float)tex_ladrillos_horizontal.width, (float)tex_ladrillos_horizontal.height},
+                    {x0, y0, w, h},
+                    {0, 0},
+                    0.0f,
+                    tint(WHITE)
+                );
+            } else {
+                DrawRectangleRec({x0, y0, w, h}, tint(Color{205,195,180,255}));
+                int filas = 2;
+                for (int fila=0; fila<filas; ++fila) {
+                    float ry = y0 + fila*(h/filas);
+                    float off = (fila%2==0)?0.0f:w*0.16f;
+                    for (float bx=x0-off; bx<x0+w; bx+=w*0.33f) {
+                        float a=fmaxf(bx,x0), b=fminf(bx+w*0.33f-1.5f, x0+w);
+                        if (b>a) DrawRectangleRec({a, ry+1, b-a, h/filas-2}, tint(Color{170,70,55,255}));
+                    }
                 }
+                DrawRectangleLinesEx({x0,y0,w,h}, 1.5f, tint(Color{110,45,35,255}));
             }
-            DrawRectangleLinesEx({x0,y0,w,h}, 1.5f, tint(Color{110,45,35,255}));
             // flechas horizontales (indica que crece en ancho)
             DrawLineEx({x0-4*escala, cy},{x0-1*escala, cy}, 1.5f, tint(Color{60,60,70,255}));
             DrawLineEx({x0+w+1*escala, cy},{x0+w+4*escala, cy}, 1.5f, tint(Color{60,60,70,255}));
             break;
         }
         case TipoObjetoMenu::DINAMITA: {
-            float w = 16.0f*escala, h = 24.0f*escala;
-            float x0 = cx - w/2, y0 = cy - h/2 + 2*escala;
-            for (int i=0;i<3;++i) {
-                float bx = x0 + i*(w/3.0f);
-                DrawRectangleRec({bx+0.5f, y0, w/3.0f-1.0f, h}, tint(Color{190,55,45,255}));
+            if (tex_dinamita.id > 0) {
+                float w = 12.0f * escala;
+                float h = w * ((float)tex_dinamita.height / (float)tex_dinamita.width);
+                Rectangle src = {0.0f, 0.0f, (float)tex_dinamita.width, (float)tex_dinamita.height};
+                Rectangle dst = {cx, cy + 2.0f * escala, w, h};
+                Vector2 origin = {w / 2.0f, h / 2.0f};
+                DrawTexturePro(tex_dinamita, src, dst, origin, 0.0f, tint(WHITE));
+            } else {
+                float w = 16.0f*escala, h = 24.0f*escala;
+                float x0 = cx - w/2, y0 = cy - h/2 + 2*escala;
+                for (int i=0;i<3;++i) {
+                    float bx = x0 + i*(w/3.0f);
+                    DrawRectangleRec({bx+0.5f, y0, w/3.0f-1.0f, h}, tint(Color{190,55,45,255}));
+                }
+                DrawRectangleRec({x0, y0 + h*0.45f, w, 3.0f}, tint(Color{90,60,30,255}));
+                // mecha con chispa
+                DrawLineEx({cx, y0}, {cx + 4*escala, y0 - 6*escala}, 1.6f, tint(Color{70,55,35,255}));
+                DrawCircle((int)(cx + 4*escala), (int)(y0 - 6*escala), 2.2f*escala, tint(Color{255,200,60,255}));
             }
-            DrawRectangleRec({x0, y0 + h*0.45f, w, 3.0f}, tint(Color{90,60,30,255}));
-            // mecha con chispa
-            DrawLineEx({cx, y0}, {cx + 4*escala, y0 - 6*escala}, 1.6f, tint(Color{70,55,35,255}));
-            DrawCircle((int)(cx + 4*escala), (int)(y0 - 6*escala), 2.2f*escala, tint(Color{255,200,60,255}));
             break;
         }
         case TipoObjetoMenu::DINAMITA_DETONADOR: {
-            float w = 12.0f*escala, h = 22.0f*escala;
-            float x0 = cx - 10*escala, y0 = cy - h/2 + 2*escala;
-            for (int i=0;i<3;++i) {
-                float bx = x0 + i*(w/3.0f);
-                DrawRectangleRec({bx+0.5f, y0, w/3.0f-1.0f, h}, tint(Color{190,55,45,255}));
+            if (tex_dinamita.id > 0 && tex_caja_dinamita.id > 0) {
+                // Dinamita a la izquierda
+                float w_dina = 10.0f * escala;
+                float h_dina = w_dina * ((float)tex_dinamita.height / (float)tex_dinamita.width);
+                float lx = cx - 11.0f * escala;
+                Rectangle src_dina = {0.0f, 0.0f, (float)tex_dinamita.width, (float)tex_dinamita.height};
+                Rectangle dst_dina = {lx, cy + 2.0f * escala, w_dina, h_dina};
+                Vector2 origin_dina = {w_dina / 2.0f, h_dina / 2.0f};
+                DrawTexturePro(tex_dinamita, src_dina, dst_dina, origin_dina, 0.0f, tint(WHITE));
+
+                // Detonador a la derecha
+                float w_box = 18.0f * escala;
+                float h_box = w_box * ((float)tex_caja_dinamita.height / (float)tex_caja_dinamita.width);
+                float rx = cx + 11.0f * escala;
+                Rectangle src_box = {0.0f, 0.0f, (float)tex_caja_dinamita.width, (float)tex_caja_dinamita.height};
+                Rectangle dst_box = {rx, cy + 2.0f * escala, w_box, h_box};
+                Vector2 origin_box = {w_box / 2.0f, h_box / 2.0f};
+                DrawTexturePro(tex_caja_dinamita, src_box, dst_box, origin_box, 0.0f, tint(WHITE));
+
+                // Cable Bezier
+                DrawLineBezier({lx, cy + 2.0f * escala}, {rx - w_box / 2.0f, cy + 4.0f * escala}, 1.8f * escala, tint(Color{40, 40, 45, 255}));
+            } else {
+                float w = 12.0f*escala, h = 22.0f*escala;
+                float x0 = cx - 10*escala, y0 = cy - h/2 + 2*escala;
+                for (int i=0;i<3;++i) {
+                    float bx = x0 + i*(w/3.0f);
+                    DrawRectangleRec({bx+0.5f, y0, w/3.0f-1.0f, h}, tint(Color{190,55,45,255}));
+                }
+                // cable + detonador (émbolo) a la derecha
+                float dx = cx + 12*escala, dy = cy;
+                DrawLineBezier({x0+w, y0+h*0.5f}, {dx, dy}, 1.8f, tint(Color{40,40,45,255}));
+                DrawRectangleRec({dx-5*escala, dy-3*escala, 10*escala, 8*escala}, tint(Color{120,70,30,255}));
+                DrawRectangleRec({dx-1*escala, dy-9*escala, 2*escala, 6*escala}, tint(Color{150,155,160,255}));
+                DrawRectangleRec({dx-4*escala, dy-10*escala, 8*escala, 2*escala}, tint(Color{150,155,160,255}));
             }
-            // cable + detonador (émbolo) a la derecha
-            float dx = cx + 12*escala, dy = cy;
-            DrawLineBezier({x0+w, y0+h*0.5f}, {dx, dy}, 1.8f, tint(Color{40,40,45,255}));
-            DrawRectangleRec({dx-5*escala, dy-3*escala, 10*escala, 8*escala}, tint(Color{120,70,30,255}));
-            DrawRectangleRec({dx-1*escala, dy-9*escala, 2*escala, 6*escala}, tint(Color{150,155,160,255}));
-            DrawRectangleRec({dx-4*escala, dy-10*escala, 8*escala, 2*escala}, tint(Color{150,155,160,255}));
             break;
         }
         case TipoObjetoMenu::GATO: {
-            Color c = tint(Color{235,235,240,255});
-            Color o = tint(Color{170,170,180,255});
-            float bw = 16*escala, bh = 11*escala;
-            // cola
-            DrawLineBezier({cx - bw*0.6f, cy}, {cx - bw*0.9f, cy - bh*1.2f}, 2.5f, c);
-            // cuerpo
-            DrawEllipse((int)cx, (int)(cy+2*escala), bw*0.6f, bh*0.5f, c);
-            // cabeza
-            float hx = cx + bw*0.4f, hy = cy - bh*0.3f;
-            DrawCircle((int)hx, (int)hy, bh*0.55f, c);
-            DrawTriangle({hx-4*escala, hy-3*escala},{hx-1*escala,hy-8*escala},{hx+1*escala,hy-2*escala}, c);
-            DrawTriangle({hx+4*escala, hy-3*escala},{hx+2*escala,hy-8*escala},{hx-1*escala,hy-2*escala}, c);
-            DrawCircle((int)(hx+2*escala),(int)hy, 1.5f, tint(Color{80,150,90,255}));
-            DrawEllipseLines((int)cx, (int)(cy+2*escala), bw*0.6f, bh*0.5f, o);
+            if (tex_gato_quieto.id > 0) {
+                float w = 32.0f * escala;
+                float h = w * ((float)tex_gato_quieto.height / (float)tex_gato_quieto.width);
+                Rectangle src = {0.0f, 0.0f, (float)tex_gato_quieto.width, (float)tex_gato_quieto.height};
+                Rectangle dst = {cx, cy, w, h};
+                Vector2 origin = {w / 2.0f, h / 2.0f};
+                DrawTexturePro(tex_gato_quieto, src, dst, origin, 0.0f, tint(WHITE));
+            } else {
+                Color c = tint(Color{235,235,240,255});
+                Color o = tint(Color{170,170,180,255});
+                float bw = 16*escala, bh = 11*escala;
+                // cola
+                DrawLineBezier({cx - bw*0.6f, cy}, {cx - bw*0.9f, cy - bh*1.2f}, 2.5f, c);
+                // cuerpo
+                DrawEllipse((int)cx, (int)(cy+2*escala), bw*0.6f, bh*0.5f, c);
+                // cabeza
+                float hx = cx + bw*0.4f, hy = cy - bh*0.3f;
+                DrawCircle((int)hx, (int)hy, bh*0.55f, c);
+                DrawTriangle({hx-4*escala, hy-3*escala},{hx-1*escala,hy-8*escala},{hx+1*escala,hy-2*escala}, c);
+                DrawTriangle({hx+4*escala, hy-3*escala},{hx+2*escala,hy-8*escala},{hx-1*escala,hy-2*escala}, c);
+                DrawCircle((int)(hx+2*escala),(int)hy, 1.5f, tint(Color{80,150,90,255}));
+                DrawEllipseLines((int)cx, (int)(cy+2*escala), bw*0.6f, bh*0.5f, o);
+            }
             break;
         }
         case TipoObjetoMenu::RATON: {
-            Color c = tint(Color{150,150,158,255});
-            Color rosa = tint(Color{235,150,160,255});
-            float bw = 15*escala, bh = 8*escala;
-            // cola
-            DrawLineBezier({cx - bw*0.5f, cy}, {cx - bw*0.8f, cy - bh}, 1.5f, rosa);
-            // cuerpo
-            DrawEllipse((int)cx, (int)cy, bw*0.5f, bh*0.5f, c);
-            // cabeza + oreja
-            float hx = cx + bw*0.4f;
-            DrawCircle((int)hx, (int)cy, bh*0.5f, c);
-            DrawCircle((int)(hx - 2*escala), (int)(cy - bh*0.5f), bh*0.4f, c);
-            DrawCircle((int)(hx - 2*escala), (int)(cy - bh*0.5f), bh*0.22f, rosa);
-            DrawCircle((int)(hx + bh*0.4f), (int)cy, 1.2f, rosa);
+            if (tex_rata_quieta.id > 0) {
+                float w = 24.0f * escala;
+                float h = w * ((float)tex_rata_quieta.height / (float)tex_rata_quieta.width);
+                Rectangle src = {0.0f, 0.0f, -(float)tex_rata_quieta.width, (float)tex_rata_quieta.height};
+                Rectangle dst = {cx, cy, w, h};
+                Vector2 origin = {w / 2.0f, h / 2.0f};
+                DrawTexturePro(tex_rata_quieta, src, dst, origin, 0.0f, tint(WHITE));
+            } else {
+                Color c = tint(Color{150,150,158,255});
+                Color rosa = tint(Color{235,150,160,255});
+                float bw = 15*escala, bh = 8*escala;
+                // cola
+                DrawLineBezier({cx - bw*0.5f, cy}, {cx - bw*0.8f, cy - bh}, 1.5f, rosa);
+                // cuerpo
+                DrawEllipse((int)cx, (int)cy, bw*0.5f, bh*0.5f, c);
+                // cabeza + oreja
+                float hx = cx + bw*0.4f;
+                DrawCircle((int)hx, (int)cy, bh*0.5f, c);
+                DrawCircle((int)(hx - 2*escala), (int)(cy - bh*0.5f), bh*0.4f, c);
+                DrawCircle((int)(hx - 2*escala), (int)(cy - bh*0.5f), bh*0.22f, rosa);
+                DrawCircle((int)(hx + bh*0.4f), (int)cy, 1.2f, rosa);
+            }
             break;
         }
         case TipoObjetoMenu::GLOBO: {
             float r = 14.0f * escala;
-            DrawCircle((int)cx, (int)(cy + 4 * escala), r, tint(Color{220, 50, 50, 255}));
-            DrawCircleLines((int)cx, (int)(cy + 4 * escala), r, tint(Color{150, 20, 20, 255}));
-            // hilo
-            DrawLineEx({cx, cy + 4 * escala + r}, {cx, cy + r * 2.2f + 4 * escala}, 1.5f, tint(Color{80, 80, 80, 255}));
+            if (tex_globo.id > 0) {
+                float w = 2.0f * r;
+                float h = w * ((float)tex_globo.height / (float)tex_globo.width);
+                Rectangle src = {0.0f, 0.0f, (float)tex_globo.width, (float)tex_globo.height};
+                Rectangle dst = {cx, cy - 2.0f * escala, w, h};
+                Vector2 origin = {w / 2.0f, h / 2.0f};
+                DrawTexturePro(tex_globo, src, dst, origin, 0.0f, tint(WHITE));
+                // hilo
+                DrawLineEx({cx, cy - 2.0f * escala + h / 2.0f}, {cx, cy + r * 2.2f + 4 * escala}, 1.5f, tint(Color{80, 80, 80, 255}));
+            } else {
+                DrawCircle((int)cx, (int)(cy + 4 * escala), r, tint(Color{220, 50, 50, 255}));
+                DrawCircleLines((int)cx, (int)(cy + 4 * escala), r, tint(Color{150, 20, 20, 255}));
+                // hilo
+                DrawLineEx({cx, cy + 4 * escala + r}, {cx, cy + r * 2.2f + 4 * escala}, 1.5f, tint(Color{80, 80, 80, 255}));
+            }
             break;
         }
         case TipoObjetoMenu::TIJERA: {
-            // Tijera horizontal: aros a la izquierda, puntas a la derecha
-            float hx = 18.0f * escala;
-            float hy = 9.0f * escala;
-            float ra = 6.5f * escala;
-            Color sc = tint(Color{175, 182, 195, 255});
-            Color sd = tint(Color{80, 88, 100, 255});
-            // cuchilla superior: aro izq arriba -> punta derecha arriba
-            DrawLineEx({cx - hx + ra, cy - hy * 0.3f}, {cx + hx, cy - hy}, 2.8f * escala, sc);
-            // cuchilla inferior: aro izq abajo -> punta derecha abajo
-            DrawLineEx({cx - hx + ra, cy + hy * 0.3f}, {cx + hx, cy + hy}, 2.8f * escala, sc);
-            // aros izquierda (rojos como mangos)
-            DrawCircle((int)(cx - hx + ra), (int)(cy - hy * 0.55f), ra, tint(Color{200, 40, 40, 255}));
-            DrawCircleLines((int)(cx - hx + ra), (int)(cy - hy * 0.55f), ra, sd);
-            DrawCircle((int)(cx - hx + ra), (int)(cy + hy * 0.55f), ra, tint(Color{200, 40, 40, 255}));
-            DrawCircleLines((int)(cx - hx + ra), (int)(cy + hy * 0.55f), ra, sd);
-            // pivote central
-            DrawCircle((int)(cx - hx * 0.1f), (int)cy, 2.5f * escala, sd);
-            // línea verde de corte vertical
-            DrawLineEx({cx + hx * 0.15f, cy - hy * 1.4f}, {cx + hx * 0.15f, cy + hy * 1.4f}, 1.5f * escala, tint(Color{80, 200, 80, 255}));
+            if (tex_tijera_abierta.id > 0) {
+                float w = 38.0f * escala;
+                float h = w * ((float)tex_tijera_abierta.height / (float)tex_tijera_abierta.width);
+                Rectangle src = {0.0f, 0.0f, (float)tex_tijera_abierta.width, (float)tex_tijera_abierta.height};
+                Rectangle dst = {cx, cy, w, h};
+                Vector2 origin = {w / 2.0f, h / 2.0f};
+                DrawTexturePro(tex_tijera_abierta, src, dst, origin, 0.0f, tint(WHITE));
+            } else {
+                // Tijera horizontal: aros a la izquierda, puntas a la derecha
+                float hx = 18.0f * escala;
+                float hy = 9.0f * escala;
+                float ra = 6.5f * escala;
+                Color sc = tint(Color{175, 182, 195, 255});
+                Color sd = tint(Color{80, 88, 100, 255});
+                // cuchilla superior: aro izq arriba -> punta derecha arriba
+                DrawLineEx({cx - hx + ra, cy - hy * 0.3f}, {cx + hx, cy - hy}, 2.8f * escala, sc);
+                // cuchilla inferior: aro izq abajo -> punta derecha abajo
+                DrawLineEx({cx - hx + ra, cy + hy * 0.3f}, {cx + hx, cy + hy}, 2.8f * escala, sc);
+                // aros izquierda (rojos como mangos)
+                DrawCircle((int)(cx - hx + ra), (int)(cy - hy * 0.55f), ra, tint(Color{200, 40, 40, 255}));
+                DrawCircleLines((int)(cx - hx + ra), (int)(cy - hy * 0.55f), ra, sd);
+                DrawCircle((int)(cx - hx + ra), (int)(cy + hy * 0.55f), ra, tint(Color{200, 40, 40, 255}));
+                DrawCircleLines((int)(cx - hx + ra), (int)(cy + hy * 0.55f), ra, sd);
+                // pivote central
+                DrawCircle((int)(cx - hx * 0.1f), (int)cy, 2.5f * escala, sd);
+                // línea verde de corte vertical
+                DrawLineEx({cx + hx * 0.15f, cy - hy * 1.4f}, {cx + hx * 0.15f, cy + hy * 1.4f}, 1.5f * escala, tint(Color{80, 200, 80, 255}));
+            }
             break;
         }
         case TipoObjetoMenu::BOLA_BEISBOL: {
             float r = 14.0f * escala;
-            DrawCircle((int)cx, (int)cy, r, tint(Color{240, 235, 220, 255}));
-            DrawCircleLines((int)cx, (int)cy, r, tint(Color{180, 170, 150, 255}));
-            // costuras
-            DrawLineEx({cx - r * 0.3f, cy - r * 0.8f}, {cx - r * 0.3f, cy + r * 0.8f}, 1.5f, tint(Color{200, 60, 60, 255}));
-            DrawLineEx({cx + r * 0.3f, cy - r * 0.8f}, {cx + r * 0.3f, cy + r * 0.8f}, 1.5f, tint(Color{200, 60, 60, 255}));
+            if (tex_beisbol.id > 0) {
+                DrawTexturePro(
+                    tex_beisbol,
+                    {0.0f, 0.0f, (float)tex_beisbol.width, (float)tex_beisbol.height},
+                    {cx - r, cy - r, 2.0f * r, 2.0f * r},
+                    {0, 0},
+                    0.0f,
+                    tint(WHITE)
+                );
+            } else {
+                DrawCircle((int)cx, (int)cy, r, tint(Color{240, 235, 220, 255}));
+                DrawCircleLines((int)cx, (int)cy, r, tint(Color{180, 170, 150, 255}));
+                // costuras
+                DrawLineEx({cx - r * 0.3f, cy - r * 0.8f}, {cx - r * 0.3f, cy + r * 0.8f}, 1.5f, tint(Color{200, 60, 60, 255}));
+                DrawLineEx({cx + r * 0.3f, cy - r * 0.8f}, {cx + r * 0.3f, cy + r * 0.8f}, 1.5f, tint(Color{200, 60, 60, 255}));
+            }
             break;
         }
         case TipoObjetoMenu::ZONA_META: {
@@ -1895,14 +2055,33 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
             break;
         }
         case TipoObjetoMenu::CAJA_HAMSTER: {
-            // Caja izquierda + rueda derecha
-            float bw = 14.0f * escala, bh = 24.0f * escala;
-            float rr = 12.0f * escala;
-            DrawRectangleRec({cx - 20*escala, cy - bh/2, bw, bh}, tint(Color{140, 100, 50, 255}));
-            DrawCircle((int)(cx + 2*escala), (int)cy, rr, tint(Color{210, 170, 80, 255}));
-            DrawCircleLines((int)(cx + 2*escala), (int)cy, rr, tint(Color{80, 50, 20, 255}));
-            // hámster mini
-            DrawCircle((int)(cx + 2*escala), (int)(cy + rr*0.3f), rr*0.3f, tint(Color{230, 200, 160, 255}));
+            if (tex_rueda_hamster_externa.id > 0 && tex_rueda_hamster_rueda.id > 0) {
+                float scale_factor = 0.05f * escala;
+                // Base/externa
+                float w_ext = (float)tex_rueda_hamster_externa.width * scale_factor;
+                float h_ext = (float)tex_rueda_hamster_externa.height * scale_factor;
+                Rectangle src_ext = {0.0f, 0.0f, (float)tex_rueda_hamster_externa.width, (float)tex_rueda_hamster_externa.height};
+                Rectangle dst_ext = {cx - 8.0f * escala, cy, w_ext, h_ext};
+                Vector2 origin_ext = {w_ext / 2.0f, h_ext / 2.0f};
+                DrawTexturePro(tex_rueda_hamster_externa, src_ext, dst_ext, origin_ext, 0.0f, tint(WHITE));
+
+                // Rueda
+                float w_rueda = (float)tex_rueda_hamster_rueda.width * scale_factor;
+                float h_rueda = (float)tex_rueda_hamster_rueda.height * scale_factor;
+                Rectangle src_rueda = {0.0f, 0.0f, (float)tex_rueda_hamster_rueda.width, (float)tex_rueda_hamster_rueda.height};
+                Rectangle dst_rueda = {cx + 8.0f * escala, cy, w_rueda, h_rueda};
+                Vector2 origin_rueda = {w_rueda / 2.0f, h_rueda / 2.0f};
+                DrawTexturePro(tex_rueda_hamster_rueda, src_rueda, dst_rueda, origin_rueda, 0.0f, tint(WHITE));
+            } else {
+                // Caja izquierda + rueda derecha
+                float bw = 14.0f * escala, bh = 24.0f * escala;
+                float rr = 12.0f * escala;
+                DrawRectangleRec({cx - 20*escala, cy - bh/2, bw, bh}, tint(Color{140, 100, 50, 255}));
+                DrawCircle((int)(cx + 2*escala), (int)cy, rr, tint(Color{210, 170, 80, 255}));
+                DrawCircleLines((int)(cx + 2*escala), (int)cy, rr, tint(Color{80, 50, 20, 255}));
+                // hámster mini
+                DrawCircle((int)(cx + 2*escala), (int)(cy + rr*0.3f), rr*0.3f, tint(Color{230, 200, 160, 255}));
+            }
             break;
         }
         case TipoObjetoMenu::BANDA: {
@@ -1913,16 +2092,32 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
             break;
         }
         case TipoObjetoMenu::CAJA_SORPRESA: {
-            float bw = 26.0f * escala, bh = 26.0f * escala;
-            // Caja roja con lunares amarillos
-            DrawRectangleRec({cx - bw/2, cy - bh/2 + 4*escala, bw, bh * 0.85f}, tint(Color{210,40,40,255}));
-            DrawCircle((int)(cx - bw*0.25f),(int)(cy + 4*escala), bw*0.1f, tint(Color{255,200,50,255}));
-            DrawCircle((int)(cx + bw*0.25f),(int)(cy + 4*escala), bw*0.1f, tint(Color{255,200,50,255}));
-            // Tapa
-            DrawRectangleRec({cx - bw/2 - 2*escala, cy - bh/2, bw + 4*escala, bh*0.18f}, tint(Color{180,30,30,255}));
-            // Cabeza asomando
-            DrawCircle((int)cx, (int)(cy - bh/2 - 8*escala), 9*escala, tint(Color{255,220,170,255}));
-            DrawCircle((int)cx, (int)(cy - bh/2 - 9*escala), 4*escala, tint(Color{220,40,40,255}));
+            if (tex_caja_base.id > 0 && tex_caja_tapa.id > 0) {
+                float w = 26.0f * escala;
+                float h = w * ((float)tex_caja_base.height / (float)tex_caja_base.width);
+                Rectangle src_base = {0.0f, 0.0f, (float)tex_caja_base.width, (float)tex_caja_base.height};
+                Rectangle dst_base = {cx, cy + 2.0f * escala, w, h};
+                Vector2 origin_base = {w / 2.0f, h / 2.0f};
+                DrawTexturePro(tex_caja_base, src_base, dst_base, origin_base, 0.0f, tint(WHITE));
+
+                float wt = w * 1.14f;
+                float ht = wt * ((float)tex_caja_tapa.height / (float)tex_caja_tapa.width);
+                Rectangle src_tapa = {0.0f, 0.0f, (float)tex_caja_tapa.width, (float)tex_caja_tapa.height};
+                Rectangle dst_tapa = {cx, cy - h/2.0f + 2.0f * escala, wt, ht};
+                Vector2 origin_tapa = {wt / 2.0f, ht / 2.0f};
+                DrawTexturePro(tex_caja_tapa, src_tapa, dst_tapa, origin_tapa, 0.0f, tint(WHITE));
+            } else {
+                float bw = 26.0f * escala, bh = 26.0f * escala;
+                // Caja roja con lunares amarillos
+                DrawRectangleRec({cx - bw/2, cy - bh/2 + 4*escala, bw, bh * 0.85f}, tint(Color{210,40,40,255}));
+                DrawCircle((int)(cx - bw*0.25f),(int)(cy + 4*escala), bw*0.1f, tint(Color{255,200,50,255}));
+                DrawCircle((int)(cx + bw*0.25f),(int)(cy + 4*escala), bw*0.1f, tint(Color{255,200,50,255}));
+                // Tapa
+                DrawRectangleRec({cx - bw/2 - 2*escala, cy - bh/2, bw + 4*escala, bh*0.18f}, tint(Color{180,30,30,255}));
+                // Cabeza asomando
+                DrawCircle((int)cx, (int)(cy - bh/2 - 8*escala), 9*escala, tint(Color{255,220,170,255}));
+                DrawCircle((int)cx, (int)(cy - bh/2 - 9*escala), 4*escala, tint(Color{220,40,40,255}));
+            }
             break;
         }
         case TipoObjetoMenu::CAMINADORA: {
@@ -3100,6 +3295,33 @@ void cargandoTexturas() {
         TraceLog(LOG_INFO, "Textura de la television (pause) cargada: %dx%d", tex_tv_pause.width, tex_tv_pause.height);
     }
 
+    // Cargar nuevas texturas de objetos agregados
+    tex_globo = cargar_textura_datos("Assets/Objetos/Globo.png");
+    tex_beisbol = cargar_textura_datos("Assets/Objetos/beisbol.png");
+    tex_caja_dinamita = cargar_textura_datos("Assets/Objetos/caja-dinamita.png");
+    tex_caja_base = cargar_textura_datos("Assets/Objetos/caja_base.png");
+    tex_caja_tapa = cargar_textura_datos("Assets/Objetos/caja_tapa.png");
+    tex_canon_tubo = cargar_textura_datos("Assets/Objetos/canon1.png");
+    tex_canon_base = cargar_textura_datos("Assets/Objetos/canon2.png");
+    tex_dinamita = cargar_textura_datos("Assets/Objetos/dinamita.png");
+    tex_foco_apagado = cargar_textura_datos("Assets/Objetos/foco_apagado.png");
+    tex_foco_prendido = cargar_textura_datos("Assets/Objetos/foco_prendido.png");
+    tex_ladrillos_cuadrado = cargar_textura_datos("Assets/Objetos/ladrillos_cuadrado.png");
+    tex_ladrillos_horizontal = cargar_textura_datos("Assets/Objetos/ladrillos_horizontal.png");
+    tex_ladrillos_vertical = cargar_textura_datos("Assets/Objetos/ladrillos_vertical.png");
+    tex_payaso = cargar_textura_datos("Assets/Objetos/payaso.png");
+    tex_rueda_hamster_externa = cargar_textura_datos("Assets/Objetos/rueda_hambter(Estructura externa).png");
+    tex_rueda_hamster_rueda = cargar_textura_datos("Assets/Objetos/rueda_hambter(Rueda).png");
+    tex_cubo = cargar_textura_datos("Assets/Objetos/subo.png");
+    tex_tijera_cerrada = cargar_textura_datos("Assets/Objetos/tijera_cerrada.png");
+    tex_tijera_abierta = cargar_textura_datos("Assets/Objetos/tijeras_abierta.png");
+    tex_gato_quieto = cargar_textura_datos("Assets/Objetos/anim/gato.png");
+    tex_gato_caminando = cargar_textura_datos("Assets/Objetos/anim/gato-animacion-walk.png");
+    tex_gato_corriendo = cargar_textura_datos("Assets/Objetos/anim/gato-anim-run.png");
+    tex_rata_quieta = cargar_textura_datos("Assets/Objetos/anim/rata.png");
+    tex_rata_caminando = cargar_textura_datos("Assets/Objetos/anim/rata-animacion.png");
+
+
 
     
     // Cargar texturas del SeguidorBooster
@@ -3128,7 +3350,6 @@ void cargandoTexturas() {
     if (tex_seguidor_corriendo.id > 0) {
         anim_seguidor_corriendo = new Animacion(tex_seguidor_corriendo, 8, 12, 8);
     }
-
     // Inicializar animaciones del Menú de Inicio
     tex_menu_inicio_anim = cargar_textura_datos("Assets/animation/manuel-anim.png");
     if (tex_menu_inicio_anim.id == 0) {
@@ -5457,7 +5678,6 @@ void dibujar_y_actualizar_boton_silencio() {
     Vector2 t_size = MeasureTextEx(fuente_menu, txt, text_size, 1);
     DrawTextEx(fuente_menu, txt, { rect_mute.x + (rect_mute.width - t_size.x)/2.0f, rect_mute.y + (rect_mute.height - t_size.y)/2.0f }, text_size, 1, WHITE);
 }
-
 // ============================================================================
 // Punto de entrada
 // ============================================================================
@@ -5572,6 +5792,32 @@ int main() {
     if (tex_pistola_gira.id > 0) UnloadTexture(tex_pistola_gira);
     if (tex_tv_play.id > 0) UnloadTexture(tex_tv_play);
     if (tex_tv_pause.id > 0) UnloadTexture(tex_tv_pause);
+
+    // Liberar nuevas texturas de objetos agregados
+    if (tex_globo.id > 0) UnloadTexture(tex_globo);
+    if (tex_beisbol.id > 0) UnloadTexture(tex_beisbol);
+    if (tex_caja_dinamita.id > 0) UnloadTexture(tex_caja_dinamita);
+    if (tex_caja_base.id > 0) UnloadTexture(tex_caja_base);
+    if (tex_caja_tapa.id > 0) UnloadTexture(tex_caja_tapa);
+    if (tex_canon_tubo.id > 0) UnloadTexture(tex_canon_tubo);
+    if (tex_canon_base.id > 0) UnloadTexture(tex_canon_base);
+    if (tex_dinamita.id > 0) UnloadTexture(tex_dinamita);
+    if (tex_foco_apagado.id > 0) UnloadTexture(tex_foco_apagado);
+    if (tex_foco_prendido.id > 0) UnloadTexture(tex_foco_prendido);
+    if (tex_ladrillos_cuadrado.id > 0) UnloadTexture(tex_ladrillos_cuadrado);
+    if (tex_ladrillos_horizontal.id > 0) UnloadTexture(tex_ladrillos_horizontal);
+    if (tex_ladrillos_vertical.id > 0) UnloadTexture(tex_ladrillos_vertical);
+    if (tex_payaso.id > 0) UnloadTexture(tex_payaso);
+    if (tex_rueda_hamster_externa.id > 0) UnloadTexture(tex_rueda_hamster_externa);
+    if (tex_rueda_hamster_rueda.id > 0) UnloadTexture(tex_rueda_hamster_rueda);
+    if (tex_cubo.id > 0) UnloadTexture(tex_cubo);
+    if (tex_tijera_cerrada.id > 0) UnloadTexture(tex_tijera_cerrada);
+    if (tex_tijera_abierta.id > 0) UnloadTexture(tex_tijera_abierta);
+    if (tex_gato_quieto.id > 0) UnloadTexture(tex_gato_quieto);
+    if (tex_gato_caminando.id > 0) UnloadTexture(tex_gato_caminando);
+    if (tex_gato_corriendo.id > 0) UnloadTexture(tex_gato_corriendo);
+    if (tex_rata_quieta.id > 0) UnloadTexture(tex_rata_quieta);
+    if (tex_rata_caminando.id > 0) UnloadTexture(tex_rata_caminando);
 
     if (tex_seguidor_quieto.id > 0) UnloadTexture(tex_seguidor_quieto);
     if (tex_seguidor_corriendo.id > 0) UnloadTexture(tex_seguidor_corriendo);

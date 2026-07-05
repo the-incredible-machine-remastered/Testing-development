@@ -1,6 +1,7 @@
 #pragma once
 #include "../core/entidad_fisica.h"
 #include "balancin.h"
+#include "../sistema/assets_extern.h"
 #include <cmath>
 
 class Globo : public EntidadFisica {
@@ -63,9 +64,16 @@ public:
         float py = static_cast<float>(posicion.y);
         float r  = static_cast<float>(radio);
         DrawLineEx({px, py + r * 0.9f}, {px + 3.0f, py + r * 1.6f}, 1.8f, Color{80, 55, 30, 200});
-        DrawCircle(static_cast<int>(px), static_cast<int>(py), r, Color{220, 48, 48, 220});
-        DrawCircleLines(static_cast<int>(px), static_cast<int>(py), r, Color{120, 10, 10, 220});
-        DrawCircle(static_cast<int>(px - r * 0.30f), static_cast<int>(py - r * 0.30f), r * 0.22f, Color{255, 200, 200, 115});
+        if (tex_globo.id > 0) {
+            Rectangle src = {0.0f, 0.0f, (float)tex_globo.width, (float)tex_globo.height};
+            Rectangle dst = {px, py, r * 2.0f, r * 2.0f};
+            Vector2 origin = {r, r};
+            DrawTexturePro(tex_globo, src, dst, origin, 0.0f, WHITE);
+        } else {
+            DrawCircle(static_cast<int>(px), static_cast<int>(py), r, Color{220, 48, 48, 220});
+            DrawCircleLines(static_cast<int>(px), static_cast<int>(py), r, Color{120, 10, 10, 220});
+            DrawCircle(static_cast<int>(px - r * 0.30f), static_cast<int>(py - r * 0.30f), r * 0.22f, Color{255, 200, 200, 115});
+        }
         if (debug) DrawCircleLines(static_cast<int>(px), static_cast<int>(py), r, GREEN);
     }
 };

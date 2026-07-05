@@ -1,5 +1,6 @@
 #pragma once
 #include "bola.h"
+#include "../sistema/assets_extern.h"
 
 class BolaBeisbol : public Bola {
 public:
@@ -24,12 +25,19 @@ public:
         float px = static_cast<float>(posicion.x);
         float py = static_cast<float>(posicion.y);
         float r  = static_cast<float>(get_radio());
-        DrawCircle(static_cast<int>(px), static_cast<int>(py), r, Color{220, 220, 220, 220});
-        DrawCircleLines(static_cast<int>(px), static_cast<int>(py), r, Color{50, 50, 50, 220});
-        float angle1 = 0.4f;
-        float angle2 = 3.14f - 0.4f;
-        DrawLineEx({px + r * cosf(angle1), py + r * sinf(angle1)}, {px + r * cosf(angle2), py + r * sinf(angle2)}, 1.8f, Color{200, 30, 30, 180});
-        DrawCircle(static_cast<int>(px - r * 0.35f), static_cast<int>(py - r * 0.35f), r * 0.25f, Color{255, 255, 255, 100});
+        if (tex_beisbol.id > 0) {
+            Rectangle src = {0.0f, 0.0f, (float)tex_beisbol.width, (float)tex_beisbol.height};
+            Rectangle dst = {px, py, r * 2.0f, r * 2.0f};
+            Vector2 origin = {r, r};
+            DrawTexturePro(tex_beisbol, src, dst, origin, 0.0f, WHITE);
+        } else {
+            DrawCircle(static_cast<int>(px), static_cast<int>(py), r, Color{220, 220, 220, 220});
+            DrawCircleLines(static_cast<int>(px), static_cast<int>(py), r, Color{50, 50, 50, 220});
+            float angle1 = 0.4f;
+            float angle2 = 3.14f - 0.4f;
+            DrawLineEx({px + r * cosf(angle1), py + r * sinf(angle1)}, {px + r * cosf(angle2), py + r * sinf(angle2)}, 1.8f, Color{200, 30, 30, 180});
+            DrawCircle(static_cast<int>(px - r * 0.35f), static_cast<int>(py - r * 0.35f), r * 0.25f, Color{255, 255, 255, 100});
+        }
         if (debug) DrawCircleLines(static_cast<int>(px), static_cast<int>(py), r, GREEN);
     }
 };

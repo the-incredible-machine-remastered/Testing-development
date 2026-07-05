@@ -60,24 +60,35 @@ public:
         float py = static_cast<float>(posicion.y);
         float r  = static_cast<float>(radio);
 
-        Color vidrio = encendido ? Color{255, 235, 130, 255} : Color{200, 205, 210, 255};
-        Color borde  = encendido ? Color{210, 170, 40, 255}  : Color{120, 128, 135, 255};
+        Texture2D tex = encendido ? tex_foco_prendido : tex_foco_apagado;
 
-        if (encendido) {
-            DrawCircle((int)px, (int)py, r * 2.0f, Color{255, 230, 120, 60});
-            DrawCircle((int)px, (int)py, r * 1.4f, Color{255, 235, 150, 90});
+        if (tex.id > 0) {
+            float s_w = r * 2.2f;
+            float s_h = s_w * ((float)tex.height / (float)tex.width);
+            Rectangle src = {0.0f, 0.0f, (float)tex.width, (float)tex.height};
+            Rectangle dst = {px, py, s_w, s_h};
+            Vector2 origin = {s_w / 2.0f, s_h * 0.35f};
+            DrawTexturePro(tex, src, dst, origin, 0.0f, WHITE);
+        } else {
+            Color vidrio = encendido ? Color{255, 235, 130, 255} : Color{200, 205, 210, 255};
+            Color borde  = encendido ? Color{210, 170, 40, 255}  : Color{120, 128, 135, 255};
+
+            if (encendido) {
+                DrawCircle((int)px, (int)py, r * 2.0f, Color{255, 230, 120, 60});
+                DrawCircle((int)px, (int)py, r * 1.4f, Color{255, 235, 150, 90});
+            }
+
+            DrawCircle((int)px, (int)py, r, vidrio);
+            DrawCircleLines((int)px, (int)py, r, borde);
+
+            Color fil = encendido ? Color{255, 150, 30, 255} : Color{110, 115, 120, 255};
+            DrawLineEx({px - r * 0.35f, py + r * 0.1f}, {px, py - r * 0.3f}, 2.0f, fil);
+            DrawLineEx({px, py - r * 0.3f}, {px + r * 0.35f, py + r * 0.1f}, 2.0f, fil);
+
+            Color metal = Color{150, 155, 160, 255};
+            DrawRectangleRec({px - r * 0.45f, py + r * 0.75f, r * 0.9f, r * 0.55f}, metal);
+            DrawRectangleLinesEx({px - r * 0.45f, py + r * 0.75f, r * 0.9f, r * 0.55f}, 1.0f, Color{90, 95, 100, 255});
         }
-
-        DrawCircle((int)px, (int)py, r, vidrio);
-        DrawCircleLines((int)px, (int)py, r, borde);
-
-        Color fil = encendido ? Color{255, 150, 30, 255} : Color{110, 115, 120, 255};
-        DrawLineEx({px - r * 0.35f, py + r * 0.1f}, {px, py - r * 0.3f}, 2.0f, fil);
-        DrawLineEx({px, py - r * 0.3f}, {px + r * 0.35f, py + r * 0.1f}, 2.0f, fil);
-
-        Color metal = Color{150, 155, 160, 255};
-        DrawRectangleRec({px - r * 0.45f, py + r * 0.75f, r * 0.9f, r * 0.55f}, metal);
-        DrawRectangleLinesEx({px - r * 0.45f, py + r * 0.75f, r * 0.9f, r * 0.55f}, 1.0f, Color{90, 95, 100, 255});
 
         if (debug) {
             DrawRectangleLines((int)(px - r), (int)(py - r), (int)(r * 2), (int)(r * 2), GREEN);

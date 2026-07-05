@@ -1,5 +1,6 @@
 #pragma once
 #include "obstaculo_estatico.h"
+#include "../sistema/assets_extern.h"
 #include <cmath>
 #include <vector>
 
@@ -124,24 +125,37 @@ public:
         Color col_hamster = Color{230, 200, 160, 255};
 
         // --- Caja exterior ---
-        DrawRectangleRec({px, py, w * 0.35f, h}, col_caja);
-        DrawRectangleLinesEx({px, py, w * 0.35f, h}, 2.0f, Color{80, 50, 20, 255});
-
-        // --- Rueda ---
-        DrawCircle(static_cast<int>(rcx), static_cast<int>(rcy), rr, col_rueda);
-        DrawCircleLines(static_cast<int>(rcx), static_cast<int>(rcy), rr, Color{80, 50, 20, 255});
-
-        // Rayos de la rueda (giran con fase)
-        for (int i = 0; i < 6; i++) {
-            float ang = fase + i * (MathUtils::TIM_PI / 3.0f);
-            float x2 = rcx + std::cos(ang) * rr * 0.88f;
-            float y2 = rcy + std::sin(ang) * rr * 0.88f;
-            DrawLineEx({rcx, rcy}, {x2, y2}, 2.0f, col_rayo);
+        if (tex_rueda_hamster_externa.id > 0) {
+            Rectangle src = {0.0f, 0.0f, (float)tex_rueda_hamster_externa.width, (float)tex_rueda_hamster_externa.height};
+            Rectangle dst = {px, py, w * 0.35f, h};
+            DrawTexturePro(tex_rueda_hamster_externa, src, dst, {0,0}, 0.0f, WHITE);
+        } else {
+            DrawRectangleRec({px, py, w * 0.35f, h}, col_caja);
+            DrawRectangleLinesEx({px, py, w * 0.35f, h}, 2.0f, Color{80, 50, 20, 255});
         }
 
-        // Aro interior de la rueda
-        DrawCircleLines(static_cast<int>(rcx), static_cast<int>(rcy), rr * 0.25f, Color{80, 50, 20, 200});
-        DrawCircle(static_cast<int>(rcx), static_cast<int>(rcy), rr * 0.12f, Color{80, 50, 20, 255});
+        // --- Rueda ---
+        if (tex_rueda_hamster_rueda.id > 0) {
+            Rectangle src = {0.0f, 0.0f, (float)tex_rueda_hamster_rueda.width, (float)tex_rueda_hamster_rueda.height};
+            Rectangle dst = {rcx, rcy, rr * 2.0f, rr * 2.0f};
+            Vector2 origin = {rr, rr};
+            DrawTexturePro(tex_rueda_hamster_rueda, src, dst, origin, fase * (180.0f / MathUtils::TIM_PI), WHITE);
+        } else {
+            DrawCircle(static_cast<int>(rcx), static_cast<int>(rcy), rr, col_rueda);
+            DrawCircleLines(static_cast<int>(rcx), static_cast<int>(rcy), rr, Color{80, 50, 20, 255});
+
+            // Rayos de la rueda (giran con fase)
+            for (int i = 0; i < 6; i++) {
+                float ang = fase + i * (MathUtils::TIM_PI / 3.0f);
+                float x2 = rcx + std::cos(ang) * rr * 0.88f;
+                float y2 = rcy + std::sin(ang) * rr * 0.88f;
+                DrawLineEx({rcx, rcy}, {x2, y2}, 2.0f, col_rayo);
+            }
+
+            // Aro interior de la rueda
+            DrawCircleLines(static_cast<int>(rcx), static_cast<int>(rcy), rr * 0.25f, Color{80, 50, 20, 200});
+            DrawCircle(static_cast<int>(rcx), static_cast<int>(rcy), rr * 0.12f, Color{80, 50, 20, 255});
+        }
 
         // --- Hámster dentro de la rueda ---
         // El hámster se mueve con la rueda — su posición varía con la fase

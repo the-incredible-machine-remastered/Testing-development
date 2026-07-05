@@ -110,38 +110,63 @@ public:
         float h  = static_cast<float>(alto);
         float d  = (dir_x < 0.0) ? -1.0f : 1.0f; // hacia dónde mira
 
-        Color cuerpo = Color{150, 150, 158, 255};
-        Color oscuro = Color{95, 95, 105, 255};
-        Color rosa   = Color{235, 150, 160, 255};
+        bool esta_quieto = (std::abs(velocidad.x) < 5.0);
 
-        // Sombra
-        DrawEllipse((int)px, (int)(py + h*0.5f), w*0.5f, 2.5f, Color{0,0,0,60});
+        if (esta_quieto && tex_rata_quieta.id > 0) {
+            float w_quieto = w * 2.0f; 
+            float h_quieto = h * 2.0f;
+            Rectangle src = {0.0f, 0.0f, (float)tex_rata_quieta.width * d, (float)tex_rata_quieta.height};
+            Rectangle dst = {px, py, w_quieto, h_quieto};
+            Vector2 origin = {w / 2.0f, h / 2.0f};
+            DrawTexturePro(tex_rata_quieta, src, dst, origin, 0.0f, WHITE);
 
-        // Patitas (animación simple)
-        float paso = std::sin((float)patas_fase) * 2.0f;
-        DrawLineEx({px - w*0.2f, py + h*0.35f}, {px - w*0.2f + paso, py + h*0.55f}, 1.5f, oscuro);
-        DrawLineEx({px + w*0.2f, py + h*0.35f}, {px + w*0.2f - paso, py + h*0.55f}, 1.5f, oscuro);
+        } else if (!esta_quieto && tex_rata_caminando.id > 0) {
 
-        // Cola (lado opuesto a la mirada), curvada
-        float colax = px - d * w*0.5f;
-        DrawLineBezier({colax, py}, {colax - d*w*0.5f, py - h*0.6f}, 1.8f, rosa);
+            int frame = ((int)patas_fase) % 8;
+            int frame_w = tex_rata_caminando.width / 8;
+            int frame_h = tex_rata_caminando.height;
 
-        // Cuerpo ovalado
-        DrawEllipse((int)px, (int)py, w*0.5f, h*0.5f, cuerpo);
-        // Cabeza (hacia la dirección)
-        float hx = px + d * w*0.42f;
-        DrawCircle((int)hx, (int)py, h*0.42f, cuerpo);
-        // Orejas
-        DrawCircle((int)(hx - d*h*0.15f), (int)(py - h*0.4f), h*0.32f, cuerpo);
-        DrawCircle((int)(hx - d*h*0.15f), (int)(py - h*0.4f), h*0.18f, rosa);
-        // Ojo
-        DrawCircle((int)(hx + d*h*0.15f), (int)(py - h*0.05f), 1.6f, BLACK);
-        // Nariz
-        DrawCircle((int)(hx + d*h*0.42f), (int)py, 1.5f, rosa);
-        // Bigotes
-        DrawLineEx({hx + d*h*0.4f, py}, {hx + d*h*0.9f, py - h*0.15f}, 0.8f, oscuro);
-        DrawLineEx({hx + d*h*0.4f, py}, {hx + d*h*0.9f, py + h*0.15f}, 0.8f, oscuro);
+            float w_moviendo = w * 2.0f;
+            float h_moviendo = h * 2.0f;
 
+            Rectangle src = {(float)(frame * frame_w), 0.0f, (float)frame_w * d, (float)frame_h};
+            Rectangle dst = {px, py, w_moviendo, h_moviendo};
+            Vector2 origin = {w_moviendo / 2.0f, h_moviendo / 2.0f};
+            DrawTexturePro(tex_rata_caminando, src, dst, origin, 0.0f, WHITE);
+        
+        } else {
+            Color cuerpo = Color{150, 150, 158, 255};
+            Color oscuro = Color{95, 95, 105, 255};
+            Color rosa   = Color{235, 150, 160, 255};
+
+            // Sombra
+            DrawEllipse((int)px, (int)(py + h*0.5f), w*0.5f, 2.5f, Color{0,0,0,60});
+
+            // Patitas (animación simple)
+            float paso = std::sin((float)patas_fase) * 2.0f;
+            DrawLineEx({px - w*0.2f, py + h*0.35f}, {px - w*0.2f + paso, py + h*0.55f}, 1.5f, oscuro);
+            DrawLineEx({px + w*0.2f, py + h*0.35f}, {px + w*0.2f - paso, py + h*0.55f}, 1.5f, oscuro);
+
+            // Cola (lado opuesto a la mirada), curvada
+            float colax = px - d * w*0.5f;
+            DrawLineBezier({colax, py}, {colax - d*w*0.5f, py - h*0.6f}, 1.8f, rosa);
+
+            // Cuerpo ovalado
+            DrawEllipse((int)px, (int)py, w*0.5f, h*0.5f, cuerpo);
+            // Cabeza (hacia la dirección)
+            float hx = px + d * w*0.42f;
+            DrawCircle((int)hx, (int)py, h*0.42f, cuerpo);
+            // Orejas
+            DrawCircle((int)(hx - d*h*0.15f), (int)(py - h*0.4f), h*0.32f, cuerpo);
+            DrawCircle((int)(hx - d*h*0.15f), (int)(py - h*0.4f), h*0.18f, rosa);
+            // Ojo
+            DrawCircle((int)(hx + d*h*0.15f), (int)(py - h*0.05f), 1.6f, BLACK);
+            // Nariz
+            DrawCircle((int)(hx + d*h*0.42f), (int)py, 1.5f, rosa);
+            // Bigotes
+            DrawLineEx({hx + d*h*0.4f, py}, {hx + d*h*0.9f, py - h*0.15f}, 0.8f, oscuro);
+            DrawLineEx({hx + d*h*0.4f, py}, {hx + d*h*0.9f, py + h*0.15f}, 0.8f, oscuro);
+        }
         if (debug) {
             DrawRectangleLines((int)(px - w/2), (int)(py - h/2), (int)w, (int)h, GREEN);
             DrawCircleLines((int)px, (int)py, (float)rango_vision, Color{0,255,0,50});
