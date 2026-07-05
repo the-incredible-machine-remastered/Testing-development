@@ -146,6 +146,11 @@ double tiempo_nivel = 0.0;
 std::string ruta_nivel_actual = "";
 int campana_nivel_actual = -1;
 
+// Estadísticas del jugador para la pantalla de victoria
+int movimientos_usuario = 0;
+int intentos_usuario = 1;
+int reinicios_usuario = 0;
+
 // Audio del juego
 Music musica_menu;
 bool sonido_mutado = false;
@@ -696,6 +701,12 @@ Texture2D tex_barra_encabezado;    // Asset para los encabezados de categoría
 Font fuente_menu = {0}; 
 Texture2D tex_seguidor_cabezazo;   // Sprite del personaje cabeceando
 
+// Texturas para la pantalla de victoria
+Texture2D tex_vic_logo;
+Texture2D tex_vic_pel;
+Texture2D tex_vic_cub;
+Texture2D tex_vic_bot;
+
 // Texturas adicionales para assets
 Texture2D tex_trampolin;
 Texture2D tex_balancin_base;
@@ -727,12 +738,18 @@ Texture2D tex_robote_pelota;   // Pelota roja de BolaRebotadora
 Texture2D tex_ventilador_cuerpo; // Cuerpo del ventilador
 Texture2D tex_ventilador_aspa;   // Aspa del ventilador
 Texture2D tex_caminadora;        // Sprite caminadora/conveyor
+Texture2D tex_pistola;           // Textura base de la pistola
+Texture2D tex_pistola_gira;      // Textura del círculo giratorio
+Texture2D tex_tv_play;           // Textura de la televisión en play
+Texture2D tex_tv_pause;          // Textura de la televisión en pausa
 
 // Animaciones del SeguidorBooster
 Animacion* anim_seguidor_corriendo = nullptr;
 Texture2D tex_menu_inicio_anim;
 Animacion* anim_menu_inicio = nullptr;
 float pos_x_anim_menu = 0.0f;
+Texture2D tex_robotin_anim;
+Animacion* anim_robotin = nullptr;
 Texture2D tex_menu_fede_anim;
 Animacion* anim_menu_fede = nullptr;
 Texture2D tex_menu_moto_anim;
@@ -1206,6 +1223,7 @@ bool crear_zona_meta(MotorFisica& motor, Vector2D pos) {
 }
 
 bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
+    bool creado = false;
     switch (tipo) {
         case TipoObjetoMenu::BOLA_PLAYA:        return crear_bola_playa(motor, pos);
         case TipoObjetoMenu::BOLA_NORMAL:       return crear_bola_normal(motor, pos);
@@ -1520,30 +1538,97 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
         }
         case TipoObjetoMenu::BOLA_REBOTADORA: {
             float r = 18.0f * escala;
-            DrawCircle(static_cast<int>(cx), static_cast<int>(cy), r, tint(Color{218, 48, 42, 255}));
-            DrawCircleLines(static_cast<int>(cx), static_cast<int>(cy), r, tint(MAROON));
+            if (tex_robote_pelota.id > 0) {
+                if (tex_robote_soporte.id > 0) {
+                    float base_w = r * 1.35f;
+                    float base_top = cy + r * 0.72f;
+                    float scale_support = base_w / tex_robote_soporte.width;
+                    DrawTextureEx(tex_robote_soporte, 
+                                 {cx - base_w / 2.0f, base_top - (25.0f * (r / 48.0f))}, 
+                                 0.0f, scale_support, tint(WHITE));
+                }
+                DrawTexturePro(
+                    tex_robote_pelota,
+                    {0.0f, 0.0f, (float)tex_robote_pelota.width, (float)tex_robote_pelota.height},
+                    {cx - r, cy - r, 2.0f * r, 2.0f * r},
+                    {0, 0},
+                    0.0f,
+                    tint(WHITE)
+                );
+            } else {
+                DrawCircle(static_cast<int>(cx), static_cast<int>(cy), r, tint(Color{218, 48, 42, 255}));
+                DrawCircleLines(static_cast<int>(cx), static_cast<int>(cy), r, tint(MAROON));
+            }
             break;
         }
         case TipoObjetoMenu::SEGUIDOR_BOOSTER: {
-            DrawRectangleRec({cx - 8 * escala, cy - 16 * escala, 16 * escala,28 * escala}, tint(SKYBLUE));
-            DrawCircle(static_cast<int>(cx), static_cast<int>(cy - 14 * escala), 6 * escala, tint(Color{255, 220, 180, 255}));
+            float w = 24.0f * escala;
+            float h = 48.0f * escala;
+            float sprite_w = w * 1.5f;
+            float sprite_h = h * 1.2f;
+            if (tex_seguidor_quieto.id > 0) {
+                DrawTexturePro(
+                    tex_seguidor_quieto,
+                    {0, 0, (float)tex_seguidor_quieto.width, (float)tex_seguidor_quieto.height},
+                    {cx - sprite_w/2, cy - sprite_h/2, sprite_w, sprite_h},
+                    {0, 0},
+                    0.0f,
+                    tint(WHITE)
+                );
+            } else {
+                DrawRectangleRec({cx - 8 * escala, cy - 16 * escala, 16 * escala, 28 * escala}, tint(SKYBLUE));
+                DrawCircle(static_cast<int>(cx), static_cast<int>(cy - 14 * escala), 6 * escala, tint(Color{255, 220, 180, 255}));
+            }
             break;
         }
         case TipoObjetoMenu::BARRIL_CHAVO: {
             float w = 28.0f * escala;
             float h = 36.0f * escala;
-            DrawRectangleRec({cx - w / 2, cy - h / 2 + 6 * escala, w, h},
-                             tint(Color{139, 90, 43, 255}));
-            DrawCircle(static_cast<int>(cx), static_cast<int>(cy - h / 2 + 2 * escala),
-                       8 * escala, tint(Color{255, 220, 180, 255}));
+            if (tex_barril.id > 0) {
+                DrawTexturePro(
+                    tex_barril,
+                    {0, 0, (float)tex_barril.width, (float)tex_barril.height},
+                    {cx - w / 2, cy - h / 2, w, h},
+                    {0, 0},
+                    0.0f,
+                    tint(WHITE)
+                );
+            } else {
+                DrawRectangleRec({cx - w / 2, cy - h / 2 + 6 * escala, w, h},
+                                 tint(Color{139, 90, 43, 255}));
+                DrawCircle(static_cast<int>(cx), static_cast<int>(cy - h / 2 + 2 * escala),
+                           8 * escala, tint(Color{255, 220, 180, 255}));
+            }
             break;
         }
         case TipoObjetoMenu::VENTILADOR: {
             float w = 28.0f * escala;
             float h = 22.0f * escala;
-            DrawRectangleRec({cx - w / 2, cy - h / 2, w, h}, tint(Color{70, 84, 96, 255}));
-            DrawCircleLines(static_cast<int>(cx + w / 2), static_cast<int>(cy), 8 * escala,
-                            tint(Color{190, 210, 220, 255}));
+            if (tex_ventilador_cuerpo.id > 0) {
+                DrawTexturePro(
+                    tex_ventilador_cuerpo,
+                    {0, 0, (float)tex_ventilador_cuerpo.width, (float)tex_ventilador_cuerpo.height},
+                    {cx - w / 2, cy - h / 2, w, h},
+                    {0, 0},
+                    0.0f,
+                    tint(WHITE)
+                );
+                if (tex_ventilador_aspa.id > 0) {
+                    float r_aspas = 16.0f * escala;
+                    DrawTexturePro(
+                        tex_ventilador_aspa,
+                        {0, 0, (float)tex_ventilador_aspa.width, (float)tex_ventilador_aspa.height},
+                        {cx + w / 2, cy, r_aspas, r_aspas},
+                        {r_aspas / 2.0f, r_aspas / 2.0f},
+                        0.0f,
+                        tint(WHITE)
+                    );
+                }
+            } else {
+                DrawRectangleRec({cx - w / 2, cy - h / 2, w, h}, tint(Color{70, 84, 96, 255}));
+                DrawCircleLines(static_cast<int>(cx + w / 2), static_cast<int>(cy), 8 * escala,
+                                tint(Color{190, 210, 220, 255}));
+            }
             break;
         }
         case TipoObjetoMenu::RUEDA_HAMSTER: {
@@ -1587,18 +1672,36 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
             break;
         }
         case TipoObjetoMenu::PISTOLA: {
-            Color pc = tint(Color{60, 65, 70, 255});
-            Color pm = tint(Color{100, 60, 30, 255});
-            Color pml = tint(Color{140, 148, 155, 255});
-            float s = escala;
-            // mango
-            DrawRectangleRec({cx - 4*s, cy, 14*s, 16*s}, pm);
-            // cuerpo
-            DrawRectangleRec({cx - 18*s, cy - 8*s, 36*s, 13*s}, pc);
-            // cañón
-            DrawRectangleRec({cx + 6*s, cy - 5*s, 20*s, 8*s}, pml);
-            // aros rojos (gatillo)
-            DrawCircle((int)(cx - 2*s), (int)(cy + 4*s), 4*s, tint(Color{200, 40, 40, 255}));
+            if (tex_pistola.id > 0) {
+                float w = 56.0f * escala;
+                float h = 36.0f * escala;
+                Rectangle src = {0.0f, 0.0f, (float)tex_pistola.width * -1.0f, (float)tex_pistola.height};
+                Rectangle dst = {cx, cy, w, h};
+                Vector2 origin = {w / 2.0f, h / 2.0f};
+                DrawTexturePro(tex_pistola, src, dst, origin, 0.0f, tint(WHITE));
+                
+                if (tex_pistola_gira.id > 0) {
+                    float circle_w = 20.0f * escala;
+                    float circle_h = 20.0f * escala;
+                    Rectangle c_src = {0.0f, 0.0f, (float)tex_pistola_gira.width, (float)tex_pistola_gira.height};
+                    Rectangle c_dst = {cx - 4.0f * escala, cy, circle_w, circle_h};
+                    Vector2 c_origin = {circle_w / 2.0f, circle_h / 2.0f};
+                    DrawTexturePro(tex_pistola_gira, c_src, c_dst, c_origin, 0.0f, tint(WHITE));
+                }
+            } else {
+                Color pc = tint(Color{60, 65, 70, 255});
+                Color pm = tint(Color{100, 60, 30, 255});
+                Color pml = tint(Color{140, 148, 155, 255});
+                float s = escala;
+                // mango
+                DrawRectangleRec({cx - 4*s, cy, 14*s, 16*s}, pm);
+                // cuerpo
+                DrawRectangleRec({cx - 18*s, cy - 8*s, 36*s, 13*s}, pc);
+                // cañón
+                DrawRectangleRec({cx + 6*s, cy - 5*s, 20*s, 8*s}, pml);
+                // aros rojos (gatillo)
+                DrawCircle((int)(cx - 2*s), (int)(cy + 4*s), 4*s, tint(Color{200, 40, 40, 255}));
+            }
             break;
         }
         case TipoObjetoMenu::FOCO: {
@@ -2968,6 +3071,37 @@ void cargandoTexturas() {
         TraceLog(LOG_INFO, "Textura El Chavo cargada: %dx%d", tex_chavo.width, tex_chavo.height);
     }
     
+    // Cargar texturas de la Pistola
+    tex_pistola = cargar_textura_datos("Assets/arma/arma.png");
+    if (tex_pistola.id == 0) {
+        TraceLog(LOG_WARNING, "Textura de pistola no encontrada: Assets/arma/arma.png (usando renderizado geométrico)");
+    } else {
+        TraceLog(LOG_INFO, "Textura de pistola cargada: %dx%d", tex_pistola.width, tex_pistola.height);
+    }
+
+    tex_pistola_gira = cargar_textura_datos("Assets/arma/gira.png");
+    if (tex_pistola_gira.id == 0) {
+        TraceLog(LOG_WARNING, "Textura del circulo giratorio no encontrada: Assets/arma/gira.png (usando renderizado geométrico)");
+    } else {
+        TraceLog(LOG_INFO, "Textura del circulo giratorio cargada: %dx%d", tex_pistola_gira.width, tex_pistola_gira.height);
+    }
+
+    tex_tv_play = cargar_textura_datos("Assets/escenario/play.png");
+    if (tex_tv_play.id == 0) {
+        TraceLog(LOG_WARNING, "Textura de la television (play) no encontrada: Assets/escenario/play.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura de la television (play) cargada: %dx%d", tex_tv_play.width, tex_tv_play.height);
+    }
+
+    tex_tv_pause = cargar_textura_datos("Assets/escenario/pause.png");
+    if (tex_tv_pause.id == 0) {
+        TraceLog(LOG_WARNING, "Textura de la television (pause) no encontrada: Assets/escenario/pause.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura de la television (pause) cargada: %dx%d", tex_tv_pause.width, tex_tv_pause.height);
+    }
+
+
+    
     // Cargar texturas del SeguidorBooster
     tex_seguidor_quieto = cargar_textura_datos("Assets/messi/messi-normal.png");
     if (tex_seguidor_quieto.id == 0) {
@@ -2996,12 +3130,12 @@ void cargandoTexturas() {
     }
 
     // Inicializar animaciones del Menú de Inicio
-    tex_menu_inicio_anim = cargar_textura_datos("Assets/animation/manuel-n.png");
+    tex_menu_inicio_anim = cargar_textura_datos("Assets/animation/manuel-anim.png");
     if (tex_menu_inicio_anim.id == 0) {
-        TraceLog(LOG_WARNING, "Textura de animacion de menu no encontrada: Assets/animation/manuel-n.png");
+        TraceLog(LOG_WARNING, "Textura de animacion de menu no encontrada: Assets/animation/manuel-anima.png");
     } else {
         TraceLog(LOG_INFO, "Textura de animacion de menu cargada: %dx%d", tex_menu_inicio_anim.width, tex_menu_inicio_anim.height);
-        anim_menu_inicio = new Animacion(tex_menu_inicio_anim, 6, 8, 6);
+        anim_menu_inicio = new Animacion(tex_menu_inicio_anim, 8, 8, 8);
         pos_x_anim_menu = ANCHO * 0.25f;
     }
 
@@ -3047,6 +3181,14 @@ void cargandoTexturas() {
         TraceLog(LOG_INFO, "Textura de animacion drone cargada: %dx%d", tex_menu_drom_anim.width, tex_menu_drom_anim.height);
         anim_menu_drom = new Animacion(tex_menu_drom_anim, 8, 8, 8);
         pos_x_anim_drom = -150.0f;
+    }
+
+    tex_robotin_anim = cargar_textura_datos("Assets/animation/robotin.png");
+    if (tex_robotin_anim.id == 0) {
+        TraceLog(LOG_WARNING, "Textura de animacion robotin no encontrada: Assets/animation/robotin.png");
+    } else {
+        TraceLog(LOG_INFO, "Textura de animacion robotin cargada: %dx%d", tex_robotin_anim.width, tex_robotin_anim.height);
+        anim_robotin = new Animacion(tex_robotin_anim, 8, 5, 8);
     }
 
     // Cargar texturas de los nuevos assets
@@ -3144,6 +3286,12 @@ void cargandoTexturas() {
         TraceLog(LOG_INFO, "Textura barra encabezado cargada: %dx%d", tex_barra_encabezado.width, tex_barra_encabezado.height);
     }
     
+    // Cargar assets para la pantalla de victoria
+    tex_vic_logo = cargar_textura_datos("Assets/Victoria/logo2.png");
+    tex_vic_pel = cargar_textura_datos("Assets/Victoria/pel.png");
+    tex_vic_cub = cargar_textura_datos("Assets/Victoria/cub.png");
+    tex_vic_bot = cargar_textura_datos("Assets/Victoria/bot.png");
+    
     // Cargar fuente personalizada
     fuente_menu = cargar_fuente_datos("fonts/Gamer.ttf", 32);
     if (fuente_menu.baseSize == 0) {
@@ -3208,20 +3356,7 @@ bool dibujar_boton_imagen_interactivo(Rectangle rect, Texture2D tex_normal, Text
 // ============================================================================
 void actualizar_menu_principal() {
     if (anim_menu_inicio) {
-        if (timer_espera_menu > 0.0f) {
-            timer_espera_menu -= GetFrameTime();
-            if (timer_espera_menu <= 0.0f) {
-                pos_x_anim_menu = ANCHO + 150.0f;
-            }
-        } else {
-            anim_menu_inicio->actualizar(GetFrameTime());
-            pos_x_anim_menu -= 70.0f * GetFrameTime();
-            if (pos_x_anim_menu < -150.0f) {
-                // Tiempo de espera aleatorio entre 3.0 y 8.0 segundos
-                timer_espera_menu = (float)GetRandomValue(80, 100) / 10.0f;
-                pos_x_anim_menu = -1000.0f;
-            }
-        }
+        anim_menu_inicio->actualizar(GetFrameTime());
     }
     if (anim_menu_fede) {
         anim_menu_fede->actualizar(GetFrameTime());
@@ -3300,16 +3435,10 @@ void dibujar_menu_principal(MotorFisica& motor) {
 
     // Dibujar personaje animado Manuel
     if (anim_menu_inicio) {
-        Vector2 pos_dibujo = { pos_x_anim_menu, ALTO * 0.65f + 150.0f };
-        anim_menu_inicio->dibujar(pos_dibujo, 110.0f * 1.5f, 200.0f * 1.5f);
+        Vector2 pos_dibujo = { pos_x_anim_menu - 300 , ALTO * 0.65f + 150.0f - 50 };
+        anim_menu_inicio->dibujar(pos_dibujo, 110.0f * 1.5f + 50, 200.0f * 1.5f + 50);
     }
 
-    // Dibujar personaje animado Drone (Drom) - Capa superior
-    if (anim_menu_drom) {
-        Vector2 pos_dibujo = { pos_x_anim_drom, ALTO * 0.15f };
-        anim_menu_drom->dibujar(pos_dibujo, 110.0f * 1.5f, 200.0f * 1.5f);
-    }
-    
     // Título y Subtítulo
     if (tex_menu_titulo.id > 0) {
         float logo_w = 600.0f ; // scaled size
@@ -3324,6 +3453,11 @@ void dibujar_menu_principal(MotorFisica& motor) {
         
         Vector2 size_sub = MeasureTextEx(fuente_menu, subtitulo, 24, 1);
         DrawTextEx(fuente_menu, subtitulo, {(ANCHO - size_sub.x)/2.0f, ALTO * 0.2f + 70.0f}, 24, 1, SKYBLUE);
+    }
+    // Dibujar personaje animado Drone (Drom) - Capa superior por delante del título
+    if (anim_menu_drom) {
+        Vector2 pos_dibujo = { pos_x_anim_drom, ALTO * 0.15f };
+        anim_menu_drom->dibujar(pos_dibujo, 110.0f * 1.5f, 200.0f * 1.5f);
     }
     
     // Botones
@@ -3529,6 +3663,9 @@ void actualizar_seleccion_niveles(MotorFisica& motor) {
     if (IsKeyPressed(KEY_ESCAPE)) {
         estado_actual = EstadoJuego::MENU_PRINCIPAL;
     }
+    if (anim_robotin) {
+        anim_robotin->actualizar(GetFrameTime());
+    }
 }
 
 // Inicializa un nivel de campaña oficial en memoria
@@ -3536,6 +3673,9 @@ void cargar_nivel_campana(MotorFisica& motor, int lvl_idx) {
     tiempo_nivel = 0.0;
     nivel_campana_actual = lvl_idx;
     nivel_usuario_actual_path = "";
+    movimientos_usuario = 0;
+    intentos_usuario = 1;
+    reinicios_usuario = 0;
 
     motor.limpiar();
     resetear_punteros_borde();
@@ -3750,6 +3890,10 @@ void dibujar_seleccion_niveles(MotorFisica& motor) {
                 tiempo_nivel = 0.0;
                 campana_nivel_actual = -1;
                 ruta_nivel_actual = partidas_guardadas[i].ruta_archivo;
+                
+                movimientos_usuario = 0;
+                intentos_usuario = 1;
+                reinicios_usuario = 0;
 
                 int ancho_cargado = ANCHO;
                 int alto_cargado = ALTO;
@@ -3800,6 +3944,14 @@ void dibujar_seleccion_niveles(MotorFisica& motor) {
         Vector2 ts_sub = MeasureTextEx(fuente_menu, text_sub, 16.0f, 1.0f);
         DrawTextEx(fuente_menu, text_sub, { cx - ts_sub.x/2.0f, cy + 85.0f }, 16.0f, 1.0f, GRAY);
     }
+
+    // Dibujar personaje animado Robotin en la esquina inferior derecha
+    if (anim_robotin) {
+        float dib_alto = 200.0f;
+        float dib_ancho = dib_alto * (268.0f / 351.0f);
+        Vector2 pos_dibujo = { ANCHO - dib_ancho / 2.0f -200, ALTO - dib_alto / 2.0f - 100};
+        anim_robotin->dibujar(pos_dibujo, dib_ancho + 100, dib_alto + 100);
+    }
 }
 
 struct BotonesHUD {
@@ -3827,6 +3979,31 @@ BotonesHUD calcular_rectangulos_botones_hud() {
     return btns;
 }
 
+
+void reintentar_nivel_actual(MotorFisica& motor) {
+    tiempo_nivel = 0.0;
+    gestor_eventos.victoria_alcanzada = false;
+    gestor_eventos.timer_victoria = 0.0f;
+    movimientos_usuario = 0;
+    intentos_usuario = 1;
+    reinicios_usuario = 0;
+    if (nivel_campana_actual != -1) {
+        cargar_nivel_campana(motor, nivel_campana_actual);
+    } else if (!nivel_usuario_actual_path.empty()) {
+        int ancho_cargado = ANCHO;
+        int alto_cargado = ALTO;
+        cargar_partida(motor, gestor_eventos, nivel_usuario_actual_path, ancho_cargado, alto_cargado, contador_bolas);
+        ANCHO = ancho_cargado;
+        ALTO = alto_cargado;
+    } else {
+        motor.limpiar();
+        contador_bolas = 0;
+        resetear_punteros_borde();
+        limpiar_estado_tras_cargar_partida();
+        crear_escena(motor);
+        gestor_eventos.limpiar();
+    }
+}
 
 // ============================================================================
 // Núcleo del Juego (Común para Sandbox y Niveles)
@@ -3859,6 +4036,50 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     if (modo_panel_guardado != ModoPanelGuardado::CERRADO) {
         if (estado_actual != EstadoJuego::JUEGO_NIVEL) {
             manejar_teclas_panel_guardado(motor, gestor_eventos, ANCHO, ALTO, contador_bolas);
+        }
+        return;
+    }
+
+    if (gestor_eventos.victoria_alcanzada) {
+        float box_w = 540.0f;
+        float box_h = 580.0f;
+        float box_x = (ANCHO - box_w) / 2.0f;
+        float box_y = (ALTO - box_h) / 2.0f;
+        
+        float btn_gap = 10.0f;
+        float btn_w = (box_w - 40.0f - 2.0f * btn_gap) / 3.0f;
+        
+        Rectangle btn_reintentar = {box_x + 20, box_y + 515, btn_w, 40};
+        Rectangle btn_siguiente = {box_x + 20 + btn_w + btn_gap, box_y + 515, btn_w, 40};
+        Rectangle btn_salir = {box_x + 20 + 2.0f * (btn_w + btn_gap), box_y + 515, btn_w, 40};
+        
+        Vector2 mouse_pos = GetMousePosition();
+        
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            if (CheckCollisionPointRec(mouse_pos, btn_reintentar)) {
+                reintentar_nivel_actual(motor);
+            }
+            else if (CheckCollisionPointRec(mouse_pos, btn_siguiente)) {
+                if (nivel_campana_actual != -1 && nivel_campana_actual < 3) {
+                    cargar_nivel_campana(motor, nivel_campana_actual + 1);
+                    gestor_eventos.victoria_alcanzada = false;
+                    gestor_eventos.timer_victoria = 0.0f;
+                }
+            }
+            else if (CheckCollisionPointRec(mouse_pos, btn_salir)) {
+                estado_actual = es_modo_nivel ? EstadoJuego::SELECCION_NIVELES : EstadoJuego::MENU_PRINCIPAL;
+                gestor_eventos.victoria_alcanzada = false;
+                gestor_eventos.timer_victoria = 0.0f;
+            }
+        }
+        
+        if (IsKeyPressed(KEY_R)) {
+            reintentar_nivel_actual(motor);
+        }
+        if (IsKeyPressed(KEY_ESCAPE)) {
+            estado_actual = es_modo_nivel ? EstadoJuego::SELECCION_NIVELES : EstadoJuego::MENU_PRINCIPAL;
+            gestor_eventos.victoria_alcanzada = false;
+            gestor_eventos.timer_victoria = 0.0f;
         }
         return;
     }
@@ -3900,6 +4121,7 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                     motor.aplicar_transmision_bandas(); // apagar ventiladores controlados antes del primer frame
                     motor.set_pausado(false);
                     cancelar_colocacion_cuerda();
+                    intentos_usuario++;
                 } else {
                     spawn_error_timer = 0.5f;
                     spawn_error_pos = Vector2D(mx, my);
@@ -3910,6 +4132,7 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                 restaurar_snapshot_simulacion(motor, gestor_eventos);
                 motor.aplicar_transmision_bandas();
                 motor.set_pausado(true);
+                reinicios_usuario++;
                 return;
             }
             if (CheckCollisionPointRec(mouse_pos, btns.rect_opciones)) {
@@ -4185,6 +4408,7 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             }
         }
         if (entidad_arrastrada != nullptr) {
+            movimientos_usuario++;
             if (estado_actual == EstadoJuego::JUEGO_CREATIVO && !es_borde_nivel(entidad_arrastrada)) {
                 int panel_x = 12;
                 int panel_y = ALTO - 390;
@@ -4213,10 +4437,12 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             motor.aplicar_transmision_bandas();
             motor.set_pausado(false);
             cancelar_colocacion_cuerda();
+            intentos_usuario++;
         } else {
             restaurar_snapshot_simulacion(motor, gestor_eventos);
             motor.aplicar_transmision_bandas();
             motor.set_pausado(true);
+            reinicios_usuario++;
         }
     }
 
@@ -4274,6 +4500,7 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                 } else {
                     motor.remover_entidad(id_eliminar);
                 }
+                movimientos_usuario++;
                 if (entidad_arrastrada == entidad_seleccionada) entidad_arrastrada = nullptr;
                 entidad_seleccionada = nullptr;
             }
@@ -4288,30 +4515,44 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             spawn_error_timer = 0.5f;
             spawn_error_pos = entidad_seleccionada->get_posicion();
         } else {
+            bool modificado = false;
             auto* vent = dynamic_cast<Ventilador*>(entidad_seleccionada);
             if (vent) {
                 vent->invertir_direccion();
+                modificado = true;
             } else {
                 auto* ramp = dynamic_cast<PlanoInclinado*>(entidad_seleccionada);
                 if (ramp) {
                     ramp->invertir();
+                    modificado = true;
                 } else {
                     auto* hamster = dynamic_cast<RuedaHamster*>(entidad_seleccionada);
                     if (hamster) {
                         hamster->invertir_sentido();
+                        modificado = true;
                     } else {
                         auto* bal = dynamic_cast<Balancin*>(entidad_seleccionada);
-                        if (bal) bal->ciclar_inclinacion();
-                        else {
+                        if (bal) {
+                            bal->ciclar_inclinacion();
+                            modificado = true;
+                        } else {
                             auto* pist = dynamic_cast<Pistola*>(entidad_seleccionada);
-                            if (pist) pist->invertir();
-                            else {
+                            if (pist) {
+                                pist->invertir();
+                                modificado = true;
+                            } else {
                                 auto* can = dynamic_cast<Canon*>(entidad_seleccionada);
-                                if (can) can->invertir();
+                                if (can) {
+                                    can->invertir();
+                                    modificado = true;
+                                }
                             }
                         }
                     }
                 }
+            }
+            if (modificado) {
+                movimientos_usuario++;
             }
         }
     }
@@ -4327,6 +4568,7 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             auto* ramp = dynamic_cast<PlanoInclinado*>(entidad_seleccionada);
             if (ramp) {
                 ramp->alternar_tamano();
+                movimientos_usuario++;
             }
         }
     }
@@ -4444,6 +4686,27 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
         float escala_y = static_cast<float>(ALTO) / tex_fondo.height;
         float escala = (escala_x > escala_y) ? escala_x : escala_y;
         DrawTextureEx(tex_fondo, {0, 0}, 0, escala, WHITE);
+    }
+
+    // Televisión de fondo indicadora de pausa/play
+    Texture2D tex_tv_actual = motor.get_pausado() ? tex_tv_pause : tex_tv_play;
+    if (tex_tv_actual.id > 0) {
+        float tv_w = 300.0f;
+        float scale = tv_w / tex_tv_actual.width;
+        float tv_h = tex_tv_actual.height * scale;
+
+        // Centrado en la zona jugable (1920 - 300 sidebar = 1620 -> centro es 810)
+        float tv_x = 810.0f - (tv_w / 2.0f) + 100;
+        float tv_y = 45.0f;
+
+        DrawTexturePro(
+            tex_tv_actual,
+            {0.0f, 0.0f, (float)tex_tv_actual.width, (float)tex_tv_actual.height},
+            {tv_x, tv_y, tv_w, tv_h},
+            {0.0f, 0.0f},
+            0.0f,
+            WHITE
+        );
     }
 
     dibujar_cuerdas(motor);
@@ -4663,19 +4926,217 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
 
     if (gestor_eventos.victoria_alcanzada) {
         DrawRectangle(0, 0, ANCHO, ALTO, ColorAlpha(BLACK, 0.7f));
-        DrawText("VICTORIA!", ANCHO/2 - 100, ALTO/2 - 60, 40, GREEN);
         
-        if (es_modo_nivel) {
-            int min = (int)(tiempo_nivel / 60);
-            int seg = (int)(tiempo_nivel) % 60;
-            int ms = (int)(tiempo_nivel * 100) % 100;
-            const char* final_time_txt = TextFormat("Tiempo de completado: %02d:%02d.%02d", min, seg, ms);
-            int tw = MeasureText(final_time_txt, 24);
-            DrawText(final_time_txt, ANCHO/2 - tw/2, ALTO/2, 24, GOLD);
-            DrawText("Presiona R para reiniciar el nivel o ESC para salir", ANCHO/2 - 240, ALTO/2 + 50, 20, WHITE);
-        } else {
-            DrawText("Presiona R para reiniciar el nivel", ANCHO/2 - 160, ALTO/2 + 20, 20, WHITE);
+        // Lambda local para dibujar texturas centradas manteniendo relación de aspecto
+        auto dibujar_textura_centrada = [](Texture2D tex, Rectangle dest, Color tint) {
+            if (tex.id == 0) return;
+            float scale = std::min(dest.width / (float)tex.width, dest.height / (float)tex.height);
+            float w = (float)tex.width * scale;
+            float h = (float)tex.height * scale;
+            float x = dest.x + (dest.width - w) / 2.0f;
+            float y = dest.y + (dest.height - h) / 2.0f;
+            DrawTexturePro(
+                tex,
+                { 0.0f, 0.0f, (float)tex.width, (float)tex.height },
+                { x, y, w, h },
+                { 0.0f, 0.0f },
+                0.0f,
+                tint
+            );
+        };
+        
+        float box_w = 540.0f;
+        float box_h = 580.0f;
+        float box_x = (ANCHO - box_w) / 2.0f;
+        float box_y = (ALTO - box_h) / 2.0f;
+        Rectangle box = {box_x, box_y, box_w, box_h};
+        
+        // Dibujar panel central metálico
+        DrawRectangleRounded(box, 0.02f, 8, Color{230, 230, 232, 255});
+        DrawRectangleRoundedLinesEx(box, 0.02f, 8, 3.0f, Color{100, 100, 105, 255});
+        
+        // Remaches metálicos en las esquinas
+        DrawCircle(box_x + 12, box_y + 12, 4, Color{120, 120, 125, 255});
+        DrawCircle(box_x + 12, box_y + 12, 2, Color{80, 80, 85, 255});
+        DrawCircle(box_x + box_w - 12, box_y + 12, 4, Color{120, 120, 125, 255});
+        DrawCircle(box_x + box_w - 12, box_y + 12, 2, Color{80, 80, 85, 255});
+        DrawCircle(box_x + 12, box_y + box_h - 12, 4, Color{120, 120, 125, 255});
+        DrawCircle(box_x + 12, box_y + box_h - 12, 2, Color{80, 80, 85, 255});
+        DrawCircle(box_x + box_w - 12, box_y + box_h - 12, 4, Color{120, 120, 125, 255});
+        DrawCircle(box_x + box_w - 12, box_y + box_h - 12, 2, Color{80, 80, 85, 255});
+        
+        // Logo Aperture (Textura)
+        float logo_x = box_x + box_w / 2.0f;
+        float logo_y = box_y + 45.0f;
+        if (tex_vic_logo.id > 0) {
+            Rectangle logo_dest = { logo_x - 30.0f, logo_y - 25.0f, 60.0f, 60.0f };
+            dibujar_textura_centrada(tex_vic_logo, logo_dest, WHITE);
         }
+        //
+        // Título de Victoria
+        const char* vic_title = "VICTORIA";
+        Vector2 ts_vic = MeasureTextEx(fuente_menu, vic_title, 40, 2);
+        DrawTextEx(fuente_menu, vic_title, {box_x + (box_w - ts_vic.x)/2.0f, box_y + 80.0f}, 40, 2, Color{76, 175, 80, 255});
+        
+        // Línea divisora
+        DrawLine(box_x + 40, box_y + 135, box_x + box_w - 40, box_y + 135, Color{180, 180, 185, 255});
+        DrawRectangle(box_x + box_w/2.0f - 6, box_y + 135 - 6, 12, 12, Color{0, 150, 220, 255});
+        
+        // Tiempo de completado
+        const char* t_label = "TIEMPO DE COMPLETADO:";
+        Vector2 ts_lbl = MeasureTextEx(fuente_menu, t_label, 16, 1);
+        DrawTextEx(fuente_menu, t_label, {box_x + (box_w - ts_lbl.x)/2.0f, box_y + 155.0f}, 16, 1, Color{100, 100, 105, 255});
+        
+        int min = (int)(tiempo_nivel / 60);
+        int seg = (int)(tiempo_nivel) % 60;
+        int ms = (int)(tiempo_nivel * 100) % 100;
+        const char* final_time_txt = TextFormat("%02d:%02d.%02d", min, seg, ms);
+        Vector2 ts_val = MeasureTextEx(fuente_menu, final_time_txt, 34, 1.5f);
+        DrawTextEx(fuente_menu, final_time_txt, {box_x + (box_w - ts_val.x)/2.0f, box_y + 175.0f}, 34, 1.5f, Color{230, 130, 40, 255});
+        
+        // 3 Tarjetas de Estadísticas (Movimientos, Objetos, Intentos)
+        float card_gap = 12.0f;
+        float card_w = (box_w - 40.0f - 2.0f * card_gap) / 3.0f;
+        float card_h = 65.0f;
+        float cards_y = box_y + 220.0f;
+        
+        auto dibujar_tarjeta_stat = [&](Rectangle r, const char* label, int val, int type) {
+            DrawRectangleRounded(r, 0.05f, 4, Color{220, 220, 223, 255});
+            DrawRectangleRoundedLinesEx(r, 0.05f, 4, 1.5f, Color{180, 180, 185, 255});
+            
+            // Iconos cargados
+            Rectangle icon_dest = { r.x + 8.0f, r.y + 12.0f, 30.0f, 40.0f };
+            if (type == 1 && tex_vic_pel.id > 0) {
+                dibujar_textura_centrada(tex_vic_pel, icon_dest, WHITE);
+            } else if (type == 2 && tex_vic_cub.id > 0) {
+                dibujar_textura_centrada(tex_vic_cub, icon_dest, WHITE);
+            } else if (type == 3 && tex_vic_bot.id > 0) {
+                dibujar_textura_centrada(tex_vic_bot, icon_dest, WHITE);
+            }
+            
+            // Textos
+            float tx = r.x + 44.0f;
+            DrawTextEx(fuente_menu, label, {tx, r.y + 12}, 12, 1, Color{80, 80, 85, 255});
+            DrawTextEx(fuente_menu, TextFormat("%d", val), {tx, r.y + 28}, 22, 1, Color{40, 40, 45, 255});
+        };
+        
+        dibujar_tarjeta_stat({box_x + 20, cards_y, card_w, card_h}, "MOVIMIENTOS", movimientos_usuario, 1);
+        
+        int obj_usados = 0;
+        for (auto* e : motor.get_entidades()) {
+            if (e && !e->get_es_fijo()) obj_usados++;
+        }
+        dibujar_tarjeta_stat({box_x + 20 + card_w + card_gap, cards_y, card_w, card_h}, "OBJETOS", obj_usados, 2);
+        dibujar_tarjeta_stat({box_x + 20 + 2.0f * (card_w + card_gap), cards_y, card_w, card_h}, "INTENTOS", intentos_usuario, 3);
+        
+        // Sección Evaluación
+        const char* ev_title = "EVALUACION";
+        Vector2 ts_ev = MeasureTextEx(fuente_menu, ev_title, 16, 1);
+        DrawTextEx(fuente_menu, ev_title, {box_x + (box_w - ts_ev.x)/2.0f, box_y + 305.0f}, 16, 1, Color{100, 100, 105, 255});
+        
+        Rectangle eval_box = {box_x + 20, box_y + 330, box_w - 40, 110};
+        DrawRectangleRounded(eval_box, 0.02f, 4, Color{242, 242, 244, 255});
+        DrawRectangleRoundedLinesEx(eval_box, 0.02f, 4, 1.5f, Color{200, 200, 205, 255});
+        
+        auto dibujar_checkbox = [](float x, float y, bool checked) {
+            Rectangle r = {x, y, 18, 18};
+            if (checked) {
+                DrawRectangleRounded(r, 0.2f, 4, Color{55, 130, 220, 255});
+                DrawRectangleRoundedLinesEx(r, 0.2f, 4, 1.5f, Color{40, 100, 180, 255});
+                DrawLineEx({x + 4, y + 9}, {x + 8, y + 13}, 2.0f, WHITE);
+                DrawLineEx({x + 8, y + 13}, {x + 14, y + 5}, 2.0f, WHITE);
+            } else {
+                DrawRectangleRounded(r, 0.2f, 4, Color{220, 220, 225, 255});
+                DrawRectangleRoundedLinesEx(r, 0.2f, 4, 1.5f, Color{160, 160, 165, 255});
+            }
+        };
+        
+        // Item 1: Prueba Completada
+        dibujar_checkbox(eval_box.x + 15, eval_box.y + 12, true);
+        DrawTextEx(fuente_menu, "PRUEBA COMPLETADA", {eval_box.x + 45, eval_box.y + 12}, 16, 1, Color{60, 60, 65, 255});
+        DrawTextEx(fuente_menu, "+1000", {eval_box.x + eval_box.width - 70, eval_box.y + 12}, 16, 1, Color{120, 120, 125, 255});
+        
+        // Item 2: Tiempo Óptimo
+        float tiempo_objetivo = 60.0f;
+        if (nivel_campana_actual == 0) tiempo_objetivo = 15.0f;
+        else if (nivel_campana_actual == 1) tiempo_objetivo = 25.0f;
+        else if (nivel_campana_actual == 2) tiempo_objetivo = 35.0f;
+        else if (nivel_campana_actual == 3) tiempo_objetivo = 45.0f;
+        
+        bool tiempo_optimo = (tiempo_nivel <= tiempo_objetivo);
+        dibujar_checkbox(eval_box.x + 15, eval_box.y + 44, tiempo_optimo);
+        DrawTextEx(fuente_menu, "TIEMPO ÓPTIMO", {eval_box.x + 45, eval_box.y + 44}, 16, 1, Color{60, 60, 65, 255});
+        DrawTextEx(fuente_menu, "+500", {eval_box.x + eval_box.width - 70, eval_box.y + 44}, 16, 1, Color{120, 120, 125, 255});
+        
+        // Item 3: Sin Reinicios
+        bool sin_reinicios = (reinicios_usuario == 0);
+        dibujar_checkbox(eval_box.x + 15, eval_box.y + 76, sin_reinicios);
+        DrawTextEx(fuente_menu, "SIN REINICIOS", {eval_box.x + 45, eval_box.y + 76}, 16, 1, Color{60, 60, 65, 255});
+        DrawTextEx(fuente_menu, "+500", {eval_box.x + eval_box.width - 70, eval_box.y + 76}, 16, 1, Color{120, 120, 125, 255});
+        
+        // Puntuación Total Box
+        Rectangle puntos_box = {box_x + 20, box_y + 455, box_w - 40, 42};
+        DrawRectangleRounded(puntos_box, 0.05f, 4, Color{225, 225, 228, 255});
+        DrawRectangleRoundedLinesEx(puntos_box, 0.05f, 4, 1.5f, Color{180, 180, 185, 255});
+        
+        DrawTextEx(fuente_menu, "PUNTUACION TOTAL", {puntos_box.x + 15, puntos_box.y + 13}, 17, 1, Color{80, 80, 85, 255});
+        int total_score = 1000 + (tiempo_optimo ? 500 : 0) + (sin_reinicios ? 500 : 0);
+        DrawTextEx(fuente_menu, TextFormat("%d", total_score), {puntos_box.x + puntos_box.width - 70, puntos_box.y + 8}, 24, 1, Color{55, 130, 220, 255});
+        
+        // Botones Inferiores
+        float btn_gap = 10.0f;
+        float btn_w = (box_w - 40.0f - 2.0f * btn_gap) / 3.0f;
+        
+        Rectangle btn_reintentar = {box_x + 20, box_y + 515, btn_w, 40};
+        Rectangle btn_siguiente = {box_x + 20 + btn_w + btn_gap, box_y + 515, btn_w, 40};
+        Rectangle btn_salir = {box_x + 20 + 2.0f * (btn_w + btn_gap), box_y + 515, btn_w, 40};
+        
+        Vector2 mouse_pos = GetMousePosition();
+        bool hover_reintentar = CheckCollisionPointRec(mouse_pos, btn_reintentar);
+        bool hover_siguiente = CheckCollisionPointRec(mouse_pos, btn_siguiente) && (nivel_campana_actual != -1 && nivel_campana_actual < 3);
+        bool hover_salir = CheckCollisionPointRec(mouse_pos, btn_salir);
+        
+        auto dibujar_boton = [&](Rectangle btn, const char* text, Color bg, Color border, Color text_color, bool is_hovered, int icon_type) {
+            float y_shift = is_hovered ? -1.0f : 0.0f;
+            Rectangle r_draw = { btn.x, btn.y + y_shift, btn.width, btn.height };
+            DrawRectangleRounded(r_draw, 0.15f, 4, bg);
+            DrawRectangleRoundedLinesEx(r_draw, 0.15f, 4, 1.5f, border);
+            
+            float ex = btn.x + 18;
+            float ey = btn.y + 20 + y_shift;
+            if (icon_type == 1) { // Refresh
+                DrawCircleLines(ex, ey, 5, text_color);
+                DrawTriangle({ex + 2, ey - 6}, {ex + 6, ey - 2}, {ex + 7, ey - 8}, text_color);
+            } else if (icon_type == 2) { // Fast forward
+                DrawTriangle({ex - 4, ey - 5}, {ex - 4, ey + 5}, {ex + 1, ey}, text_color);
+                DrawTriangle({ex + 1, ey - 5}, {ex + 1, ey + 5}, {ex + 6, ey}, text_color);
+            } else if (icon_type == 3) { // Exit
+                DrawRectangleLines(ex - 6, ey - 6, 12, 12, text_color);
+                DrawLine(ex - 2, ey, ex + 4, ey, text_color);
+                DrawTriangle({ex + 1, ey - 3}, {ex + 1, ey + 3}, {ex + 4, ey}, text_color);
+            }
+            
+            Vector2 ts_btn = MeasureTextEx(fuente_menu, text, 14, 1);
+            DrawTextEx(fuente_menu, text, {btn.x + 28 + (btn.width - 28 - ts_btn.x)/2.0f, btn.y + (btn.height - ts_btn.y)/2.0f + y_shift}, 14, 1, text_color);
+        };
+        
+        dibujar_boton(btn_reintentar, "REINTENTAR", 
+                      hover_reintentar ? Color{215, 215, 220, 255} : Color{195, 195, 200, 255},
+                      Color{140, 140, 145, 255}, Color{60, 60, 65, 255}, hover_reintentar, 1);
+                      
+        if (nivel_campana_actual == -1 || nivel_campana_actual >= 3) {
+            // Desactivado
+            dibujar_boton(btn_siguiente, "SIG. NIVEL", Color{180, 180, 185, 255},
+                          Color{140, 140, 145, 255}, Color{120, 120, 125, 255}, false, 2);
+        } else {
+            dibujar_boton(btn_siguiente, "SIG. NIVEL", 
+                          hover_siguiente ? Color{75, 150, 240, 255} : Color{55, 130, 220, 255},
+                          Color{40, 100, 180, 255}, WHITE, hover_siguiente, 2);
+        }
+        
+        dibujar_boton(btn_salir, "SALIR AL MENÚ", 
+                      hover_salir ? Color{215, 215, 220, 255} : Color{195, 195, 200, 255},
+                      Color{140, 140, 145, 255}, Color{60, 60, 65, 255}, hover_salir, 3);
     }
 
     if (titulo_alpha > 0.01f) {
@@ -4768,28 +5229,57 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
 
     // Dibujar Overlay de Ayuda
     if (mostrar_ayuda_overlay) {
-        DrawRectangle(0, 0, ANCHO, ALTO, ColorAlpha(BLACK, 0.75f));
+        DrawRectangle(0, 0, ANCHO, ALTO, ColorAlpha(BLACK, 0.6f));
         
         float w = 600.0f;
         float h = 400.0f;
         Rectangle box = {(ANCHO - w)/2.0f, (ALTO - h)/2.0f, w, h};
-        DrawRectangleRounded(box, 0.05f, 6, Color{40, 42, 68, 255});
-        DrawRectangleRoundedLinesEx(box, 0.05f, 6, 2.0f, SKYBLUE);
         
+        // Dibujar panel principal off-white metálico
+        DrawRectangleRounded(box, 0.03f, 4, Color{240, 240, 243, 255});
+        DrawRectangleRoundedLinesEx(box, 0.03f, 4, 2.0f, Color{150, 150, 155, 255});
+        
+        Rectangle inner_box = { box.x + 4.0f, box.y + 4.0f, box.width - 8.0f, box.height - 8.0f };
+        DrawRectangleRoundedLinesEx(inner_box, 0.03f, 4, 1.0f, Color{180, 180, 185, 255});
+        
+        // Dibujar los tornillos en las 4 esquinas
+        auto dibujar_tornillo = [](float cx, float cy) {
+            DrawCircle(cx, cy, 6.0f, Color{130, 130, 135, 255});
+            DrawCircle(cx, cy, 4.0f, Color{195, 195, 200, 255});
+            DrawLine(cx - 3, cy - 1, cx + 3, cy + 1, Color{90, 90, 95, 255});
+        };
+        dibujar_tornillo(box.x + 12.0f, box.y + 12.0f);
+        dibujar_tornillo(box.x + box.width - 12.0f, box.y + 12.0f);
+        dibujar_tornillo(box.x + 12.0f, box.y + box.height - 12.0f);
+        dibujar_tornillo(box.x + box.width - 12.0f, box.y + box.height - 12.0f);
+        
+        // Botón de cerrar "X" tipo Aperture rojo
         Rectangle close_btn = {box.x + box.width - 40, box.y + 10, 30, 30};
         bool hover_close = CheckCollisionPointRec(mouse, close_btn);
-        DrawRectangleRec(close_btn, hover_close ? RED : ColorAlpha(RED, 0.7f));
+        Color close_bg = hover_close ? Color{220, 70, 60, 255} : Color{195, 55, 45, 255};
+        Color close_border = Color{130, 30, 25, 255};
+        
+        DrawRectangleRounded(close_btn, 0.2f, 4, close_bg);
+        DrawRectangleRoundedLinesEx(close_btn, 0.2f, 4, 1.5f, close_border);
+        DrawLine(close_btn.x + 2, close_btn.y + 1, close_btn.x + close_btn.width - 2, close_btn.y + 1, Color{255, 255, 255, 60});
+        DrawLine(close_btn.x + 2, close_btn.y + close_btn.height - 1, close_btn.x + close_btn.width - 2, close_btn.y + close_btn.height - 1, Color{0, 0, 0, 60});
         DrawText("X", close_btn.x + 10, close_btn.y + 6, 16, WHITE);
         
+        // Título "GUIA DE AYUDA RAPIDA"
         Vector2 t_size = MeasureTextEx(fuente_menu, "GUIA DE AYUDA RAPIDA", 28, 2);
-        DrawTextEx(fuente_menu, "GUIA DE AYUDA RAPIDA", {box.x + (box.width - t_size.x)/2.0f, box.y + 30.0f}, 28, 2, GOLD);
+        DrawTextEx(fuente_menu, "GUIA DE AYUDA RAPIDA", {box.x + (box.width - t_size.x)/2.0f, box.y + 22.0f}, 28, 2, Color{245, 140, 10, 255});
+        
+        // Línea divisoria con nodo azul
+        float line_y = box.y + 65.0f;
+        DrawLine(box.x + 40, line_y, box.x + box.width - 40, line_y, Color{200, 200, 205, 255});
+        DrawRectangle(box.x + box.width / 2.0f - 5, line_y - 5, 10, 10, Color{0, 120, 190, 255});
         
         float start_y = box.y + 90.0f;
         float dy = 32.0f;
         
-        auto draw_help_line = [](const char* key, const char* desc, float y, float x_offset) {
-            DrawTextEx(fuente_menu, key, {x_offset, y}, 18, 1, GOLD);
-            DrawTextEx(fuente_menu, desc, {x_offset + 120.0f, y}, 18, 1, LIGHTGRAY);
+        auto draw_help_line = [&](const char* key, const char* desc, float y, float x_offset) {
+            DrawTextEx(fuente_menu, key, {x_offset, y}, 18, 1, Color{210, 110, 5, 255});
+            DrawTextEx(fuente_menu, desc, {x_offset + 145.0f, y}, 18, 1, Color{60, 62, 65, 255});
         };
         
         draw_help_line("Objetivo:", "Coloca objetos para que la pelota llegue a la zona meta.", start_y, box.x + 30.0f);
@@ -4801,40 +5291,138 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
         draw_help_line("Menu Lateral:", "Presiona TAB para ocultar/mostrar el catalogo de objetos.", start_y + dy * 6, box.x + 30.0f);
         draw_help_line("Reiniciar (R):", "Presiona R para limpiar el nivel y reiniciar.", start_y + dy * 7, box.x + 30.0f);
         
-        DrawTextEx(fuente_menu, "Haz click en 'X' o fuera de este panel para cerrar.", {box.x + 30.0f, box.y + h - 40.0f}, 14, 1, GRAY);
+        DrawTextEx(fuente_menu, "Haz click en 'X' o fuera de este panel para cerrar.", {box.x + 30.0f, box.y + h - 35.0f}, 14, 1, Color{120, 122, 125, 255});
     }
 
     // Dibujar Overlay de Pausa
     if (mostrar_pausa_overlay) {
-        DrawRectangle(0, 0, ANCHO, ALTO, ColorAlpha(BLACK, 0.75f));
+        DrawRectangle(0, 0, ANCHO, ALTO, ColorAlpha(BLACK, 0.6f));
         
-        float w = 340.0f;
-        float h = 260.0f;
+        float w = 400.0f;
+        float h = 330.0f;
         Rectangle box = {(ANCHO - w)/2.0f, (ALTO - h)/2.0f, w, h};
-        DrawRectangleRounded(box, 0.08f, 6, Color{40, 42, 68, 255});
-        DrawRectangleRoundedLinesEx(box, 0.08f, 6, 2.0f, SKYBLUE);
         
-        Vector2 t_size = MeasureTextEx(fuente_menu, "PAUSA", 28, 2);
-        DrawTextEx(fuente_menu, "PAUSA", {box.x + (box.width - t_size.x)/2.0f, box.y + 20.0f}, 28, 2, GOLD);
+        // Dibujar panel principal off-white metálico
+        DrawRectangleRounded(box, 0.05f, 4, Color{240, 240, 243, 255});
+        DrawRectangleRoundedLinesEx(box, 0.05f, 4, 2.0f, Color{150, 150, 155, 255});
         
-        float btn_w = 260.0f;
-        float btn_h = 42.0f;
-        float start_y = box.y + 70.0f;
-        float spacing_y = 55.0f;
+        Rectangle inner_box = { box.x + 4.0f, box.y + 4.0f, box.width - 8.0f, box.height - 8.0f };
+        DrawRectangleRoundedLinesEx(inner_box, 0.05f, 4, 1.0f, Color{180, 180, 185, 255});
+        
+        // Dibujar los tornillos en las 4 esquinas
+        auto dibujar_tornillo = [](float cx, float cy) {
+            DrawCircle(cx, cy, 6.0f, Color{130, 130, 135, 255});
+            DrawCircle(cx, cy, 4.0f, Color{195, 195, 200, 255});
+            DrawLine(cx - 3, cy - 1, cx + 3, cy + 1, Color{90, 90, 95, 255});
+        };
+        dibujar_tornillo(box.x + 12.0f, box.y + 12.0f);
+        dibujar_tornillo(box.x + box.width - 12.0f, box.y + 12.0f);
+        dibujar_tornillo(box.x + 12.0f, box.y + box.height - 12.0f);
+        dibujar_tornillo(box.x + box.width - 12.0f, box.y + box.height - 12.0f);
+        
+        // Título "PAUSA" en naranja estilizado
+        Vector2 t_size = MeasureTextEx(fuente_menu, "PAUSA", 32, 2);
+        DrawTextEx(fuente_menu, "PAUSA", {box.x + (box.width - t_size.x)/2.0f, box.y + 22.0f}, 32, 2, Color{245, 140, 10, 255});
+        
+        // Línea divisoria con nodo azul
+        float line_y = box.y + 65.0f;
+        DrawLine(box.x + 40, line_y, box.x + box.width - 40, line_y, Color{200, 200, 205, 255});
+        DrawRectangle(box.x + box.width / 2.0f - 5, line_y - 5, 10, 10, Color{0, 120, 190, 255});
+        
+        float btn_w = 320.0f;
+        float btn_h = 50.0f;
+        float start_y = box.y + 95.0f;
+        float spacing_y = 65.0f;
         
         Rectangle rect_continuar = {box.x + (w - btn_w)/2.0f, start_y, btn_w, btn_h};
         Rectangle rect_opciones  = {box.x + (w - btn_w)/2.0f, start_y + spacing_y, btn_w, btn_h};
         Rectangle rect_salir     = {box.x + (w - btn_w)/2.0f, start_y + spacing_y * 2.0f, btn_w, btn_h};
         
-        if (dibujar_boton_interactivo(rect_continuar, "CONTINUAR", {45, 50, 80, 255}, {70, 80, 130, 255}, fuente_menu, 20.0f)) {
+        // Lambda para dibujar botones interactivos con el estilo de la foto
+        auto dibujar_boton_pausa = [&](Rectangle rect, const char* label, bool es_rojo, int icon_type) -> bool {
+            Vector2 mouse = GetMousePosition();
+            bool hover = CheckCollisionPointRec(mouse, rect);
+            bool clicked = hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+
+            // Colores base
+            Color col_base = es_rojo ? Color{195, 55, 45, 255} : Color{220, 222, 225, 255};
+            Color col_hover = es_rojo ? Color{220, 70, 60, 255} : Color{200, 205, 215, 255};
+            Color col_border = es_rojo ? Color{130, 30, 25, 255} : Color{140, 145, 150, 255};
+            Color col_bg = hover ? col_hover : col_base;
+
+            // Dibujar fondo de botón
+            DrawRectangleRounded(rect, 0.15f, 4, col_bg);
+            DrawRectangleRoundedLinesEx(rect, 0.15f, 4, 1.5f, col_border);
+
+            // Dibujar bisel/3D (con cast explícito para evitar narrowing warnings)
+            unsigned char alpha_highlight = static_cast<unsigned char>(es_rojo ? 60 : 120);
+            unsigned char alpha_shadow = static_cast<unsigned char>(60);
+            
+            DrawLine(rect.x + 4, rect.y + 1, rect.x + rect.width - 4, rect.y + 1, Color{255, 255, 255, alpha_highlight});
+            DrawLine(rect.x + 1, rect.y + 4, rect.x + 1, rect.y + rect.height - 4, Color{255, 255, 255, alpha_highlight});
+            DrawLine(rect.x + 4, rect.y + rect.height - 1, rect.x + rect.width - 4, rect.y + rect.height - 1, Color{0, 0, 0, alpha_shadow});
+            DrawLine(rect.x + rect.width - 1, rect.y + 4, rect.x + rect.width - 1, rect.y + rect.height - 4, Color{0, 0, 0, alpha_shadow});
+
+            // Ranura/Slot del icono
+            float slot_w = rect.height - 8;
+            float slot_h = rect.height - 8;
+            Rectangle slot_rect = { rect.x + 4, rect.y + 4, slot_w, slot_h };
+            Color slot_bg = es_rojo ? Color{150, 35, 25, 255} : Color{205, 207, 210, 255};
+            Color slot_border = es_rojo ? Color{110, 20, 15, 255} : Color{150, 155, 160, 255};
+            
+            DrawRectangleRounded(slot_rect, 0.2f, 4, slot_bg);
+            DrawRectangleRoundedLinesEx(slot_rect, 0.2f, 4, 1.5f, slot_border);
+
+            // Dibujar icono
+            float cx = slot_rect.x + slot_w / 2.0f;
+            float cy = slot_rect.y + slot_h / 2.0f;
+            Color icon_color = es_rojo ? WHITE : Color{60, 62, 65, 255};
+
+            if (icon_type == 0) { // Play
+                DrawTriangle(
+                    { cx - 4, cy - 7 },
+                    { cx - 4, cy + 7 },
+                    { cx + 7, cy },
+                    icon_color
+                );
+            }
+            else if (icon_type == 1) { // Gear
+                DrawCircle(cx, cy, 5, icon_color);
+                DrawCircle(cx, cy, 2, slot_bg);
+                for (int a = 0; a < 360; a += 45) {
+                    float rad = a * DEG2RAD;
+                    DrawCircle(cx + cos(rad) * 6.5f, cy + sin(rad) * 6.5f, 2.0f, icon_color);
+                }
+            }
+            else if (icon_type == 2) { // Exit
+                // Puerta
+                DrawLine(cx - 6, cy - 7, cx - 6, cy + 7, icon_color);
+                DrawLine(cx - 6, cy - 7, cx + 1, cy - 7, icon_color);
+                DrawLine(cx - 6, cy + 7, cx + 1, cy + 7, icon_color);
+                // Flecha
+                DrawLine(cx - 2, cy, cx + 6, cy, icon_color);
+                DrawLine(cx + 6, cy, cx + 3, cy - 3, icon_color);
+                DrawLine(cx + 6, cy, cx + 3, cy + 3, icon_color);
+            }
+
+            // Texto
+            Color text_color = es_rojo ? WHITE : Color{50, 52, 55, 255};
+            Vector2 text_size = MeasureTextEx(fuente_menu, label, 20, 1);
+            float text_x = rect.x + slot_w + (rect.width - slot_w - text_size.x) / 2.0f;
+            DrawTextEx(fuente_menu, label, { text_x, rect.y + (rect.height - text_size.y) / 2.0f }, 20, 1, text_color);
+
+            return clicked;
+        };
+        
+        if (dibujar_boton_pausa(rect_continuar, "CONTINUAR", false, 0)) {
             mostrar_pausa_overlay = false;
         }
-        if (dibujar_boton_interactivo(rect_opciones, "OPCIONES", {45, 50, 80, 255}, {70, 80, 130, 255}, fuente_menu, 20.0f)) {
+        if (dibujar_boton_pausa(rect_opciones, "OPCIONES", false, 1)) {
             mostrar_pausa_overlay = false;
             estado_previo = estado_actual;
             estado_actual = EstadoJuego::MENU_OPCIONES;
         }
-        if (dibujar_boton_interactivo(rect_salir, "SALIR AL MENU", {180, 50, 50, 255}, {220, 70, 70, 255}, fuente_menu, 20.0f)) {
+        if (dibujar_boton_pausa(rect_salir, "SALIR AL MENU", true, 2)) {
             mostrar_pausa_overlay = false;
             estado_actual = es_modo_nivel ? EstadoJuego::SELECCION_NIVELES : EstadoJuego::MENU_PRINCIPAL;
         }
@@ -4980,6 +5568,11 @@ int main() {
     UnloadTexture(derecho);
     if (tex_barril.id > 0) UnloadTexture(tex_barril);
     if (tex_chavo.id > 0) UnloadTexture(tex_chavo);
+    if (tex_pistola.id > 0) UnloadTexture(tex_pistola);
+    if (tex_pistola_gira.id > 0) UnloadTexture(tex_pistola_gira);
+    if (tex_tv_play.id > 0) UnloadTexture(tex_tv_play);
+    if (tex_tv_pause.id > 0) UnloadTexture(tex_tv_pause);
+
     if (tex_seguidor_quieto.id > 0) UnloadTexture(tex_seguidor_quieto);
     if (tex_seguidor_corriendo.id > 0) UnloadTexture(tex_seguidor_corriendo);
     if (tex_celda_menu.id > 0) UnloadTexture(tex_celda_menu);
@@ -5030,6 +5623,13 @@ int main() {
     if (tex_menu_drom_anim.id > 0) {
         UnloadTexture(tex_menu_drom_anim);
     }
+    if (anim_robotin) {
+        delete anim_robotin;
+        anim_robotin = nullptr;
+    }
+    if (tex_robotin_anim.id > 0) {
+        UnloadTexture(tex_robotin_anim);
+    }
 
 
     if (tex_trampolin.id > 0) UnloadTexture(tex_trampolin);
@@ -5064,6 +5664,12 @@ int main() {
     if (tex_btn_salir1.id > 0) UnloadTexture(tex_btn_salir1);
     if (tex_btn_salir2.id > 0) UnloadTexture(tex_btn_salir2);
     if (tex_menu_titulo.id > 0) UnloadTexture(tex_menu_titulo);
+    
+    // Descargar texturas de la pantalla de victoria
+    if (tex_vic_logo.id > 0) UnloadTexture(tex_vic_logo);
+    if (tex_vic_pel.id > 0) UnloadTexture(tex_vic_pel);
+    if (tex_vic_cub.id > 0) UnloadTexture(tex_vic_cub);
+    if (tex_vic_bot.id > 0) UnloadTexture(tex_vic_bot);
     
     // Descargar fuente personalizada
     if (fuente_menu.baseSize > 0) UnloadFont(fuente_menu);

@@ -30,4 +30,8 @@ extern Texture2D tex_plata_rampa_izq;
 extern Texture2D tex_plata_rampa_der;
 extern Texture2D tex_chavo;
 extern Texture2D tex_barril;
+extern Texture2D tex_pistola;
+extern Texture2D tex_pistola_gira;
+extern Texture2D tex_tv_play;
+extern Texture2D tex_tv_pause;
 extern Font fuente_menu;
