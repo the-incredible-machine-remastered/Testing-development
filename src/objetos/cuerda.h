@@ -133,6 +133,20 @@ public:
         return true;
     }
 
+    // Recalcula la longitud de reposo según la geometría actual y limpia el historial
+    // de tensión. Se llama al dar Play, para que mover un extremo/soporte en edición no
+    // deje la cuerda pre-tensada al iniciar la simulación.
+    void sincronizar_reposo(const std::vector<EntidadFisica*>& entidades) {
+        std::vector<Vector2D> puntos;
+        if (!obtener_puntos(entidades, puntos) || puntos.size() < 2) return;
+        double longitud_actual = 0.0;
+        for (size_t i = 1; i < puntos.size(); ++i)
+            longitud_actual += Vector2D::distancia(puntos[i - 1], puntos[i]);
+        longitud_inicial = longitud_actual;
+        ultima_tension = 0.0;
+        tension_anterior = 0.0;
+    }
+
     void aplicar_tension(const std::vector<EntidadFisica*>& entidades, const Vector2D& gravedad) {
         EntidadFisica* ent_a = buscar_entidad(entidades, extremo_a.entidad_id);
         EntidadFisica* ent_b = buscar_entidad(entidades, extremo_b.entidad_id);

@@ -23,6 +23,24 @@
 #include "../objetos/correa.h"
 #include "../objetos/gancho.h"
 #include "../objetos/pistola.h"
+#include "../objetos/tijera.h"
+#include "../objetos/globo.h"
+#include "../objetos/bola_beisbol.h"
+#include "../objetos/caja_hamster.h"
+#include "../objetos/banda.h"
+#include "../objetos/caja_sorpresa.h"
+#include "../objetos/caminadora.h"
+#include "../objetos/foco.h"
+#include "../objetos/lupa.h"
+#include "../objetos/canon.h"
+#include "../objetos/ladrillo.h"
+#include "../objetos/ladrillo_vertical.h"
+#include "../objetos/ladrillo_horizontal.h"
+#include "../objetos/dinamita.h"
+#include "../objetos/dinamita_detonador.h"
+#include "../objetos/raton.h"
+#include "../objetos/gato.h"
+#include "../objetos/escalon.h"
 #include "eventos.h"
 #include "rutas_datos.h"
 #include "../objetos/catalogo_menu.gen.h"
@@ -83,6 +101,23 @@ inline TipoObjetoMenu mapear_tipo_entidad_a_menu(TipoEntidadJuego t, const Entid
         case TipoEntidadJuego::CINTA_TRANSPORTADORA: return TipoObjetoMenu::CINTA_TRANSPORTADORA;
         case TipoEntidadJuego::GENERADOR_MOTOR: return TipoObjetoMenu::GENERADOR_MOTOR;
         case TipoEntidadJuego::CORREA: return TipoObjetoMenu::CORREA;
+        case TipoEntidadJuego::TIJERA: return TipoObjetoMenu::TIJERA;
+        case TipoEntidadJuego::GLOBO: return TipoObjetoMenu::GLOBO;
+        case TipoEntidadJuego::BOLA_BEISBOL: return TipoObjetoMenu::BOLA_BEISBOL;
+        case TipoEntidadJuego::CAJA_HAMSTER: return TipoObjetoMenu::CAJA_HAMSTER;
+        case TipoEntidadJuego::BANDA: return TipoObjetoMenu::BANDA;
+        case TipoEntidadJuego::CAJA_SORPRESA: return TipoObjetoMenu::CAJA_SORPRESA;
+        case TipoEntidadJuego::CAMINADORA: return TipoObjetoMenu::CAMINADORA;
+        case TipoEntidadJuego::FOCO: return TipoObjetoMenu::FOCO;
+        case TipoEntidadJuego::LUPA: return TipoObjetoMenu::LUPA;
+        case TipoEntidadJuego::CANON: return TipoObjetoMenu::CANON;
+        case TipoEntidadJuego::DINAMITA: return TipoObjetoMenu::DINAMITA;
+        case TipoEntidadJuego::DINAMITA_DETONADOR: return TipoObjetoMenu::DINAMITA_DETONADOR;
+        case TipoEntidadJuego::GATO: return TipoObjetoMenu::GATO;
+        case TipoEntidadJuego::RATON: return TipoObjetoMenu::RATON;
+        case TipoEntidadJuego::ESCALON: return TipoObjetoMenu::ESCALON;
+        case TipoEntidadJuego::LADRILLO_VERTICAL: return TipoObjetoMenu::LADRILLO_VERTICAL;
+        case TipoEntidadJuego::LADRILLO_HORIZONTAL: return TipoObjetoMenu::LADRILLO_HORIZONTAL;
         case TipoEntidadJuego::PARED: {
             const ParedRectangular* p = dynamic_cast<const ParedRectangular*>(e);
             if (p) {
@@ -305,6 +340,7 @@ inline const std::unordered_map<std::string, CreadorEntidad>& obtener_registro_f
                 Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
                 leer_valor(linea, "w=", 42), leer_valor(linea, "h=", 54));
             if (leer_valor_i(linea, "der=", 1) == 0) v->invertir_direccion();
+            if (leer_valor_i(linea, "banda=", 0) == 1) v->set_controlado_por_banda(true);
             return v;
         }},
         {"SEGUIDOR", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
@@ -387,10 +423,115 @@ inline const std::unordered_map<std::string, CreadorEntidad>& obtener_registro_f
                 Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
                 leer_valor(linea, "ang=", 0.0));
         }},
+        {"FOCO", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Foco>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "r=", 18.0));
+        }},
+        {"LUPA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Lupa>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "ang=", 0.0), leer_valor(linea, "rango=", 200.0));
+        }},
+        {"CANON", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Canon>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "ang=", 180.0));
+        }},
+        {"LADRILLO_VERTICAL", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<LadrilloVertical>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 40.0), leer_valor(linea, "h=", 120.0));
+        }},
+        {"LADRILLO_HORIZONTAL", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<LadrilloHorizontal>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 120.0), leer_valor(linea, "h=", 40.0));
+        }},
+        {"DINAMITA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Dinamita>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 26.0), leer_valor(linea, "h=", 46.0));
+        }},
+        {"DINAMITA_DETONADOR", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<DinamitaDetonador>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 26.0), leer_valor(linea, "h=", 46.0));
+        }},
+        {"GATO", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Gato>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 54.0), leer_valor(linea, "h=", 58.0));
+        }},
+        {"RATON", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Raton>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 22.0), leer_valor(linea, "h=", 12.0));
+        }},
         {"ZONA_META", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
             return std::make_unique<ZonaMeta>(id,
                 Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
                 leer_valor(linea, "w=", 80), leer_valor(linea, "h=", 80));
+        }},
+        {"TIJERA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Tijera>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 119.0), leer_valor(linea, "h=", 51.0));
+        }},
+        {"GLOBO", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            auto g = std::make_unique<Globo>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "r=", 36.0));
+            g->set_velocidad(Vector2D(leer_valor(linea, "vx=", 0), leer_valor(linea, "vy=", 0)));
+            return g;
+        }},
+        {"BOLA_BEISBOL", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            auto b = std::make_unique<BolaBeisbol>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "r=", 24.0));
+            b->set_velocidad(Vector2D(leer_valor(linea, "vx=", 0), leer_valor(linea, "vy=", 0)));
+            b->set_velocidad_angular(leer_valor(linea, "omega=", 0));
+            return b;
+        }},
+        {"CAJA_HAMSTER", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            auto h = std::make_unique<CajaHamster>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 90.0), leer_valor(linea, "h=", 80.0));
+            // Leer IDs de ventiladores conectados
+            size_t pv = linea.find("vents=");
+            if (pv != std::string::npos) {
+                std::string lista = linea.substr(pv + 6);
+                std::stringstream ls(lista);
+                std::string item;
+                while (std::getline(ls, item, ',')) {
+                    try { if (!item.empty()) h->agregar_ventilador(std::stoi(item)); } catch(...) {}
+                }
+            }
+            return h;
+        }},
+        {"BANDA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            int orig = leer_valor_i(linea, "orig=", 0);
+            int dest = leer_valor_i(linea, "dest=", 0);
+            return std::make_unique<Banda>(id, orig, dest);
+        }},
+        {"CAJA_SORPRESA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<CajaSorpresa>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 70.0), leer_valor(linea, "h=", 70.0));
+        }},
+        {"CONVEYOR", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            auto c = std::make_unique<Caminadora>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "w=", 150.0), leer_valor(linea, "h=", 24.0),
+                leer_valor_i(linea, "der=", 1) != 0);
+            c->set_velocidad_cinta(leer_valor(linea, "vel=", 320.0));
+            return c;
+        }},
+        {"ESCALON", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Escalon>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "b=", 50.0), leer_valor(linea, "h=", 26.0),
+                leer_valor_i(linea, "inv=", 0) != 0);
         }}
     };
     return registro;
@@ -576,6 +717,21 @@ inline bool cargar_partida(MotorFisica& motor, GestorEventos& gestor, const std:
         e->set_velocidad_angular(0.0);
     }
     
+    // Apagar ventiladores que están controlados por una Banda
+    {
+        const auto& ents = motor.get_entidades();
+        for (auto* e : ents) {
+            auto* banda = dynamic_cast<Banda*>(e);
+            if (!banda) continue;
+            for (auto* e2 : ents) {
+                if (e2->get_id() != banda->get_id_destino()) continue;
+                auto* vent = dynamic_cast<Ventilador*>(e2);
+                if (vent) vent->set_controlado_por_banda(true);
+                break;
+            }
+        }
+    }
+
     mensaje_guardado = "Partida cargada";
     mensaje_guardado_timer = 3.0f;
     motor.set_pausado(true);
@@ -733,6 +889,21 @@ inline void restaurar_snapshot_simulacion(MotorFisica& motor, GestorEventos& ges
     motor.set_gravedad(Vector2D(0, gravedad_y));
     motor.set_siguiente_id(max_id + 1);
     limpiar_estado_tras_restaurar_snapshot();
+
+    // Apagar ventiladores controlados por Banda
+    {
+        const auto& ents = motor.get_entidades();
+        for (auto* e : ents) {
+            auto* banda = dynamic_cast<Banda*>(e);
+            if (!banda) continue;
+            for (auto* e2 : ents) {
+                if (e2->get_id() != banda->get_id_destino()) continue;
+                auto* vent = dynamic_cast<Ventilador*>(e2);
+                if (vent) vent->set_controlado_por_banda(true);
+                break;
+            }
+        }
+    }
     TraceLog(LOG_INFO, "Snapshot de simulación restaurado.");
 }
 

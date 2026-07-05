@@ -40,6 +40,21 @@
 #include "objetos/pistola.h"
 #include "objetos/tijera.h"
 #include "objetos/bola_beisbol.h"
+#include "objetos/caja_hamster.h"
+#include "objetos/banda.h"
+#include "objetos/caja_sorpresa.h"
+#include "objetos/caminadora.h"
+#include "objetos/foco.h"
+#include "objetos/lupa.h"
+#include "objetos/canon.h"
+#include "objetos/ladrillo.h"
+#include "objetos/ladrillo_vertical.h"
+#include "objetos/ladrillo_horizontal.h"
+#include "objetos/dinamita.h"
+#include "objetos/dinamita_detonador.h"
+#include "objetos/raton.h"
+#include "objetos/gato.h"
+#include "objetos/escalon.h"
 #include "fisica/colisiones.h"
 #include "fisica/motor_fisica.h"
 #include "objetos/catalogo_menu.gen.h"
@@ -173,7 +188,6 @@ AnclajeCuerda cuerda_extremo_a = { -1, TipoAnclajeCuerda::Cubeta };
 Vector2D cuerda_punto_a_preview;
 std::vector<int> cuerda_soportes_id;
 std::vector<Vector2D> cuerda_soportes_preview;
-
 enum class EstadoColocacionCorrea {
     INACTIVA,
     ESPERANDO_EJE_A,
@@ -183,6 +197,16 @@ enum class EstadoColocacionCorrea {
 EstadoColocacionCorrea estado_correa = EstadoColocacionCorrea::INACTIVA;
 int correa_eje_a_id = -1;
 Vector2D correa_punto_a_preview;
+
+enum class EstadoConexionBanda {
+    INACTIVA,
+    ESPERANDO_HAMSTER,
+    ESPERANDO_VENTILADOR
+};
+EstadoConexionBanda estado_banda = EstadoConexionBanda::INACTIVA;
+int banda_hamster_id  = -1;
+int banda_ventilador_id = -1;
+Vector2D banda_origen_preview; // posición del hámster seleccionado para preview
 
 bool obtener_datos_circulo(const EntidadFisica* e, Vector2D& pos, double& radio) {
     const Bola* bola = dynamic_cast<const Bola*>(e);
@@ -305,6 +329,32 @@ bool detectar_anclaje_cuerda(const MotorFisica& motor, Vector2D mouse_pos,
             if (d2 <= mejor_dist2) {
                 mejor_dist2 = d2;
                 out = { pistola_anc->get_id(), TipoAnclajeCuerda::Gancho };
+                punto_out = p;
+                encontrado = true;
+            }
+        }
+
+        // Foco y Lupa: activables como la pistola; se anclan con el mismo tipo
+        // de anclaje genérico (Gancho, punto = posición, masa 0).
+        const Foco* foco_anc = dynamic_cast<const Foco*>(e);
+        if (foco_anc) {
+            Vector2D p = foco_anc->get_posicion();
+            double d2 = (p - mouse_pos).magnitud_cuadrada();
+            if (d2 <= mejor_dist2) {
+                mejor_dist2 = d2;
+                out = { foco_anc->get_id(), TipoAnclajeCuerda::Gancho };
+                punto_out = p;
+                encontrado = true;
+            }
+        }
+
+        const Lupa* lupa_anc = dynamic_cast<const Lupa*>(e);
+        if (lupa_anc) {
+            Vector2D p = lupa_anc->get_posicion();
+            double d2 = (p - mouse_pos).magnitud_cuadrada();
+            if (d2 <= mejor_dist2) {
+                mejor_dist2 = d2;
+                out = { lupa_anc->get_id(), TipoAnclajeCuerda::Gancho };
                 punto_out = p;
                 encontrado = true;
             }
@@ -539,6 +589,69 @@ bool manejar_click_colocacion_cuerda(MotorFisica& motor, Vector2D mouse_pos) {
     return false;
 }
 
+bool manejar_click_conexion_banda(MotorFisica& motor, Vector2D mouse_pos) {
+    if (estado_banda == EstadoConexionBanda::INACTIVA) return false;
+
+    if (!motor.get_pausado()) {
+        estado_banda = EstadoConexionBanda::INACTIVA;
+        banda_hamster_id = -1;
+        return true;
+    }
+
+    const auto& ents = motor.get_entidades();
+
+    if (estado_banda == EstadoConexionBanda::ESPERANDO_HAMSTER) {
+        for (auto* e : ents) {
+            auto* h = dynamic_cast<CajaHamster*>(e);
+            if (!h) continue;
+            if (!e->contiene_punto(mouse_pos)) continue;
+            Vector2D p = e->get_posicion();
+            banda_hamster_id = e->get_id();
+            banda_origen_preview = Vector2D(p.x + h->get_ancho() * 0.5, p.y + h->get_alto() * 0.5);
+            estado_banda = EstadoConexionBanda::ESPERANDO_VENTILADOR;
+            return true;
+        }
+        return true;
+    }
+
+    if (estado_banda == EstadoConexionBanda::ESPERANDO_VENTILADOR) {
+        for (auto* e : ents) {
+            // No conectar con el mismo hámster origen
+            if (e->get_id() == banda_hamster_id) continue;
+
+            if (!e->contiene_punto(mouse_pos)) continue;
+
+            auto* v = dynamic_cast<Ventilador*>(e);
+            if (v) {
+                motor.agregar_entidad(new Banda(motor.generar_id(), banda_hamster_id, e->get_id()));
+                v->set_controlado_por_banda(true);
+                estado_banda = EstadoConexionBanda::INACTIVA;
+                banda_hamster_id = -1;
+                return true;
+            }
+
+            auto* cs = dynamic_cast<CajaSorpresa*>(e);
+            if (cs) {
+                motor.agregar_entidad(new Banda(motor.generar_id(), banda_hamster_id, e->get_id()));
+                estado_banda = EstadoConexionBanda::INACTIVA;
+                banda_hamster_id = -1;
+                return true;
+            }
+
+            auto* conv = dynamic_cast<Caminadora*>(e);
+            if (conv) {
+                motor.agregar_entidad(new Banda(motor.generar_id(), banda_hamster_id, e->get_id()));
+                estado_banda = EstadoConexionBanda::INACTIVA;
+                banda_hamster_id = -1;
+                return true;
+            }
+        }
+        return true;
+    }
+
+    return false;
+}
+
 // ============================================================================
 // Menú lateral derecho — UI y drag-and-drop desde paleta
 // ============================================================================
@@ -613,6 +726,7 @@ Texture2D tex_robote_soporte;  // Soporte de BolaRebotadora (robot rojo)
 Texture2D tex_robote_pelota;   // Pelota roja de BolaRebotadora
 Texture2D tex_ventilador_cuerpo; // Cuerpo del ventilador
 Texture2D tex_ventilador_aspa;   // Aspa del ventilador
+Texture2D tex_caminadora;        // Sprite caminadora/conveyor
 
 // Animaciones del SeguidorBooster
 Animacion* anim_seguidor_corriendo = nullptr;
@@ -684,12 +798,8 @@ struct InfoHandles {
     Rectangle rects[8];
     HandleResize tipos[8];
 };
-InfoHandles calcular_handles(const ParedRectangular* p) {
+InfoHandles calcular_handles_xywh(float x, float y, float w, float h) {
     const float S = 10.0f;
-    float x = (float)p->get_posicion().x;
-    float y = (float)p->get_posicion().y;
-    float w = (float)p->get_ancho();
-    float h = (float)p->get_alto();
     float hs = S / 2.0f;
     InfoHandles out;
     out.tipos[0] = HandleResize::TOP_LEFT;    out.rects[0] = {x-hs,       y-hs,       S,S};
@@ -701,6 +811,10 @@ InfoHandles calcular_handles(const ParedRectangular* p) {
     out.tipos[6] = HandleResize::BOT_CENTER;  out.rects[6] = {x+w/2-hs,   y+h-hs,     S,S};
     out.tipos[7] = HandleResize::BOT_RIGHT;   out.rects[7] = {x+w-hs,     y+h-hs,     S,S};
     return out;
+}
+InfoHandles calcular_handles(const ParedRectangular* p) {
+    return calcular_handles_xywh((float)p->get_posicion().x, (float)p->get_posicion().y,
+                                 (float)p->get_ancho(), (float)p->get_alto());
 }
 
 // Obtener qué objeto está debajo del cursor del mouse (incluye estáticos)
@@ -999,6 +1113,61 @@ bool crear_pistola(MotorFisica& motor, Vector2D pos) {
     motor.agregar_entidad(new Pistola(motor.generar_id(), pos, 0.0));
     return true;
 }
+bool crear_foco(MotorFisica& motor, Vector2D pos) {
+    motor.agregar_entidad(new Foco(motor.generar_id(), pos));
+    return true;
+}
+
+bool crear_lupa(MotorFisica& motor, Vector2D pos) {
+    motor.agregar_entidad(new Lupa(motor.generar_id(), pos, 0.0, 200.0));
+    return true;
+}
+
+bool crear_canon(MotorFisica& motor, Vector2D pos) {
+    motor.agregar_entidad(new Canon(motor.generar_id(), pos, 180.0)); // apunta izquierda
+    return true;
+}
+
+
+bool crear_dinamita(MotorFisica& motor, Vector2D pos) {
+    Vector2D spawn(pos.x - 13.0, pos.y - 23.0);
+    motor.agregar_entidad(new Dinamita(motor.generar_id(), spawn, 26.0, 46.0));
+    return true;
+}
+
+bool crear_ladrillo_vertical(MotorFisica& motor, Vector2D pos) {
+    Vector2D spawn(pos.x - 20.0, pos.y - 60.0);
+    motor.agregar_entidad(new LadrilloVertical(motor.generar_id(), spawn, 40.0, 120.0));
+    return true;
+}
+
+bool crear_ladrillo_horizontal(MotorFisica& motor, Vector2D pos) {
+    Vector2D spawn(pos.x - 60.0, pos.y - 20.0);
+    motor.agregar_entidad(new LadrilloHorizontal(motor.generar_id(), spawn, 120.0, 40.0));
+    return true;
+}
+
+bool crear_dinamita_detonador(MotorFisica& motor, Vector2D pos) {
+    Vector2D spawn(pos.x - 13.0, pos.y - 23.0);
+    motor.agregar_entidad(new DinamitaDetonador(motor.generar_id(), spawn, 26.0, 46.0));
+    return true;
+}
+
+bool crear_gato(MotorFisica& motor, Vector2D pos) {
+    motor.agregar_entidad(new Gato(motor.generar_id(), pos, 54.0, 58.0));
+    return true;
+}
+
+bool crear_raton(MotorFisica& motor, Vector2D pos) {
+    motor.agregar_entidad(new Raton(motor.generar_id(), pos, 22.0, 12.0));
+    return true;
+}
+
+bool crear_escalon(MotorFisica& motor, Vector2D pos) {
+    Vector2D spawn(pos.x - 25.0, pos.y - 13.0);
+    motor.agregar_entidad(new Escalon(motor.generar_id(), spawn, 50.0, 26.0));
+    return true;
+}
 bool crear_rampa(MotorFisica& motor, Vector2D pos, bool invertido) {
     double b = 160.0;
     double h = 120.0;
@@ -1026,6 +1195,10 @@ bool crear_generador_motor(MotorFisica& motor, Vector2D pos);
 bool crear_globo(MotorFisica& motor, Vector2D pos);
 bool crear_bola_beisbol(MotorFisica& motor, Vector2D pos);
 bool crear_tijera(MotorFisica& motor, Vector2D pos);
+bool crear_caja_hamster(MotorFisica& motor, Vector2D pos);
+bool crear_banda(MotorFisica& motor, Vector2D pos);
+bool crear_caja_sorpresa(MotorFisica& motor, Vector2D pos);
+bool crear_caminadora(MotorFisica& motor, Vector2D pos);
 
 bool crear_zona_meta(MotorFisica& motor, Vector2D pos) {
     motor.agregar_entidad(new ZonaMeta(motor.generar_id(), pos, 80.0, 80.0));
@@ -1052,6 +1225,16 @@ bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
         case TipoObjetoMenu::SOPORTE_TORQUE:    return crear_soporte_torque(motor, pos);
         case TipoObjetoMenu::GANCHO:            return crear_gancho(motor, pos);
         case TipoObjetoMenu::PISTOLA:           return crear_pistola(motor, pos);
+        case TipoObjetoMenu::FOCO:              return crear_foco(motor, pos);
+        case TipoObjetoMenu::LUPA:              return crear_lupa(motor, pos);
+        case TipoObjetoMenu::CANON:             return crear_canon(motor, pos);
+        case TipoObjetoMenu::LADRILLO_VERTICAL:  return crear_ladrillo_vertical(motor, pos);
+        case TipoObjetoMenu::LADRILLO_HORIZONTAL: return crear_ladrillo_horizontal(motor, pos);
+        case TipoObjetoMenu::DINAMITA:          return crear_dinamita(motor, pos);
+        case TipoObjetoMenu::DINAMITA_DETONADOR: return crear_dinamita_detonador(motor, pos);
+        case TipoObjetoMenu::GATO:              return crear_gato(motor, pos);
+        case TipoObjetoMenu::RATON:             return crear_raton(motor, pos);
+        case TipoObjetoMenu::ESCALON:           return crear_escalon(motor, pos);
         case TipoObjetoMenu::GLOBO:             return crear_globo(motor, pos);
         case TipoObjetoMenu::BOLA_BEISBOL:      return crear_bola_beisbol(motor, pos);
         case TipoObjetoMenu::TIJERA:            return crear_tijera(motor, pos);
@@ -1061,6 +1244,10 @@ bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
         case TipoObjetoMenu::GENERADOR_MOTOR:   return crear_generador_motor(motor, pos);
         case TipoObjetoMenu::CUERDA:            return false;
         case TipoObjetoMenu::CORREA:            return false;
+        case TipoObjetoMenu::CAJA_HAMSTER:      return crear_caja_hamster(motor, pos);
+        case TipoObjetoMenu::BANDA:             return crear_banda(motor, pos);
+        case TipoObjetoMenu::CAJA_SORPRESA:     return crear_caja_sorpresa(motor, pos);
+        case TipoObjetoMenu::CAMINADORA:          return crear_caminadora(motor, pos);
         default: return false;
     }
 }
@@ -1207,6 +1394,16 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
                 DrawTriangle(v1, v2, v3, tint(COLOR_RAMPA));
                 DrawTriangleLines(v1, v2, v3, tint(COLOR_RAMPA_BORDE));
             }
+            break;
+        }
+        case TipoObjetoMenu::ESCALON: {
+            // Triángulo pequeño (rampita)
+            float s = 13.0f * escala;
+            Vector2 v1 = {cx - s, cy + s*0.6f};
+            Vector2 v2 = {cx + s, cy + s*0.6f};
+            Vector2 v3 = {cx + s, cy - s*0.9f};
+            DrawTriangle(v1, v2, v3, tint(COLOR_RAMPA));
+            DrawTriangleLines(v1, v2, v3, tint(COLOR_RAMPA_BORDE));
             break;
         }
         case TipoObjetoMenu::PLATAFORMA:
@@ -1404,6 +1601,142 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
             DrawCircle((int)(cx - 2*s), (int)(cy + 4*s), 4*s, tint(Color{200, 40, 40, 255}));
             break;
         }
+        case TipoObjetoMenu::FOCO: {
+            float r = 11.0f * escala;
+            DrawCircle((int)cx, (int)(cy - 2*escala), r * 1.5f, tint(Color{255, 230, 120, 70}));
+            DrawCircle((int)cx, (int)(cy - 2*escala), r, tint(Color{255, 235, 130, 255}));
+            DrawCircleLines((int)cx, (int)(cy - 2*escala), r, tint(Color{210, 170, 40, 255}));
+            DrawLineEx({cx - r*0.35f, cy - escala}, {cx, cy - r*0.4f - 2*escala}, 1.6f, tint(Color{255,150,30,255}));
+            DrawLineEx({cx, cy - r*0.4f - 2*escala}, {cx + r*0.35f, cy - escala}, 1.6f, tint(Color{255,150,30,255}));
+            DrawRectangleRec({cx - r*0.45f, cy + r*0.7f - 2*escala, r*0.9f, r*0.55f}, tint(Color{150,155,160,255}));
+            break;
+        }
+        case TipoObjetoMenu::LUPA: {
+            // Lente vertical + rayo horizontal
+            float rx = 6.0f * escala, ry = 11.0f * escala;
+            DrawLineEx({cx, cy}, {cx + 16*escala, cy}, 2.0f, tint(Color{255,240,150,160}));
+            DrawEllipse((int)cx, (int)cy, rx, ry, tint(Color{200,230,255,120}));
+            DrawEllipseLines((int)cx, (int)cy, rx, ry, tint(Color{110,90,60,255}));
+            DrawLineEx({cx, cy + ry}, {cx, cy + ry + 6*escala}, 2.5f, tint(Color{110,90,60,255}));
+            break;
+        }
+        case TipoObjetoMenu::CANON: {
+            float s = escala;
+            Color metal = tint(Color{70, 75, 82, 255});
+            Color metal2 = tint(Color{45, 48, 54, 255});
+            Color madera = tint(Color{110, 70, 35, 255});
+            // base
+            DrawRectangleRec({cx - 12*s, cy + 4*s, 24*s, 7*s}, madera);
+            DrawCircle((int)(cx - 7*s), (int)(cy + 11*s), 3.5f*s, metal2);
+            DrawCircle((int)(cx + 7*s), (int)(cy + 11*s), 3.5f*s, metal2);
+            // tubo apuntando a la izquierda
+            DrawLineEx({cx + 4*s, cy - 2*s}, {cx - 16*s, cy - 2*s}, 11*s, metal);
+            DrawCircle((int)(cx - 16*s), (int)(cy - 2*s), 5.5f*s, metal);
+            DrawCircle((int)(cx - 16*s), (int)(cy - 2*s), 3*s, tint(Color{20,20,24,255}));
+            // mecha atras con chispa
+            DrawLineEx({cx + 8*s, cy - 4*s}, {cx + 14*s, cy - 10*s}, 1.8f, tint(Color{60,45,30,255}));
+            DrawCircle((int)(cx + 14*s), (int)(cy - 10*s), 2.5f*s, tint(Color{255,200,60,255}));
+            break;
+        }
+        case TipoObjetoMenu::LADRILLO_VERTICAL: {
+            float w = 14.0f * escala, h = 30.0f * escala;
+            float x0 = cx - w/2, y0 = cy - h/2;
+            DrawRectangleRec({x0, y0, w, h}, tint(Color{205,195,180,255}));
+            int filas = 5;
+            for (int fila=0; fila<filas; ++fila) {
+                float ry = y0 + fila*(h/filas);
+                float off = (fila%2==0)?0.0f:w*0.5f;
+                for (float bx=x0-off; bx<x0+w; bx+=w) {
+                    float a=fmaxf(bx,x0), b=fminf(bx+w-1.5f, x0+w);
+                    if (b>a) DrawRectangleRec({a, ry+1, b-a, h/filas-2}, tint(Color{170,70,55,255}));
+                }
+            }
+            DrawRectangleLinesEx({x0,y0,w,h}, 1.5f, tint(Color{110,45,35,255}));
+            // flechas verticales (indica que crece en alto)
+            DrawLineEx({cx, y0-4*escala},{cx, y0-1*escala}, 1.5f, tint(Color{60,60,70,255}));
+            DrawLineEx({cx, y0+h+1*escala},{cx, y0+h+4*escala}, 1.5f, tint(Color{60,60,70,255}));
+            break;
+        }
+        case TipoObjetoMenu::LADRILLO_HORIZONTAL: {
+            float w = 34.0f * escala, h = 14.0f * escala;
+            float x0 = cx - w/2, y0 = cy - h/2;
+            DrawRectangleRec({x0, y0, w, h}, tint(Color{205,195,180,255}));
+            int filas = 2;
+            for (int fila=0; fila<filas; ++fila) {
+                float ry = y0 + fila*(h/filas);
+                float off = (fila%2==0)?0.0f:w*0.16f;
+                for (float bx=x0-off; bx<x0+w; bx+=w*0.33f) {
+                    float a=fmaxf(bx,x0), b=fminf(bx+w*0.33f-1.5f, x0+w);
+                    if (b>a) DrawRectangleRec({a, ry+1, b-a, h/filas-2}, tint(Color{170,70,55,255}));
+                }
+            }
+            DrawRectangleLinesEx({x0,y0,w,h}, 1.5f, tint(Color{110,45,35,255}));
+            // flechas horizontales (indica que crece en ancho)
+            DrawLineEx({x0-4*escala, cy},{x0-1*escala, cy}, 1.5f, tint(Color{60,60,70,255}));
+            DrawLineEx({x0+w+1*escala, cy},{x0+w+4*escala, cy}, 1.5f, tint(Color{60,60,70,255}));
+            break;
+        }
+        case TipoObjetoMenu::DINAMITA: {
+            float w = 16.0f*escala, h = 24.0f*escala;
+            float x0 = cx - w/2, y0 = cy - h/2 + 2*escala;
+            for (int i=0;i<3;++i) {
+                float bx = x0 + i*(w/3.0f);
+                DrawRectangleRec({bx+0.5f, y0, w/3.0f-1.0f, h}, tint(Color{190,55,45,255}));
+            }
+            DrawRectangleRec({x0, y0 + h*0.45f, w, 3.0f}, tint(Color{90,60,30,255}));
+            // mecha con chispa
+            DrawLineEx({cx, y0}, {cx + 4*escala, y0 - 6*escala}, 1.6f, tint(Color{70,55,35,255}));
+            DrawCircle((int)(cx + 4*escala), (int)(y0 - 6*escala), 2.2f*escala, tint(Color{255,200,60,255}));
+            break;
+        }
+        case TipoObjetoMenu::DINAMITA_DETONADOR: {
+            float w = 12.0f*escala, h = 22.0f*escala;
+            float x0 = cx - 10*escala, y0 = cy - h/2 + 2*escala;
+            for (int i=0;i<3;++i) {
+                float bx = x0 + i*(w/3.0f);
+                DrawRectangleRec({bx+0.5f, y0, w/3.0f-1.0f, h}, tint(Color{190,55,45,255}));
+            }
+            // cable + detonador (émbolo) a la derecha
+            float dx = cx + 12*escala, dy = cy;
+            DrawLineBezier({x0+w, y0+h*0.5f}, {dx, dy}, 1.8f, tint(Color{40,40,45,255}));
+            DrawRectangleRec({dx-5*escala, dy-3*escala, 10*escala, 8*escala}, tint(Color{120,70,30,255}));
+            DrawRectangleRec({dx-1*escala, dy-9*escala, 2*escala, 6*escala}, tint(Color{150,155,160,255}));
+            DrawRectangleRec({dx-4*escala, dy-10*escala, 8*escala, 2*escala}, tint(Color{150,155,160,255}));
+            break;
+        }
+        case TipoObjetoMenu::GATO: {
+            Color c = tint(Color{235,235,240,255});
+            Color o = tint(Color{170,170,180,255});
+            float bw = 16*escala, bh = 11*escala;
+            // cola
+            DrawLineBezier({cx - bw*0.6f, cy}, {cx - bw*0.9f, cy - bh*1.2f}, 2.5f, c);
+            // cuerpo
+            DrawEllipse((int)cx, (int)(cy+2*escala), bw*0.6f, bh*0.5f, c);
+            // cabeza
+            float hx = cx + bw*0.4f, hy = cy - bh*0.3f;
+            DrawCircle((int)hx, (int)hy, bh*0.55f, c);
+            DrawTriangle({hx-4*escala, hy-3*escala},{hx-1*escala,hy-8*escala},{hx+1*escala,hy-2*escala}, c);
+            DrawTriangle({hx+4*escala, hy-3*escala},{hx+2*escala,hy-8*escala},{hx-1*escala,hy-2*escala}, c);
+            DrawCircle((int)(hx+2*escala),(int)hy, 1.5f, tint(Color{80,150,90,255}));
+            DrawEllipseLines((int)cx, (int)(cy+2*escala), bw*0.6f, bh*0.5f, o);
+            break;
+        }
+        case TipoObjetoMenu::RATON: {
+            Color c = tint(Color{150,150,158,255});
+            Color rosa = tint(Color{235,150,160,255});
+            float bw = 15*escala, bh = 8*escala;
+            // cola
+            DrawLineBezier({cx - bw*0.5f, cy}, {cx - bw*0.8f, cy - bh}, 1.5f, rosa);
+            // cuerpo
+            DrawEllipse((int)cx, (int)cy, bw*0.5f, bh*0.5f, c);
+            // cabeza + oreja
+            float hx = cx + bw*0.4f;
+            DrawCircle((int)hx, (int)cy, bh*0.5f, c);
+            DrawCircle((int)(hx - 2*escala), (int)(cy - bh*0.5f), bh*0.4f, c);
+            DrawCircle((int)(hx - 2*escala), (int)(cy - bh*0.5f), bh*0.22f, rosa);
+            DrawCircle((int)(hx + bh*0.4f), (int)cy, 1.2f, rosa);
+            break;
+        }
         case TipoObjetoMenu::GLOBO: {
             float r = 14.0f * escala;
             DrawCircle((int)cx, (int)(cy + 4 * escala), r, tint(Color{220, 50, 50, 255}));
@@ -1456,6 +1789,53 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
                 }
             }
             DrawRectangleLinesEx({cx - w/2, cy - h/2, w, h}, 1.5f, tint(Color{30, 120, 50, 255}));
+            break;
+        }
+        case TipoObjetoMenu::CAJA_HAMSTER: {
+            // Caja izquierda + rueda derecha
+            float bw = 14.0f * escala, bh = 24.0f * escala;
+            float rr = 12.0f * escala;
+            DrawRectangleRec({cx - 20*escala, cy - bh/2, bw, bh}, tint(Color{140, 100, 50, 255}));
+            DrawCircle((int)(cx + 2*escala), (int)cy, rr, tint(Color{210, 170, 80, 255}));
+            DrawCircleLines((int)(cx + 2*escala), (int)cy, rr, tint(Color{80, 50, 20, 255}));
+            // hámster mini
+            DrawCircle((int)(cx + 2*escala), (int)(cy + rr*0.3f), rr*0.3f, tint(Color{230, 200, 160, 255}));
+            break;
+        }
+        case TipoObjetoMenu::BANDA: {
+            float hw = 22.0f * escala;
+            DrawLineEx({cx - hw, cy - 4*escala}, {cx + hw, cy - 4*escala}, 2.5f*escala, tint(Color{255, 180, 50, 220}));
+            DrawLineEx({cx - hw, cy + 4*escala}, {cx + hw, cy + 4*escala}, 2.5f*escala, tint(Color{255, 180, 50, 220}));
+            DrawCircle((int)(cx), (int)cy, 4*escala, tint(Color{255, 200, 80, 255}));
+            break;
+        }
+        case TipoObjetoMenu::CAJA_SORPRESA: {
+            float bw = 26.0f * escala, bh = 26.0f * escala;
+            // Caja roja con lunares amarillos
+            DrawRectangleRec({cx - bw/2, cy - bh/2 + 4*escala, bw, bh * 0.85f}, tint(Color{210,40,40,255}));
+            DrawCircle((int)(cx - bw*0.25f),(int)(cy + 4*escala), bw*0.1f, tint(Color{255,200,50,255}));
+            DrawCircle((int)(cx + bw*0.25f),(int)(cy + 4*escala), bw*0.1f, tint(Color{255,200,50,255}));
+            // Tapa
+            DrawRectangleRec({cx - bw/2 - 2*escala, cy - bh/2, bw + 4*escala, bh*0.18f}, tint(Color{180,30,30,255}));
+            // Cabeza asomando
+            DrawCircle((int)cx, (int)(cy - bh/2 - 8*escala), 9*escala, tint(Color{255,220,170,255}));
+            DrawCircle((int)cx, (int)(cy - bh/2 - 9*escala), 4*escala, tint(Color{220,40,40,255}));
+            break;
+        }
+        case TipoObjetoMenu::CAMINADORA: {
+            float cw = 40.0f * escala, ch = 10.0f * escala;
+            float rr = ch * 0.5f;
+            // Cuerpo
+            DrawRectangleRec({cx - cw/2 + rr, cy - ch/2, cw - rr*2, ch}, tint(Color{60,80,100,255}));
+            // Cinta central
+            DrawRectangleRec({cx - cw/2 + rr, cy - ch*0.25f, cw - rr*2, ch*0.5f}, tint(Color{80,100,120,255}));
+            // Ruedas
+            DrawCircle((int)(cx - cw/2 + rr), (int)cy, rr, tint(Color{70,70,80,255}));
+            DrawCircle((int)(cx + cw/2 - rr), (int)cy, rr, tint(Color{70,70,80,255}));
+            // Flecha
+            DrawLineEx({cx - 8*escala, cy}, {cx + 8*escala, cy}, 1.5f*escala, tint(Color{255,200,80,220}));
+            DrawLineEx({cx + 8*escala, cy}, {cx + 4*escala, cy - 4*escala}, 1.5f*escala, tint(Color{255,200,80,220}));
+            DrawLineEx({cx + 8*escala, cy}, {cx + 4*escala, cy + 4*escala}, 1.5f*escala, tint(Color{255,200,80,220}));
             break;
         }
         default:
@@ -2092,38 +2472,87 @@ void dibujar_correas(const MotorFisica& motor) {
     }
 }
 
-void dibujar_previsualizacion_correa(const MotorFisica& motor) {
-    if (estado_correa == EstadoColocacionCorrea::INACTIVA) return;
+void dibujar_previsualizacion_correa_y_banda(const MotorFisica& motor) {
+    if (estado_correa != EstadoColocacionCorrea::INACTIVA) {
+        Vector2D mouse(GetMouseX(), GetMouseY());
+        dibujar_icono_objeto(TipoObjetoMenu::CORREA,
+                             static_cast<float>(mouse.x + 34.0),
+                             static_cast<float>(mouse.y - 28.0),
+                             0.72f, 190);
 
-    Vector2D mouse(GetMouseX(), GetMouseY());
-    dibujar_icono_objeto(TipoObjetoMenu::CORREA,
-                         static_cast<float>(mouse.x + 34.0),
-                         static_cast<float>(mouse.y - 28.0),
-                         0.72f, 190);
-
-    if (estado_correa == EstadoColocacionCorrea::ESPERANDO_EJE_A) {
-        int ent_id = -1;
-        Vector2D punto;
-        if (detectar_eje_correa(motor, mouse, ent_id, punto)) {
-            DrawCircleLines(static_cast<int>(punto.x), static_cast<int>(punto.y), 18.0f,
-                            Color{100, 220, 255, 230});
+        if (estado_correa == EstadoColocacionCorrea::ESPERANDO_EJE_A) {
+            int ent_id = -1;
+            Vector2D punto;
+            if (detectar_eje_correa(motor, mouse, ent_id, punto)) {
+                DrawCircleLines(static_cast<int>(punto.x), static_cast<int>(punto.y), 18.0f,
+                                Color{100, 220, 255, 230});
+            }
+            return;
         }
-        return;
+
+        if (estado_correa == EstadoColocacionCorrea::ESPERANDO_EJE_B) {
+            DrawLineEx({(float)correa_punto_a_preview.x, (float)correa_punto_a_preview.y},
+                       {(float)mouse.x, (float)mouse.y}, 4.0f, Color{90, 85, 80, 200});
+            DrawCircle(static_cast<int>(correa_punto_a_preview.x), static_cast<int>(correa_punto_a_preview.y),
+                       6.0f, Color{0, 200, 255, 245});
+            DrawCircleLines(static_cast<int>(correa_punto_a_preview.x), static_cast<int>(correa_punto_a_preview.y),
+                            12.0f, Color{100, 220, 255, 245});
+
+            int ent_id = -1;
+            Vector2D punto;
+            if (detectar_eje_correa(motor, mouse, ent_id, punto)) {
+                DrawCircleLines(static_cast<int>(punto.x), static_cast<int>(punto.y),
+                                20.0f, Color{100, 220, 255, 255});
+            }
+        }
     }
 
-    if (estado_correa == EstadoColocacionCorrea::ESPERANDO_EJE_B) {
-        DrawLineEx({(float)correa_punto_a_preview.x, (float)correa_punto_a_preview.y},
-                   {(float)mouse.x, (float)mouse.y}, 4.0f, Color{90, 85, 80, 200});
-        DrawCircle(static_cast<int>(correa_punto_a_preview.x), static_cast<int>(correa_punto_a_preview.y),
-                   6.0f, Color{0, 200, 255, 245});
-        DrawCircleLines(static_cast<int>(correa_punto_a_preview.x), static_cast<int>(correa_punto_a_preview.y),
-                        12.0f, Color{100, 220, 255, 245});
+    if (estado_banda != EstadoConexionBanda::INACTIVA) {
+        Vector2D mouse(GetMouseX(), GetMouseY());
 
-        int ent_id = -1;
-        Vector2D punto;
-        if (detectar_eje_correa(motor, mouse, ent_id, punto)) {
-            DrawCircleLines(static_cast<int>(punto.x), static_cast<int>(punto.y),
-                            20.0f, Color{100, 220, 255, 255});
+        if (estado_banda == EstadoConexionBanda::ESPERANDO_HAMSTER) {
+            for (const auto* e : motor.get_entidades()) {
+                const auto* h = dynamic_cast<const CajaHamster*>(e);
+                if (!h) continue;
+                Vector2D p = e->get_posicion();
+                if (mouse.x >= p.x && mouse.x <= p.x + h->get_ancho() &&
+                    mouse.y >= p.y && mouse.y <= p.y + h->get_alto()) {
+                    DrawRectangleLinesEx({(float)p.x, (float)p.y,
+                        (float)h->get_ancho(), (float)h->get_alto()}, 3.0f, Color{255,200,50,230});
+                }
+            }
+            return;
+        }
+
+        if (estado_banda == EstadoConexionBanda::ESPERANDO_VENTILADOR) {
+            Vector2D a = banda_origen_preview;
+            Vector2D b = mouse;
+            Vector2 va = {(float)a.x, (float)a.y};
+            Vector2 vb = {(float)b.x, (float)b.y};
+            DrawLineEx(va, vb, 5.0f, Color{40, 30, 10, 180});
+            DrawLineEx(va, vb, 3.0f, Color{255, 200, 50, 220});
+            DrawCircle((int)a.x, (int)a.y, 7.0f, Color{255, 180, 30, 230});
+
+            for (const auto* e : motor.get_entidades()) {
+                Vector2D p = e->get_posicion();
+                const auto* v = dynamic_cast<const Ventilador*>(e);
+                if (v && mouse.x >= p.x && mouse.x <= p.x + v->get_ancho() &&
+                         mouse.y >= p.y && mouse.y <= p.y + v->get_alto()) {
+                    DrawRectangleLinesEx({(float)p.x, (float)p.y,
+                        (float)v->get_ancho(), (float)v->get_alto()}, 3.0f, Color{255,200,50,230});
+                }
+                const auto* cs = dynamic_cast<const CajaSorpresa*>(e);
+                if (cs && mouse.x >= p.x && mouse.x <= p.x + cs->get_ancho() &&
+                          mouse.y >= p.y && mouse.y <= p.y + cs->get_alto()) {
+                    DrawRectangleLinesEx({(float)p.x, (float)p.y,
+                        (float)cs->get_ancho(), (float)cs->get_alto()}, 3.0f, Color{255,200,50,230});
+                }
+                const auto* conv = dynamic_cast<const Caminadora*>(e);
+                if (conv && e->contiene_punto(mouse)) {
+                    DrawRectangleLinesEx({(float)p.x, (float)p.y,
+                        (float)conv->get_ancho(), (float)conv->get_alto()}, 3.0f, Color{255,200,50,230});
+                }
+            }
         }
     }
 }
@@ -2142,7 +2571,7 @@ bool crear_soporte_torque(MotorFisica& motor, Vector2D pos) {
 }
 
 bool crear_globo(MotorFisica& motor, Vector2D pos) {
-    double radio = 18.0;
+    double radio = 36.0;
     if (!posicion_valida_para_spawn(motor, pos, TipoForma::CIRCULO, radio, 0.0)) {
         spawn_error_timer = 0.5f;
         spawn_error_pos = pos;
@@ -2166,11 +2595,38 @@ bool crear_bola_beisbol(MotorFisica& motor, Vector2D pos) {
 }
 
 bool crear_tijera(MotorFisica& motor, Vector2D pos) {
-    double w = 70.0;
-    double h = 30.0;
+    double w = 100.0;
+    double h = 51.0;
     Vector2D spawn_pos(pos.x - w / 2.0, pos.y - h / 2.0);
     Tijera* t = new Tijera(motor.generar_id(), spawn_pos, w, h);
     motor.agregar_entidad(t);
+    return true;
+}
+
+bool crear_caja_hamster(MotorFisica& motor, Vector2D pos) {
+    double w = 90.0, h = 80.0;
+    Vector2D spawn_pos(pos.x - w / 2.0, pos.y - h / 2.0);
+    CajaHamster* ham = new CajaHamster(motor.generar_id(), spawn_pos, w, h);
+    motor.agregar_entidad(ham);
+    return true;
+}
+
+bool crear_banda(MotorFisica& motor, Vector2D pos) {
+    (void)pos;
+    return false; // se maneja con el flujo de conexión de la banda
+}
+
+bool crear_caja_sorpresa(MotorFisica& motor, Vector2D pos) {
+    double w = 70.0, h = 70.0;
+    Vector2D spawn_pos(pos.x - w / 2.0, pos.y - h / 2.0);
+    motor.agregar_entidad(new CajaSorpresa(motor.generar_id(), spawn_pos, w, h));
+    return true;
+}
+
+bool crear_caminadora(MotorFisica& motor, Vector2D pos) {
+    double w = 150.0, h = 24.0;
+    Vector2D spawn_pos(pos.x - w / 2.0, pos.y - h / 2.0);
+    motor.agregar_entidad(new Caminadora(motor.generar_id(), spawn_pos, w, h, true));
     return true;
 }
 
@@ -2348,6 +2804,13 @@ void dibujar_hud(const MotorFisica& motor) {
         if (estado_cuerda == EstadoColocacionCuerda::ESPERANDO_EXTREMO_B) paso = "Torque extra o extremo final";
         DrawText(TextFormat("Cuerda: %s", paso), margin, y + 110, 14,
                  Color{235, 220, 155, 255});
+    }
+
+    if (estado_banda != EstadoConexionBanda::INACTIVA) {
+        const char* paso_banda = estado_banda == EstadoConexionBanda::ESPERANDO_HAMSTER
+            ? "Banda: Click en la Caja Hamster"
+            : "Banda: Click en Ventilador o CajaSorpresa";
+        DrawText(paso_banda, margin, y + 128, 14, Color{255, 200, 80, 255});
     }
 
     // Indicador de pausa
@@ -2663,6 +3126,7 @@ void cargandoTexturas() {
     } else {
         TraceLog(LOG_INFO, "Textura ventilador aspa cargada: %dx%d", tex_ventilador_aspa.width, tex_ventilador_aspa.height);
     }
+    tex_caminadora = cargar_textura_datos("Assets/caminadora/caminadora1.png");
 
     // Cargar asset de celda de menú
     tex_celda_menu = cargar_textura_datos("Assets/hud/obj-vacio.png");
@@ -3433,6 +3897,7 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             if (CheckCollisionPointRec(mouse_pos, btns.rect_play)) {
                 if (motor.get_pausado()) {
                     guardar_snapshot_simulacion(motor, gestor_eventos);
+                    motor.aplicar_transmision_bandas(); // apagar ventiladores controlados antes del primer frame
                     motor.set_pausado(false);
                     cancelar_colocacion_cuerda();
                 } else {
@@ -3443,6 +3908,7 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             }
             if (CheckCollisionPointRec(mouse_pos, btns.rect_reset)) {
                 restaurar_snapshot_simulacion(motor, gestor_eventos);
+                motor.aplicar_transmision_bandas();
                 motor.set_pausado(true);
                 return;
             }
@@ -3500,6 +3966,14 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                         spawn_error_timer = 0.5f;
                         spawn_error_pos = Vector2D(mx, my);
                     }
+                } else if (tipo == TipoObjetoMenu::BANDA) {
+                    if (motor.get_pausado()) {
+                        estado_banda = EstadoConexionBanda::ESPERANDO_HAMSTER;
+                        banda_hamster_id = -1;
+                    } else {
+                        spawn_error_timer = 0.5f;
+                        spawn_error_pos = Vector2D(mx, my);
+                    }
                 } else if (tipo != TipoObjetoMenu::NINGUNO) {
                     if (!motor.get_pausado()) {
                         spawn_error_timer = 0.5f;
@@ -3515,17 +3989,23 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             }
         } else if (punto_en_area_juego(mx, my)) {
             Vector2D mouse_pos(mx, my);
-            if (arrastrando_spawn != TipoObjetoMenu::NINGUNO) {
+            if (arrastrando_spawn != TipoObjetoMenu::NINGUNO && arrastrando_spawn != TipoObjetoMenu::BANDA) {
                 spawn_desde_menu(motor, arrastrando_spawn, mouse_pos);
                 arrastrando_spawn = TipoObjetoMenu::NINGUNO;
+            } else if (arrastrando_spawn == TipoObjetoMenu::BANDA) {
+                arrastrando_spawn = TipoObjetoMenu::NINGUNO;
+                manejar_click_conexion_banda(motor, mouse_pos);
             } else if (manejar_click_colocacion_correa(motor, mouse_pos)) {
                 entidad_arrastrada = nullptr;
             } else if (manejar_click_colocacion_cuerda(motor, mouse_pos)) {
+                entidad_arrastrada = nullptr;
+            } else if (manejar_click_conexion_banda(motor, mouse_pos)) {
                 entidad_arrastrada = nullptr;
             } else {
                 bool handle_click_detectado = false;
                 if (estado_actual == EstadoJuego::JUEGO_CREATIVO && entidad_seleccionada && motor.get_pausado()) {
                     ParedRectangular* p = dynamic_cast<ParedRectangular*>(entidad_seleccionada);
+                    Caminadora* camh = dynamic_cast<Caminadora*>(entidad_seleccionada);
                     if (p && !es_borde_nivel(p)) {
                         auto handles = calcular_handles(p);
                         for (int i = 0; i < 8; ++i) {
@@ -3535,6 +4015,20 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                                 handle_w_inicial = p->get_ancho();
                                 handle_h_inicial = p->get_alto();
                                 handle_pos_inicial_ent = p->get_posicion();
+                                handle_click_detectado = true;
+                                break;
+                            }
+                        }
+                    } else if (camh) {
+                        auto handles = calcular_handles_xywh((float)camh->get_posicion().x, (float)camh->get_posicion().y,
+                                                             (float)camh->get_ancho(), (float)camh->get_alto());
+                        for (int i = 0; i < 8; ++i) {
+                            if (CheckCollisionPointRec({(float)mx, (float)my}, handles.rects[i])) {
+                                handle_activo = handles.tipos[i];
+                                handle_pos_inicial_mouse = Vector2D(mx, my);
+                                handle_w_inicial = camh->get_ancho();
+                                handle_h_inicial = camh->get_alto();
+                                handle_pos_inicial_ent = camh->get_posicion();
                                 handle_click_detectado = true;
                                 break;
                             }
@@ -3590,6 +4084,21 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             if (arr)  { nh = std::max(8.0, handle_h_inicial - dy); npos.y = handle_pos_inicial_ent.y + (handle_h_inicial - nh); }
             p->set_posicion(npos);
             p->set_dimensiones(nw, nh);
+        } else if (Caminadora* camd = dynamic_cast<Caminadora*>(entidad_seleccionada)) {
+            // La caminadora SOLO cambia el ancho (con su límite interno). Alto y Y fijos.
+            double dx = mx - handle_pos_inicial_mouse.x;
+            double nw = handle_w_inicial;
+            Vector2D npos = handle_pos_inicial_ent;
+            bool izq = handle_activo==HandleResize::TOP_LEFT||handle_activo==HandleResize::MID_LEFT||handle_activo==HandleResize::BOT_LEFT;
+            bool der = handle_activo==HandleResize::TOP_RIGHT||handle_activo==HandleResize::MID_RIGHT||handle_activo==HandleResize::BOT_RIGHT;
+            if (der) nw = handle_w_inicial + dx;
+            if (izq) { nw = handle_w_inicial - dx; }
+            double antes = camd->get_ancho();
+            camd->set_dimensiones(nw, camd->get_alto());
+            // Si se arrastró el lado izquierdo, mover x para que el borde derecho quede fijo.
+            if (izq) npos.x = handle_pos_inicial_ent.x + (handle_w_inicial - camd->get_ancho());
+            camd->set_posicion(npos);
+            (void)antes;
         }
     } else if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && entidad_arrastrada != nullptr) {
         Vector2D mouse_pos(mx, my);
@@ -3701,10 +4210,12 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     if (IsKeyPressed(KEY_SPACE)) {
         if (motor.get_pausado()) {
             guardar_snapshot_simulacion(motor, gestor_eventos);
+            motor.aplicar_transmision_bandas();
             motor.set_pausado(false);
             cancelar_colocacion_cuerda();
         } else {
             restaurar_snapshot_simulacion(motor, gestor_eventos);
+            motor.aplicar_transmision_bandas();
             motor.set_pausado(true);
         }
     }
@@ -3794,6 +4305,10 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                         else {
                             auto* pist = dynamic_cast<Pistola*>(entidad_seleccionada);
                             if (pist) pist->invertir();
+                            else {
+                                auto* can = dynamic_cast<Canon*>(entidad_seleccionada);
+                                if (can) can->invertir();
+                            }
                         }
                     }
                 }
@@ -3852,6 +4367,14 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                 if (cambiado) {
                     ramp->set_dimensiones(nb, nh);
                 }
+            } else if (Caminadora* cam = dynamic_cast<Caminadora*>(entidad_seleccionada)) {
+                // Caminadora: RIGHT/LEFT expanden el ANCHO (con límite interno);
+                // UP/DOWN ajustan la VELOCIDAD de la cinta.
+                double paso = (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)) ? 1.0 : 10.0;
+                if (IsKeyPressed(KEY_RIGHT)) cam->set_dimensiones(cam->get_ancho() + paso, cam->get_alto());
+                if (IsKeyPressed(KEY_LEFT))  cam->set_dimensiones(cam->get_ancho() - paso, cam->get_alto());
+                if (IsKeyPressed(KEY_UP))    cam->ajustar_velocidad(20.0);
+                if (IsKeyPressed(KEY_DOWN))  cam->ajustar_velocidad(-20.0);
             }
         }
     }
@@ -3925,6 +4448,7 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
 
     dibujar_cuerdas(motor);
     dibujar_correas(motor);
+    motor.dibujar_bandas(modo_debug);
 
     for (const auto* e : motor.get_entidades()) {
         dibujar_entidad(e);
@@ -3968,7 +4492,7 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
         }
     }
     dibujar_previsualizacion_cuerda(motor);
-    dibujar_previsualizacion_correa(motor);
+    dibujar_previsualizacion_correa_y_banda(motor);
 
     if (entidad_seleccionada) {
         Color sel_color = {255, 200, 50, 180};
@@ -4002,6 +4526,23 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                 if (estado_actual == EstadoJuego::JUEGO_CREATIVO && motor.get_pausado() && !es_borde_nivel(sp)) {
                     auto handles = calcular_handles(sp);
                     for (int i = 0; i < 8; ++i) {
+                        bool activo = (handle_activo == handles.tipos[i]);
+                        Color col = activo ? Color{255, 200, 50, 255} : Color{80, 160, 255, 200};
+                        DrawRectangleRec(handles.rects[i], col);
+                        DrawRectangleLinesEx(handles.rects[i], 1.5f, {20, 80, 200, 255});
+                    }
+                }
+            } else if (const Caminadora* scam = dynamic_cast<const Caminadora*>(entidad_seleccionada)) {
+                // Caminadora: contorno + handles (redimensionable con el mouse, solo ancho).
+                Vector2D spos = scam->get_posicion();
+                float sw = (float)scam->get_ancho(), sh = (float)scam->get_alto();
+                DrawRectangleLinesEx({(float)spos.x - 3, (float)spos.y - 3, sw + 6, sh + 6}, 2.0f, sel_color);
+                if (estado_actual == EstadoJuego::JUEGO_CREATIVO && motor.get_pausado()) {
+                    auto handles = calcular_handles_xywh((float)spos.x, (float)spos.y, sw, sh);
+                    for (int i = 0; i < 8; ++i) {
+                        // Solo los handles laterales (izq/der) son útiles (solo ancho).
+                        bool lateral = handles.tipos[i]==HandleResize::MID_LEFT || handles.tipos[i]==HandleResize::MID_RIGHT;
+                        if (!lateral) continue;
                         bool activo = (handle_activo == handles.tipos[i]);
                         Color col = activo ? Color{255, 200, 50, 255} : Color{80, 160, 255, 200};
                         DrawRectangleRec(handles.rects[i], col);
@@ -4502,6 +5043,7 @@ int main() {
     if (tex_robote_pelota.id > 0) UnloadTexture(tex_robote_pelota);
     if (tex_ventilador_cuerpo.id > 0) UnloadTexture(tex_ventilador_cuerpo);
     if (tex_ventilador_aspa.id > 0) UnloadTexture(tex_ventilador_aspa);
+    if (tex_caminadora.id > 0) UnloadTexture(tex_caminadora);
     
     if (tex_hud_opciones.id > 0) UnloadTexture(tex_hud_opciones);
     if (tex_hud_opciones_hover.id > 0) UnloadTexture(tex_hud_opciones_hover);

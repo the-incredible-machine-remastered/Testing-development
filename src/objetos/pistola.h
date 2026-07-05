@@ -23,7 +23,8 @@ public:
     bool get_ya_disparo() const { return ya_disparo; }
     void resetear_disparo() { disparada = false; }
     void set_ya_disparo() { ya_disparo = true; }
-    void activar_por_tension() { if (!ya_disparo) { disparada = true; ya_disparo = true; } }
+    bool es_activable_por_tension() const override { return !ya_disparo; }
+    void activar_por_tension() override { if (!ya_disparo) { disparada = true; ya_disparo = true; } }
     double get_velocidad_bala() const { return velocidad_bala; }
 
     void invertir() {

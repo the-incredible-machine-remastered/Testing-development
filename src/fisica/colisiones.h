@@ -502,6 +502,8 @@ namespace Colisiones {
             if (inv_I_a > 0.0) {
                 double delta_omega_a = Vector2D::cross(r_a, impulso) * inv_I_a;
                 a->set_velocidad_angular(a->get_velocidad_angular() + delta_omega_a);
+                auto* bal_a = dynamic_cast<Balancin*>(a);
+                if (bal_a) bal_a->marcar_impacto_si_brusco();
             }
         }
         if (!b->get_es_estatico()) {
@@ -509,6 +511,8 @@ namespace Colisiones {
             if (inv_I_b > 0.0) {
                 double delta_omega_b = Vector2D::cross(r_b, impulso) * inv_I_b;
                 b->set_velocidad_angular(b->get_velocidad_angular() - delta_omega_b);
+                auto* bal_b = dynamic_cast<Balancin*>(b);
+                if (bal_b) bal_b->marcar_impacto_si_brusco();
             }
         }
 

@@ -32,7 +32,23 @@ enum class TipoEntidadJuego {
     GENERADOR_MOTOR,
     CORREA,
     GANCHO,
-    PISTOLA
+    PISTOLA,
+    CAJA_HAMSTER,
+    BANDA,
+    CAJA_SORPRESA,
+    CAMINADORA,
+    FOCO,
+    LUPA,
+    CANON,
+    LADRILLO,
+    DINAMITA,
+    DINAMITA_DETONADOR,
+    EXPLOSION,
+    GATO,
+    RATON,
+    ESCALON,
+    LADRILLO_VERTICAL,
+    LADRILLO_HORIZONTAL
 };
 
 inline const char* nombre_tipo_entidad(TipoEntidadJuego t) {
@@ -61,6 +77,22 @@ inline const char* nombre_tipo_entidad(TipoEntidadJuego t) {
         case TipoEntidadJuego::CORREA:           return "Correa";
         case TipoEntidadJuego::GANCHO:           return "Gancho";
         case TipoEntidadJuego::PISTOLA:          return "Pistola";
+        case TipoEntidadJuego::CAJA_HAMSTER:     return "Hamster";
+        case TipoEntidadJuego::BANDA:            return "Banda";
+        case TipoEntidadJuego::CAJA_SORPRESA:   return "CajaSorpresa";
+        case TipoEntidadJuego::CAMINADORA:        return "Caminadora";
+        case TipoEntidadJuego::FOCO:              return "Foco";
+        case TipoEntidadJuego::LUPA:              return "Lupa";
+        case TipoEntidadJuego::CANON:            return "Canon";
+        case TipoEntidadJuego::LADRILLO:         return "Ladrillo";
+        case TipoEntidadJuego::DINAMITA:         return "Dinamita";
+        case TipoEntidadJuego::DINAMITA_DETONADOR: return "Dina Detonador";
+        case TipoEntidadJuego::EXPLOSION:        return "Explosion";
+        case TipoEntidadJuego::GATO:             return "Gato";
+        case TipoEntidadJuego::RATON:            return "Raton";
+        case TipoEntidadJuego::ESCALON:          return "Escalon";
+        case TipoEntidadJuego::LADRILLO_VERTICAL:   return "Ladrillo V";
+        case TipoEntidadJuego::LADRILLO_HORIZONTAL: return "Ladrillo H";
         default: return "???";
     }
 }
