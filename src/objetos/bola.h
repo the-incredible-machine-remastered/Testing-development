@@ -25,7 +25,7 @@ public:
         set_restitucion(0.7);   // Rebote alto
         set_friccion(0.5);      // Fricción media-alta (favorece rolling)
         set_amortiguamiento(0.002);  // Mínimo damping
-        tipo_menu = TipoObjetoMenu::BOLA;
+        tipo_menu = TipoObjetoMenu::BOLA_NORMAL;
     }
 
     // --- Getters ---
@@ -57,20 +57,36 @@ public:
         float r = static_cast<float>(radio);
         double ang = angulo;
 
-        // Dibujar sprite de la bola con rotación correcta alrededor del centro
+        // Dibujar sprite de la bola con rotación correcta al rededor del centro
         int tex_idx = texture_idx;
         if (tex_idx >= 0 && tex_idx < 3 && tex_bola[tex_idx].id > 0) {
+            Color tint_color = WHITE;
+            if (tipo_menu == TipoObjetoMenu::BOLA_PLAYA) {
+                tint_color = WHITE;
+            } else if (tipo_menu == TipoObjetoMenu::BOLA_NORMAL) {
+                tint_color = {255, 120, 60, 255};
+            } else if (tipo_menu == TipoObjetoMenu::BOLA_BOLOS) {
+                tint_color = {50, 50, 50, 255};
+            } else if (tipo_menu == TipoObjetoMenu::BOLA_TENIS) {
+                tint_color = {180, 255, 50, 255};
+            }
+
             DrawTexturePro(
                 tex_bola[tex_idx],
                 {0, 0, (float)tex_bola[tex_idx].width, (float)tex_bola[tex_idx].height},
                 {static_cast<float>(posicion.x), static_cast<float>(posicion.y), 2.0f * r, 2.0f * r},
                 {r, r},
                 static_cast<float>(ang * 180.0 / MathUtils::TIM_PI),
-                WHITE
+                tint_color
             );
         } else {
             // Fallback a círculo si la textura no se cargó
             Color col = PALETA_BOLAS[color_idx];
+            if (tipo_menu == TipoObjetoMenu::BOLA_PLAYA) col = {255, 230, 109, 255};
+            else if (tipo_menu == TipoObjetoMenu::BOLA_NORMAL) col = {255, 107, 107, 255};
+            else if (tipo_menu == TipoObjetoMenu::BOLA_BOLOS) col = {40, 40, 40, 255};
+            else if (tipo_menu == TipoObjetoMenu::BOLA_TENIS) col = {180, 255, 50, 255};
+
             DrawCircle(static_cast<int>(posicion.x), static_cast<int>(posicion.y), r, col);
             DrawCircleLines(static_cast<int>(posicion.x), static_cast<int>(posicion.y), r,
                             ColorBrightness(col, -0.3f));
@@ -99,4 +115,8 @@ public:
     }
 };
 
-// TIM_MENU_SPAWN etiqueta="Bola" tab=0 categoria=0
+// TIM_MENU_SPAWN id=BOLA_PLAYA etiqueta="Balon Playa" tab=0 categoria=0
+// TIM_MENU_SPAWN id=BOLA_NORMAL etiqueta="Balon Normal" tab=0 categoria=0
+// TIM_MENU_SPAWN id=BOLA_BOLOS etiqueta="Balon Bolos" tab=0 categoria=0
+// TIM_MENU_SPAWN id=BOLA_TENIS etiqueta="Pelota Tenis" tab=0 categoria=0
+

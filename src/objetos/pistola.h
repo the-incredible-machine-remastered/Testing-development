@@ -10,12 +10,15 @@ private:
     bool disparada;
     bool ya_disparo;
     double velocidad_bala;
+    double angulo_rotacion;     // Ángulo acumulado del círculo giratorio
+    double velocidad_rotacion;  // Velocidad de giro actual (grados/segundo)
 
 public:
     Pistola(int id, Vector2D pos, double ang_grados = 0.0)
         : EntidadFisica(id, pos, 0.0, TipoForma::AABB, true),
           angulo(ang_grados * MathUtils::TIM_PI / 180.0),
-          disparada(false), ya_disparo(false), velocidad_bala(600.0) {}
+          disparada(false), ya_disparo(false), velocidad_bala(600.0),
+          angulo_rotacion(0.0), velocidad_rotacion(0.0) {}
 
     double get_angulo() const { return angulo; }
     double get_angulo_grados() const { return angulo * 180.0 / MathUtils::TIM_PI; }
@@ -23,7 +26,14 @@ public:
     bool get_ya_disparo() const { return ya_disparo; }
     void resetear_disparo() { disparada = false; }
     void set_ya_disparo() { ya_disparo = true; }
-    void activar_por_tension() { if (!ya_disparo) { disparada = true; ya_disparo = true; } }
+    bool es_activable_por_tension() const override { return !ya_disparo; }
+    void activar_por_tension() override {
+        if (!ya_disparo) {
+            disparada = true;
+            ya_disparo = true;
+            velocidad_rotacion = 1200.0; // Inicia el giro rápido al disparar
+        }
+    }
     double get_velocidad_bala() const { return velocidad_bala; }
 
     void invertir() {
@@ -36,6 +46,8 @@ public:
     }
 
     // Posición donde sale la bala (punta del cañón)
+    // NOTA: Puedes modificar el multiplicador (ej. 28.0) para ajustar la distancia longitudinal
+    // de salida de la bala, o sumarle un offset vertical si es necesario.
     Vector2D get_punto_bala() const {
         return posicion + get_dir_disparo() * 28.0;
     }
@@ -50,6 +62,19 @@ public:
             t != TipoEntidadJuego::CUBETA) return;
         disparada = true;
         ya_disparo = true;
+        velocidad_rotacion = 1200.0; // Inicia el giro rápido al disparar
+    }
+
+    void actualizar_fisica(double dt) override {
+        EntidadFisica::actualizar_fisica(dt);
+        if (velocidad_rotacion > 0.0) {
+            angulo_rotacion += velocidad_rotacion * dt;
+            // Desaceleración progresiva (frena a un ritmo de 450 grados/s cada segundo)
+            velocidad_rotacion -= 450.0 * dt;
+            if (velocidad_rotacion < 0.0) {
+                velocidad_rotacion = 0.0;
+            }
+        }
     }
 
     TipoEntidadJuego get_tipo_entidad() const override {
@@ -79,27 +104,57 @@ public:
         bool apunta_izq = (std::cos(angulo) < 0);
         float d = apunta_izq ? -1.0f : 1.0f; // +1 = derecha, -1 = izquierda
 
-        Color cuerpo = ya_disparo ? Color{80, 80, 80, 255} : Color{60, 65, 70, 255};
-        Color mango  = Color{100, 60, 30, 255};
-        Color metal  = Color{140, 148, 155, 255};
+        if (tex_pistola.id > 0) {
+            float w = 56.0f;
+            float h = 36.0f;
+            float flip = apunta_izq ? 1.0f : -1.0f;
+            
+            // Ya no se oscurece la pistola al activarse (usamos WHITE)
+            Color tint_color = WHITE;
 
-        // Mango inclinado (siempre debajo del cuerpo, hacia atrás)
-        DrawRectanglePro(
-            {px - 3.0f * d, py + 4.0f, 13.0f, 17.0f},
-            {6.5f, 0.0f},
-            apunta_izq ? 15.0f : -15.0f,
-            mango);
+            Rectangle src = {0.0f, 0.0f, (float)tex_pistola.width * flip, (float)tex_pistola.height};
+            Rectangle dst = {px, py, w, h};
+            Vector2 origin = {w / 2.0f, h / 2.0f};
+            DrawTexturePro(tex_pistola, src, dst, origin, 0.0f, tint_color);
 
-        // Cuerpo principal centrado en px
-        DrawRectangleRec({px - 18.0f, py - 8.0f, 36.0f, 14.0f}, cuerpo);
+            // Dibujar el círculo giratorio
+            if (tex_pistola_gira.id > 0) {
+                float circle_w = 20.0f;
+                float circle_h = 20.0f;
+                
+                // Rotación acumulada durante la simulación física (frena progresivamente)
+                float rotation = (float)angulo_rotacion;
+                
+                Rectangle c_src = {0.0f, 0.0f, (float)tex_pistola_gira.width, (float)tex_pistola_gira.height};
+                // El círculo está colocado con un ligero offset del centro para quedar alineado en el tambor/centro del arma
+                Rectangle c_dst = {px - 4.0f * d, py - 7, circle_w, circle_h};
+                Vector2 c_origin = {circle_w / 2.0f, circle_h / 2.0f};
+                
+                DrawTexturePro(tex_pistola_gira, c_src, c_dst, c_origin, rotation, WHITE);
+            }
+        } else {
+            Color cuerpo = Color{60, 65, 70, 255};
+            Color mango  = Color{100, 60, 30, 255};
+            Color metal  = Color{140, 148, 155, 255};
 
-        // Cañón hacia la dirección correcta
-        DrawRectangleRec({px + 8.0f * d, py - 5.0f, 18.0f * d, 8.0f}, metal);
+            // Mango inclinado (siempre debajo del cuerpo, hacia atrás)
+            DrawRectanglePro(
+                {px - 3.0f * d, py + 4.0f, 13.0f, 17.0f},
+                {6.5f, 0.0f},
+                apunta_izq ? 15.0f : -15.0f,
+                mango);
 
-        // Gatillo (hacia atrás)
-        DrawLineEx({px - 2.0f * d, py + 2.0f}, {px - 7.0f * d, py + 9.0f}, 2.0f, metal);
+            // Cuerpo principal centrado en px
+            DrawRectangleRec({px - 18.0f, py - 8.0f, 36.0f, 14.0f}, cuerpo);
 
-        // Flash al disparar
+            // Cañón hacia la dirección correcta
+            DrawRectangleRec({px + 8.0f * d, py - 5.0f, 18.0f * d, 8.0f}, metal);
+
+            // Gatillo (hacia atrás)
+            DrawLineEx({px - 2.0f * d, py + 2.0f}, {px - 7.0f * d, py + 9.0f}, 2.0f, metal);
+        }
+
+        // Flash al disparar (se muestra sobre el sprite)
         if (disparada) {
             Vector2D punta = get_punto_bala();
             DrawCircle((int)punta.x, (int)punta.y, 8.0f, Color{255, 220, 80, 200});

@@ -424,11 +424,19 @@ namespace Colisiones {
         Vector2D r_a = info.punto_contacto - a->get_posicion();
         Vector2D r_b = info.punto_contacto - b->get_posicion();
 
-        // Inversas de inercia (0 para estáticos)
+        // Inversas de inercia (0 para estáticos, y bloqueado para hubs de transmisión)
         double I_a = a->get_inercia();
         double I_b = b->get_inercia();
-        double inv_I_a = (!a->get_es_estatico() && I_a > MathUtils::EPSILON) ? 1.0 / I_a : 0.0;
-        double inv_I_b = (!b->get_es_estatico() && I_b > MathUtils::EPSILON) ? 1.0 / I_b : 0.0;
+        bool a_bloqueado = (a->get_tipo_entidad() == TipoEntidadJuego::RUEDA_HAMSTER ||
+                            a->get_tipo_entidad() == TipoEntidadJuego::POLEA ||
+                            a->get_tipo_entidad() == TipoEntidadJuego::CINTA_TRANSPORTADORA ||
+                            a->get_tipo_entidad() == TipoEntidadJuego::GENERADOR_MOTOR);
+        bool b_bloqueado = (b->get_tipo_entidad() == TipoEntidadJuego::RUEDA_HAMSTER ||
+                            b->get_tipo_entidad() == TipoEntidadJuego::POLEA ||
+                            b->get_tipo_entidad() == TipoEntidadJuego::CINTA_TRANSPORTADORA ||
+                            b->get_tipo_entidad() == TipoEntidadJuego::GENERADOR_MOTOR);
+        double inv_I_a = (!a->get_es_estatico() && !a_bloqueado && I_a > MathUtils::EPSILON) ? 1.0 / I_a : 0.0;
+        double inv_I_b = (!b->get_es_estatico() && !b_bloqueado && I_b > MathUtils::EPSILON) ? 1.0 / I_b : 0.0;
 
         // ---- 1. Corrección Posicional ----
         const double correccion_pct = 0.8;
@@ -465,16 +473,9 @@ namespace Colisiones {
             }
         }
 
-        // ---- Helper: velocidad en el punto de contacto (incluye rotación) ----
-        // v_contact = v_center + ω × r   (en 2D: ω × r = ω * (-r.y, r.x))
-        auto vel_contacto = [](const EntidadFisica* ent, const Vector2D& r) -> Vector2D {
-            double w = ent->get_velocidad_angular();
-            return ent->get_velocidad() + Vector2D(-w * r.y, w * r.x);
-        };
-
         // ---- 2. Impulso Normal ----
-        Vector2D v_ca = a->get_es_estatico() ? Vector2D(0,0) : vel_contacto(a, r_a);
-        Vector2D v_cb = b->get_es_estatico() ? Vector2D(0,0) : vel_contacto(b, r_b);
+        Vector2D v_ca = a->get_es_estatico() ? Vector2D(0,0) : a->get_velocidad_en_punto(info.punto_contacto);
+        Vector2D v_cb = b->get_es_estatico() ? Vector2D(0,0) : b->get_velocidad_en_punto(info.punto_contacto);
         Vector2D vel_rel = v_ca - v_cb;
         double vel_normal = Vector2D::dot(vel_rel, info.normal);
 
@@ -501,6 +502,8 @@ namespace Colisiones {
             if (inv_I_a > 0.0) {
                 double delta_omega_a = Vector2D::cross(r_a, impulso) * inv_I_a;
                 a->set_velocidad_angular(a->get_velocidad_angular() + delta_omega_a);
+                auto* bal_a = dynamic_cast<Balancin*>(a);
+                if (bal_a) bal_a->marcar_impacto_si_brusco();
             }
         }
         if (!b->get_es_estatico()) {
@@ -508,13 +511,15 @@ namespace Colisiones {
             if (inv_I_b > 0.0) {
                 double delta_omega_b = Vector2D::cross(r_b, impulso) * inv_I_b;
                 b->set_velocidad_angular(b->get_velocidad_angular() - delta_omega_b);
+                auto* bal_b = dynamic_cast<Balancin*>(b);
+                if (bal_b) bal_b->marcar_impacto_si_brusco();
             }
         }
 
         // ---- 3. Impulso Tangencial (Fricción + Rolling) ----
         // Recalcular velocidad relativa en el punto de contacto post-impulso normal
-        v_ca = a->get_es_estatico() ? Vector2D(0,0) : vel_contacto(a, r_a);
-        v_cb = b->get_es_estatico() ? Vector2D(0,0) : vel_contacto(b, r_b);
+        v_ca = a->get_es_estatico() ? Vector2D(0,0) : a->get_velocidad_en_punto(info.punto_contacto);
+        v_cb = b->get_es_estatico() ? Vector2D(0,0) : b->get_velocidad_en_punto(info.punto_contacto);
         vel_rel = v_ca - v_cb;
 
         Vector2D tangente = vel_rel - info.normal * Vector2D::dot(vel_rel, info.normal);

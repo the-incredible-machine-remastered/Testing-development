@@ -23,7 +23,7 @@ public:
     double get_alto() const { return alto; }
 
     // --- Setters (útil al redimensionar la ventana) ---
-    void set_dimensiones(double w, double h) { ancho = w; alto = h; }
+    virtual void set_dimensiones(double w, double h) { ancho = w; alto = h; }
 
     // Esquina superior-izquierda (min) y esquina inferior-derecha (max)
     // En coordenadas de pantalla: Y+ apunta hacia abajo.
@@ -94,5 +94,5 @@ public:
 
 // TIM_MENU_SPAWN id=PLATAFORMA etiqueta="Plataforma" tab=0 categoria=0 variante=plataforma
 // TIM_MENU_SPAWN id=PARED_LARGA etiqueta="Pared" tab=0 categoria=0 variante=pared
-// TIM_MENU_SPAWN id=PLATAFORMA_DECOR etiqueta="Ladrillo" tab=1 categoria=0 variante=decor_plataforma
+// TIM_MENU_SPAWN id=PLATAFORMA_DECOR etiqueta="Deco" tab=1 categoria=0 variante=decor_plataforma
 

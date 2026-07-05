@@ -179,8 +179,17 @@ public:
     TipoForma get_tipo_forma() const { return tipo_forma; }
     double get_inercia() const { return inercia; }
 
+    virtual Vector2D get_velocidad_en_punto(const Vector2D& punto_mundo) const {
+        double w = velocidad_angular;
+        Vector2D r = punto_mundo - posicion;
+        return velocidad + Vector2D(-w * r.y, w * r.x);
+    }
+
+    virtual double get_radio_eje() const { return 1.0; }
+
     // ---- Setters ----
     void set_posicion(const Vector2D& pos) { posicion = pos; }
+    virtual void set_posicion_editor(const Vector2D& pos) { set_posicion(pos); }
     void set_angulo(double a) { angulo = a; }
     void set_velocidad(const Vector2D& vel) { velocidad = vel; }
     void set_velocidad_angular(double omega) { velocidad_angular = omega; }
@@ -212,6 +221,13 @@ public:
         return ss.str();
     }
     virtual void on_collision(EntidadFisica* otro, const InfoColision& info) {}
+
+    // ---- Activación por tensión de cuerda / golpe de balancín ----
+    // Las subclases activables (pistola, foco, lupa, cañón, etc.) sobreescriben esto
+    // para reaccionar cuando una cuerda conectada las activa. El motor de física no
+    // necesita conocer el tipo concreto de la entidad.
+    virtual bool es_activable_por_tension() const { return false; }
+    virtual void activar_por_tension() {}
 
 protected:
     std::vector<RegistroEventoEspecial> eventos_pendientes;

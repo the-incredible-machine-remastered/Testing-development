@@ -40,7 +40,11 @@ endif()
 # =============================================================
 # Ejecutable principal
 # =============================================================
-add_executable(${PROJECT_NAME} main.cpp)
+if(WIN32)
+    set(RESOURCE_FILES resources.rc)
+endif()
+
+add_executable(${PROJECT_NAME} main.cpp ${RESOURCE_FILES})
 
 if(Python3_FOUND)
     add_dependencies(${PROJECT_NAME} catalogo_menu_gen)

@@ -1,0 +1,31 @@
+tim_save 1
+nombre Juan-Diego
+ancho 1924
+alto 1055
+gravedad_y 500
+contador_bolas 2
+siguiente_id 55
+ent BALANCIN id=7 x=969 y=876 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=0 largo=200 esp=6
+ent PARED id=8 x=930 y=73 w=80 h=785 fijo=1 tipo_menu=5
+ent BOLA id=9 x=1050 y=823 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=1 r=35 m=12.25 ci=0 ti=1
+ent RAMPA id=10 x=1054 y=786 b=160 h=120 inv=1 fijo=1 tipo_menu=7
+ent RAMPA id=11 x=1210 y=666 b=160 h=120 inv=1 fijo=1 tipo_menu=7
+ent RAMPA id=12 x=1440 y=768 b=160 h=120 inv=1 fijo=1 tipo_menu=7
+ent SEGUIDOR id=13 x=1427 y=832 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=11 w=60 h=120
+ent PARED id=16 x=157 y=908 w=1432 h=20 fijo=1 tipo_menu=14
+ent PARED id=18 x=1217 y=784 w=45 h=119 fijo=1 tipo_menu=5
+ent BARRIL id=20 x=1086 y=841 w=90 h=120 fijo=1 tipo_menu=10
+ent BOLA id=25 x=152 y=765 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=1 r=37 m=13.69 ci=1 ti=2
+ent PARED id=30 x=741 y=541 w=80 h=356 fijo=1 tipo_menu=5
+ent PARED id=34 x=980 y=720 w=46 h=68 fijo=1 tipo_menu=5
+ent PARED id=38 x=1563 y=803 w=68 h=107 fijo=1 tipo_menu=5
+ent BOLA_REBOTADORA id=44 x=95 y=885 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=2 r=48
+ent BARRIL id=46 x=464 y=868 w=90 h=120 fijo=1 tipo_menu=10
+ent BOLA_REBOTADORA id=48 x=658 y=718 vx=0 vy=0 ang=0 omega=0 fijo=0 tipo_menu=2 r=48
+ent BOLA_REBOTADORA id=50 x=374 y=756 vx=0 vy=0 ang=0 omega=0 fijo=0 tipo_menu=2 r=48
+ent PARED id=53 x=741 y=289 w=80 h=120 fijo=1 tipo_menu=5
+ent PARED id=54 x=745 y=45 w=80 h=120 fijo=1 tipo_menu=5
+siguiente_id_evento 3
+evt_grupo id=-1 op=AND
+  evt_cond id=2 tipo=CABEZAZO es=13 eb=-1
+evt_grupo_fin

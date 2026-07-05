@@ -23,11 +23,29 @@
 #include "../objetos/seguidor_booster.h"
 #include "../objetos/barril_chavo.h"
 #include "../objetos/ventilador.h"
+#include "../objetos/polea.h"
+#include "../objetos/rueda_hamster.h"
+#include "../objetos/cinta_transportadora.h"
+#include "../objetos/generador_motor.h"
+#include "../objetos/correa.h"
 #include "../objetos/globo.h"
 #include "../objetos/tijera.h"
 #include "../objetos/gancho.h"
 #include "../objetos/pistola.h"
 #include "../objetos/soporte_torque.h"
+#include "../objetos/caja_hamster.h"
+#include "../objetos/banda.h"
+#include "../objetos/caja_sorpresa.h"
+#include "../objetos/caminadora.h"
+#include "../objetos/foco.h"
+#include "../objetos/lupa.h"
+#include "../objetos/canon.h"
+#include "../objetos/ladrillo.h"
+#include "../objetos/dinamita.h"
+#include "../objetos/dinamita_detonador.h"
+#include "../objetos/explosion.h"
+#include "../objetos/raton.h"
+#include "../objetos/gato.h"
 #include "colisiones.h"
 #include "fisica_ventilador.h"
 #include <vector>
@@ -126,8 +144,17 @@ public:
     // --- Control de simulación ---
 
     void set_pausado(bool p) {
-        if (pausado && !p)
-            resetear_tensiones_cuerdas = true; // resetear tras los primeros 2 pasos
+        if (pausado && !p) {
+            // Al reanudar (Play): en edición el usuario pudo mover objetos, así que
+            // recalibramos la longitud de reposo de cada cuerda a su geometría actual
+            // (para no arrancar pre-tensada). La línea base de tensión se fija con el
+            // sistema resetear_tensiones_cuerdas en los primeros pasos.
+            for (auto* e : entidades) {
+                auto* c = dynamic_cast<Cuerda*>(e);
+                if (c) c->sincronizar_reposo(entidades);
+            }
+            resetear_tensiones_cuerdas = true; // resetear tras los primeros pasos
+        }
         pausado = p;
     }
     bool get_pausado() const { return pausado; }
@@ -136,6 +163,21 @@ public:
     const std::vector<EntidadFisica*>& get_entidades() const { return entidades; }
     const std::vector<RegistroColision>& get_colisiones_frame() const { return colisiones_frame; }
     const std::vector<RegistroEventoEspecial>& get_eventos_especiales_frame() const { return eventos_especiales_frame; }
+
+    void dibujar_bandas(bool mostrar_debug) const {
+        for (auto* e : entidades) {
+            auto* banda = dynamic_cast<Banda*>(e);
+            if (banda) banda->dibujar_con_entidades(entidades, mostrar_debug);
+        }
+    }
+
+    // Forzar una pasada de transmisión de bandas (útil antes del primer frame)
+    void aplicar_transmision_bandas() {
+        for (auto* e : entidades) {
+            auto* banda = dynamic_cast<Banda*>(e);
+            if (banda) banda->aplicar_transmision(entidades);
+        }
+    }
 
     // --- Bucle principal ---
     // Recibe el delta time real (variable) y lo subdivide en pasos fijos.
@@ -168,6 +210,20 @@ private:
         if (rebotadora) {
             pos = rebotadora->get_posicion();
             radio = rebotadora->get_radio();
+            return true;
+        }
+
+        auto* polea = dynamic_cast<Polea*>(e);
+        if (polea) {
+            pos = polea->get_posicion();
+            radio = polea->get_radio();
+            return true;
+        }
+
+        auto* rueda = dynamic_cast<RuedaHamster*>(e);
+        if (rueda) {
+            pos = rueda->get_posicion();
+            radio = rueda->get_radio();
             return true;
         }
 
@@ -225,10 +281,73 @@ private:
             return true;
         }
 
+        auto* cinta = dynamic_cast<CintaTransportadora*>(e);
+        if (cinta) {
+            min = cinta->get_min();
+            max = cinta->get_max();
+            return true;
+        }
+
+        auto* gen = dynamic_cast<GeneradorMotor*>(e);
+        if (gen) {
+            min = gen->get_min();
+            max = gen->get_max();
+            return true;
+        }
+
         auto* tijera = dynamic_cast<Tijera*>(e);
         if (tijera) {
             min = tijera->get_min();
             max = tijera->get_max();
+            return true;
+        }
+
+        auto* hamster = dynamic_cast<CajaHamster*>(e);
+        if (hamster) {
+            min = hamster->get_min();
+            max = hamster->get_max();
+            return true;
+        }
+
+        auto* caja_s = dynamic_cast<CajaSorpresa*>(e);
+        if (caja_s) {
+            min = caja_s->get_min();
+            max = caja_s->get_max();
+            return true;
+        }
+
+        auto* conv = dynamic_cast<Caminadora*>(e);
+        if (conv) {
+            min = conv->get_min();
+            max = conv->get_max();
+            return true;
+        }
+
+        auto* ladrillo = dynamic_cast<Ladrillo*>(e);
+        if (ladrillo) {
+            min = ladrillo->get_min();
+            max = ladrillo->get_max();
+            return true;
+        }
+
+        auto* dinamita = dynamic_cast<Dinamita*>(e);
+        if (dinamita) {
+            min = dinamita->get_min();
+            max = dinamita->get_max();
+            return true;
+        }
+
+        auto* raton = dynamic_cast<Raton*>(e);
+        if (raton) {
+            min = raton->get_min();
+            max = raton->get_max();
+            return true;
+        }
+
+        auto* gato = dynamic_cast<Gato*>(e);
+        if (gato) {
+            min = gato->get_min();
+            max = gato->get_max();
             return true;
         }
 
@@ -245,8 +364,26 @@ private:
         // 1.5 Aplicar corrientes de aire de ventiladores
         FisicaVentilador::aplicar(entidades);
 
+        // 1.55 Aplicar conveyors activos y animar
+        for (auto* e : entidades) {
+            auto* conv = dynamic_cast<Caminadora*>(e);
+            if (conv) {
+                conv->Caminadora::actualizar_fisica(dt);
+                conv->aplicar_conveyor(entidades);
+            }
+        }
+
+        // 1.6 Transmitir energía de bandas (hámster → ventilador)
+        for (auto* e : entidades) {
+            auto* banda = dynamic_cast<Banda*>(e);
+            if (banda) banda->aplicar_transmision(entidades);
+        }
+
         // 1.6 Aplicar constraints de cuerdas colocadas como herramienta
         aplicar_tensiones_cuerda();
+
+        // 1.7 Aplicar transmisión por correas
+        aplicar_correas();
  
         // 2. Actualizar comportamiento del futbolista seguidor
         for (auto* e : entidades) {
@@ -255,14 +392,15 @@ private:
                 seg->actualizar_comportamiento(entidades, dt);
             }
         }
+
+        // 2.5 Gato persigue al ratón; ratón huye; gato atrapa (elimina) al ratón.
+        actualizar_gato_raton(dt);
  
         // 3. Integrar todas las entidades (cada una usa RK4)
+        // paso_fisico() solo corre cuando la simulación NO está pausada, así que aquí
+        // siempre estamos "corriendo" — la física es idéntica en CREATIVO y NIVEL. La
+        // edición (objetos quietos) ocurre estando pausado, cuando esto ni se ejecuta.
         for (auto* e : entidades) {
-            if (estado_actual == EstadoJuego::JUEGO_CREATIVO && !e->get_es_fijo()) {
-                e->set_velocidad(Vector2D(0.0, 0.0));
-                e->set_velocidad_angular(0.0);
-                continue;
-            }
             e->actualizar_fisica(dt);
         }
  
@@ -272,8 +410,16 @@ private:
         // 4.5 Tijeras activadas cortan cuerdas que pasan por su zona
         cortar_cuerdas_con_tijeras();
 
+        // 4.55 Cadena de luz: foco encendido activa lupa; haz de lupa enciende mecha del cañón
+        procesar_luz_focos_lupas();
+
         // 4.6 Pistolas activadas disparan
         disparar_pistolas();
+        disparar_canones();
+        lanzar_cajas_sorpresa();
+
+        // 4.7 Dinamitas que explotaron: destruyen ladrillos y empujan dinámicos
+        procesar_explosiones();
 
         // 5. Recolectar eventos especiales pendientes de todas las entidades
         for (auto* e : entidades) {
@@ -289,7 +435,6 @@ private:
 
     void aplicar_gravedad() {
         for (auto* e : entidades) {
-            if (estado_actual == EstadoJuego::JUEGO_CREATIVO && !e->get_es_fijo()) continue;
             if (!e->get_es_estatico() && e->get_masa() > MathUtils::EPSILON) {
                 if (dynamic_cast<Balancin*>(e)) continue; // El balancín está pivotado y fijo linealmente
                 // F = m * g
@@ -312,26 +457,57 @@ private:
             }
         }
 
+        // Fuente de verdad única para "el balancín recibió un golpe brusco este frame".
+        // Se consume el flag de CADA balancín una sola vez, antes de recorrer cuerdas,
+        // para que el resultado no dependa del orden ni se pierda con varias cuerdas.
+        std::vector<Balancin*> balancines_golpeados;
+        for (auto* e : entidades) {
+            auto* bal = dynamic_cast<Balancin*>(e);
+            if (bal && bal->consumir_impacto_brusco())
+                balancines_golpeados.push_back(bal);
+        }
+        // Un balancín golpeado activa cualquier activable parado sobre su tabla.
+        for (auto* bal : balancines_golpeados) {
+            for (auto* e3 : entidades) {
+                if (e3->es_activable_por_tension() && bal->contiene_punto(e3->get_posicion()))
+                    e3->activar_por_tension();
+            }
+        }
+
         for (auto* e : entidades) {
             auto* cuerda = dynamic_cast<Cuerda*>(e);
             if (!cuerda) continue;
             cuerda->aplicar_tension(entidades, gravedad);
 
-            // Activar pistola solo si la tensión aumentó bruscamente
             if (resetear_tensiones_cuerdas) continue; // aún estabilizando
-            double delta = cuerda->get_delta_tension();
-            if (delta < 60.0) continue;
 
-            auto activar_si_pistola = [&](int id) {
-                for (auto* e2 : entidades) {
-                    if (e2->get_id() != id) continue;
-                    auto* pistola = dynamic_cast<Pistola*>(e2);
-                    if (pistola) pistola->activar_por_tension();
-                    break;
-                }
+            int id_a = cuerda->get_extremo_a().entidad_id;
+            int id_b = cuerda->get_extremo_b().entidad_id;
+            EntidadFisica* ent_a = nullptr;
+            EntidadFisica* ent_b = nullptr;
+            for (auto* e2 : entidades) {
+                if (e2->get_id() == id_a) ent_a = e2;
+                if (e2->get_id() == id_b) ent_b = e2;
+            }
+
+            auto fue_golpeado = [&](EntidadFisica* e2) {
+                for (auto* bal : balancines_golpeados)
+                    if (static_cast<EntidadFisica*>(bal) == e2) return true;
+                return false;
             };
-            activar_si_pistola(cuerda->get_extremo_a().entidad_id);
-            activar_si_pistola(cuerda->get_extremo_b().entidad_id);
+
+            // Un extremo activable (pistola/foco/lupa) se activa si:
+            //  - la tensión de la cuerda tuvo un pico brusco (delta >= 60), o
+            //  - el OTRO extremo es un balancín que recibió un golpe brusco
+            //    (fuente de verdad robusta, ignora la geometría frágil de la tensión).
+            double delta = cuerda->get_delta_tension();
+            auto activar_extremo = [&](EntidadFisica* e2, EntidadFisica* otro) {
+                if (!e2 || !e2->es_activable_por_tension()) return;
+                if (delta >= 60.0 || fue_golpeado(otro))
+                    e2->activar_por_tension();
+            };
+            activar_extremo(ent_a, ent_b);
+            activar_extremo(ent_b, ent_a);
         }
     }
 
@@ -457,7 +633,34 @@ private:
         for (int id : ids_a_eliminar)
             remover_entidad(id);
         for (auto* nueva : entidades_nuevas)
-            entidades.push_back(nueva);
+            agregar_entidad(nueva); // usa entidades_owner para no fugar memoria
+    }
+
+    void lanzar_cajas_sorpresa() {
+        for (auto* e : entidades) {
+            auto* caja = dynamic_cast<CajaSorpresa*>(e);
+            if (!caja || !caja->get_activada() || caja->get_ya_lanzo()) continue;
+            caja->set_ya_lanzo();
+
+            // Buscar entidades dinámicas encima/sobre la caja y empujarlas
+            Vector2D cmin = caja->get_min();
+            Vector2D cmax = caja->get_max();
+            double zona_x0 = cmin.x - 10.0;
+            double zona_x1 = cmax.x + 10.0;
+            double zona_y0 = cmin.y - 80.0; // zona de búsqueda encima
+            double zona_y1 = cmax.y + 5.0;
+
+            Vector2D impulso = caja->get_velocidad_lanzamiento(); // (280, -520)
+
+            for (auto* otro : entidades) {
+                if (otro == e || otro->get_es_estatico()) continue;
+                Vector2D pos = otro->get_posicion();
+                if (pos.x >= zona_x0 && pos.x <= zona_x1 &&
+                    pos.y >= zona_y0 && pos.y <= zona_y1) {
+                    otro->set_velocidad(impulso);
+                }
+            }
+        }
     }
 
     void disparar_pistolas() {
@@ -478,6 +681,170 @@ private:
         for (auto* n : nuevas) entidades.push_back(n);
     }
 
+    void aplicar_correas() {
+        for (auto* e : entidades) {
+            auto* correa = dynamic_cast<Correa*>(e);
+            if (correa) {
+                correa->aplicar_tension_correa(entidades);
+            }
+        }
+    }
+
+    // Cadena de luz estilo TIM:
+    //   1. Un Foco ENCENDIDO cerca de una Lupa la activa (proximidad).
+    //   2. El haz direccional de una Lupa activa, si su línea alcanza un Cañón
+    //      dentro de su rango, le enciende la mecha.
+    void procesar_luz_focos_lupas() {
+        // 1. Foco encendido -> activa lupas cercanas y orienta su haz ALEJÁNDOSE del
+        //    foco (si la lupa está a la izquierda del foco, el haz va a la izquierda).
+        const double RADIO_FOCO_LUPA = 140.0;
+        for (auto* e : entidades) {
+            auto* foco = dynamic_cast<Foco*>(e);
+            if (!foco || !foco->get_encendido()) continue;
+            for (auto* e2 : entidades) {
+                auto* lupa = dynamic_cast<Lupa*>(e2);
+                if (!lupa) continue;
+                if ((lupa->get_posicion() - foco->get_posicion()).magnitud() <= RADIO_FOCO_LUPA) {
+                    // dx = posición de la lupa relativa al foco: negativo = lupa a la izq.
+                    lupa->set_dir_haz(lupa->get_posicion().x - foco->get_posicion().x);
+                    lupa->activar();
+                }
+            }
+        }
+
+        // 2. Haz de lupa activa -> enciende la mecha de cañones que cruce.
+        for (auto* e : entidades) {
+            auto* lupa = dynamic_cast<Lupa*>(e);
+            if (!lupa || !lupa->get_activa()) continue;
+            Vector2D origen = lupa->get_posicion();
+            Vector2D fin = lupa->get_punto_final(); // origen + dir*rango
+            for (auto* e2 : entidades) {
+                auto* canon = dynamic_cast<Canon*>(e2);
+                if (!canon || canon->get_ya_disparo()) continue;
+                if (segmento_cruza_aabb(origen, fin, canon->get_min(), canon->get_max()))
+                    canon->encender_mecha();
+            }
+        }
+    }
+
+    void disparar_canones() {
+        std::vector<EntidadFisica*> nuevas;
+        for (auto* e : entidades) {
+            auto* canon = dynamic_cast<Canon*>(e);
+            if (!canon || !canon->tiene_disparo_pendiente()) continue;
+            nuevas.push_back(canon->crear_bala(generar_id()));
+        }
+        for (auto* n : nuevas) agregar_entidad(n); // usa entidades_owner, no fuga
+    }
+
+    // ¿Hay un obstáculo sólido (Ladrillo o Pared) entre a y b que bloquee la vista?
+    bool hay_obstaculo_entre(const Vector2D& a, const Vector2D& b) {
+        for (auto* e : entidades) {
+            // Ladrillo hereda de ParedRectangular, así que este cast cubre ambos.
+            auto* pared = dynamic_cast<ParedRectangular*>(e);
+            if (!pared) continue;
+            if (segmento_cruza_aabb(a, b, pared->get_min(), pared->get_max())) return true;
+        }
+        return false;
+    }
+
+    void actualizar_gato_raton(double dt) {
+        // El campo de visión es una FRANJA HORIZONTAL (misma plataforma) Y con LÍNEA DE
+        // VISTA: si un Ladrillo/Pared cruza la línea gato↔ratón, no se ven. Así el gato
+        // no persigue al ratón de otro piso ni a través de un muro.
+        const double MARGEN_ALTURA = 55.0;
+        std::vector<int> ratones_atrapados;
+
+        for (auto* e : entidades) {
+            auto* gato = dynamic_cast<Gato*>(e);
+            if (!gato) continue;
+            int mejor_id = -1; double mejor_d = 1e18; Vector2D mejor_pos;
+            for (auto* e2 : entidades) {
+                auto* raton = dynamic_cast<Raton*>(e2);
+                if (!raton) continue;
+                if (std::abs(gato->get_posicion().y - raton->get_posicion().y) > MARGEN_ALTURA) continue;
+                if (hay_obstaculo_entre(gato->get_posicion(), raton->get_posicion())) continue;
+                double d = Vector2D::distancia(gato->get_posicion(), raton->get_posicion());
+                if (d < mejor_d) { mejor_d = d; mejor_id = raton->get_id(); mejor_pos = raton->get_posicion(); }
+            }
+            gato->actualizar_comportamiento(mejor_id != -1, mejor_id, mejor_pos, mejor_d, dt);
+            int atrapado = gato->consumir_raton_atrapado();
+            if (atrapado != -1) ratones_atrapados.push_back(atrapado);
+        }
+
+        for (auto* e : entidades) {
+            auto* raton = dynamic_cast<Raton*>(e);
+            if (!raton) continue;
+            double mejor_d = 1e18; Vector2D mejor_pos; bool hay = false;
+            for (auto* e2 : entidades) {
+                auto* gato = dynamic_cast<Gato*>(e2);
+                if (!gato) continue;
+                if (std::abs(raton->get_posicion().y - gato->get_posicion().y) > MARGEN_ALTURA) continue;
+                if (hay_obstaculo_entre(raton->get_posicion(), gato->get_posicion())) continue;
+                double d = Vector2D::distancia(raton->get_posicion(), gato->get_posicion());
+                if (d < mejor_d) { mejor_d = d; mejor_pos = gato->get_posicion(); hay = true; }
+            }
+            raton->actualizar_comportamiento(hay, mejor_pos, mejor_d, dt);
+        }
+
+        // Eliminar los ratones atrapados (el gato los "comió").
+        for (int id : ratones_atrapados) remover_entidad(id);
+    }
+
+    void procesar_explosiones() {
+        std::vector<int> ids_a_eliminar;
+        std::vector<EntidadFisica*> nuevas;
+        for (auto* e : entidades) {
+            auto* dina = dynamic_cast<Dinamita*>(e);
+            if (!dina || !dina->get_pendiente_boom()) continue;
+            dina->consumir_boom();
+
+            Vector2D centro = dina->get_centro();
+            double R = dina->get_radio_explosion();
+            double R2 = R * R;
+
+            // Efecto visual "boom" en el centro.
+            nuevas.push_back(new Explosion(generar_id(), centro, R));
+
+            for (auto* otro : entidades) {
+                if (otro == e) continue;
+
+                // Destruir ladrillos cuyo centro esté dentro del radio (solo la dinamita puede).
+                if (auto* lad = dynamic_cast<Ladrillo*>(otro)) {
+                    if ((lad->get_centro() - centro).magnitud_cuadrada() <= R2) {
+                        lad->destruir();
+                        ids_a_eliminar.push_back(lad->get_id());
+                    }
+                    continue;
+                }
+
+                // Empujar objetos dinámicos cercanos (impulso radial que decae con la distancia).
+                if (!otro->get_es_estatico()) {
+                    Vector2D d = otro->get_posicion() - centro;
+                    double dist2 = d.magnitud_cuadrada();
+                    if (dist2 <= R2) {
+                        double dist = std::sqrt(dist2);
+                        Vector2D dir = (dist > MathUtils::EPSILON) ? d / dist : Vector2D(0, -1);
+                        double factor = 1.0 - dist / R; // 1 en el centro, 0 en el borde
+                        otro->set_velocidad(otro->get_velocidad() + dir * (dina->get_fuerza_empuje() * factor));
+                    }
+                }
+            }
+
+            // La dinamita se consume al explotar.
+            ids_a_eliminar.push_back(dina->get_id());
+        }
+
+        // Eliminar explosiones cuya animación ya terminó.
+        for (auto* e : entidades) {
+            auto* exp = dynamic_cast<Explosion*>(e);
+            if (exp && exp->termino()) ids_a_eliminar.push_back(exp->get_id());
+        }
+
+        for (int id : ids_a_eliminar) remover_entidad(id);
+        for (auto* n : nuevas) agregar_entidad(n);
+    }
+
     // ========================================================================
     // Detección y resolución de colisiones (Broad+Narrow phase)
     // Por ahora: fuerza bruta O(n²). Cuando haya muchos objetos,
@@ -489,20 +856,57 @@ private:
                 EntidadFisica* a = entidades[i];
                 EntidadFisica* b = entidades[j];
 
-                if (estado_actual == EstadoJuego::JUEGO_CREATIVO && (!a->get_es_fijo() || !b->get_es_fijo())) continue;
-
-                // Skip si ambos son estáticos
                 if (a->get_es_estatico() && b->get_es_estatico()) continue;
+
+                // Detección especial: círculo vs rueda de hámster
+                {
+                    CajaHamster* hamster = dynamic_cast<CajaHamster*>(a);
+                    EntidadFisica* circ_ent = b;
+                    if (!hamster) { hamster = dynamic_cast<CajaHamster*>(b); circ_ent = a; }
+                    if (hamster && !circ_ent->get_es_estatico()) {
+                        Vector2D pos_circ; double radio = 0.0;
+                        if (obtener_datos_circulo(circ_ent, pos_circ, radio)) {
+                            if (hamster->circulo_toca_rueda(pos_circ, radio)) {
+                                InfoColision info_rueda;
+                                info_rueda.hay_colision = true;
+                                info_rueda.normal = Vector2D(0, -1);
+                                info_rueda.profundidad = 1.0;
+                                info_rueda.punto_contacto = pos_circ;
+                                hamster->on_collision(circ_ent, info_rueda);
+                            }
+                        }
+                    }
+                }
+
+                // Detección especial: círculo vs aros de tijera
+                {
+                    Tijera* tijera = dynamic_cast<Tijera*>(a);
+                    EntidadFisica* circ_ent = b;
+                    if (!tijera) { tijera = dynamic_cast<Tijera*>(b); circ_ent = a; }
+                    if (tijera && !circ_ent->get_es_estatico()) {
+                        Vector2D pos_circ; double radio = 0.0;
+                        if (obtener_datos_circulo(circ_ent, pos_circ, radio)) {
+                            if (tijera->circulo_toca_aros(pos_circ, radio)) {
+                                // Notificar colisión con el aro (activa la tijera)
+                                InfoColision info_aro;
+                                info_aro.hay_colision = true;
+                                info_aro.normal = Vector2D(0, -1);
+                                info_aro.profundidad = 1.0;
+                                info_aro.punto_contacto = pos_circ;
+                                tijera->on_collision(circ_ent, info_aro);
+                                // No resolver físicamente — la bola pasa a través de los aros
+                            }
+                        }
+                    }
+                }
 
                 InfoColision info = detectar_colision(a, b);
                 if (info.hay_colision) {
                     Colisiones::resolver_colision(a, b, info);
-                    
                     colisiones_frame.push_back({
                         a->get_id(), b->get_id(),
                         info.punto_contacto, info.normal, info.profundidad
                     });
-
                     a->on_collision(b, info);
                     Vector2D normal_inv = info.normal * -1.0;
                     b->on_collision(a, InfoColision{info.hay_colision, normal_inv, info.profundidad, info.punto_contacto});
@@ -612,13 +1016,31 @@ private:
                 balancin->get_largo(), balancin->get_espesor());
         }
 
+        // Tijera cerrada: usar el filo derecho como polígono
+        auto* tijera = dynamic_cast<Tijera*>(poly_ent);
+        if (tijera && !tijera->get_vertices_filo().empty()) {
+            return Colisiones::circulo_vs_poligono(
+                pos_circ, radio,
+                tijera->get_vertices_filo());
+        }
+
         return InfoColision{};
     }
 
     // Helper: Polígono (poly_ent) vs AABB (aabb_ent)
     InfoColision colision_poligono_aabb(EntidadFisica* poly_ent, EntidadFisica* aabb_ent) {
+        std::vector<Vector2D> vertices_poly;
         auto* balancin = dynamic_cast<Balancin*>(poly_ent);
-        if (!balancin) return InfoColision{};
+        if (balancin) {
+            vertices_poly = balancin->get_vertices();
+        } else {
+            auto* rampa = dynamic_cast<PlanoInclinado*>(poly_ent);
+            if (rampa) {
+                vertices_poly = rampa->get_vertices();
+            }
+        }
+
+        if (vertices_poly.size() < 3) return InfoColision{};
 
         Vector2D min, max;
         if (!obtener_datos_aabb(aabb_ent, min, max)) return InfoColision{};
@@ -630,7 +1052,7 @@ private:
             Vector2D(min.x, max.y)
         };
 
-        return Colisiones::poligono_vs_poligono(balancin->get_vertices(), vertices_aabb);
+        return Colisiones::poligono_vs_poligono(vertices_poly, vertices_aabb);
     }
 
     // Helper: Polígono (poly_a) vs Polígono (poly_b)
