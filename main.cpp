@@ -40,8 +40,6 @@
 #include "objetos/pistola.h"
 #include "objetos/tijera.h"
 #include "objetos/bola_beisbol.h"
-#include "objetos/caja_hamster.h"
-#include "objetos/banda.h"
 #include "objetos/caja_sorpresa.h"
 #include "objetos/caminadora.h"
 #include "objetos/foco.h"
@@ -203,15 +201,6 @@ EstadoColocacionCorrea estado_correa = EstadoColocacionCorrea::INACTIVA;
 int correa_eje_a_id = -1;
 Vector2D correa_punto_a_preview;
 
-enum class EstadoConexionBanda {
-    INACTIVA,
-    ESPERANDO_HAMSTER,
-    ESPERANDO_VENTILADOR
-};
-EstadoConexionBanda estado_banda = EstadoConexionBanda::INACTIVA;
-int banda_hamster_id  = -1;
-int banda_ventilador_id = -1;
-Vector2D banda_origen_preview; // posición del hámster seleccionado para preview
 
 bool obtener_datos_circulo(const EntidadFisica* e, Vector2D& pos, double& radio) {
     const Bola* bola = dynamic_cast<const Bola*>(e);
@@ -434,20 +423,30 @@ bool detectar_eje_correa(const MotorFisica& motor, Vector2D mouse_pos,
     for (const auto* e : motor.get_entidades()) {
         if (es_borde_nivel(e)) continue;
 
-        bool es_rotativo = (e->get_tipo_entidad() == TipoEntidadJuego::POLEA ||
-                            e->get_tipo_entidad() == TipoEntidadJuego::RUEDA_HAMSTER ||
-                            e->get_tipo_entidad() == TipoEntidadJuego::CINTA_TRANSPORTADORA ||
-                            e->get_tipo_entidad() == TipoEntidadJuego::GENERADOR_MOTOR);
+        TipoEntidadJuego tipo = e->get_tipo_entidad();
+        bool eje_centrado = (tipo == TipoEntidadJuego::POLEA ||
+                             tipo == TipoEntidadJuego::RUEDA_HAMSTER ||
+                             tipo == TipoEntidadJuego::CINTA_TRANSPORTADORA ||
+                             tipo == TipoEntidadJuego::GENERADOR_MOTOR);
+        // Objetos AABB con eje ficticio: su posicion es la esquina, el eje va al centro.
+        bool eje_aabb = (tipo == TipoEntidadJuego::VENTILADOR ||
+                         tipo == TipoEntidadJuego::CAMINADORA ||
+                         tipo == TipoEntidadJuego::CAJA_SORPRESA);
 
-        if (es_rotativo) {
-            Vector2D p = e->get_posicion(); // Center of rotation/axle
-            double d2 = (p - mouse_pos).magnitud_cuadrada();
-            if (d2 <= mejor_dist2) {
-                mejor_dist2 = d2;
-                entidad_id_out = e->get_id();
-                punto_out = p;
-                encontrado = true;
-            }
+        if (!eje_centrado && !eje_aabb) continue;
+
+        Vector2D p = e->get_posicion(); // Center of rotation/axle
+        if (eje_aabb) {
+            Vector2D mn = e->get_min();
+            Vector2D mx = e->get_max();
+            p = (mn + mx) * 0.5; // centro del AABB
+        }
+        double d2 = (p - mouse_pos).magnitud_cuadrada();
+        if (d2 <= mejor_dist2) {
+            mejor_dist2 = d2;
+            entidad_id_out = e->get_id();
+            punto_out = p;
+            encontrado = true;
         }
     }
     return encontrado;
@@ -587,69 +586,6 @@ bool manejar_click_colocacion_cuerda(MotorFisica& motor, Vector2D mouse_pos) {
             }
             cancelar_colocacion_cuerda();
             return true;
-        }
-        return true;
-    }
-
-    return false;
-}
-
-bool manejar_click_conexion_banda(MotorFisica& motor, Vector2D mouse_pos) {
-    if (estado_banda == EstadoConexionBanda::INACTIVA) return false;
-
-    if (!motor.get_pausado()) {
-        estado_banda = EstadoConexionBanda::INACTIVA;
-        banda_hamster_id = -1;
-        return true;
-    }
-
-    const auto& ents = motor.get_entidades();
-
-    if (estado_banda == EstadoConexionBanda::ESPERANDO_HAMSTER) {
-        for (auto* e : ents) {
-            auto* h = dynamic_cast<CajaHamster*>(e);
-            if (!h) continue;
-            if (!e->contiene_punto(mouse_pos)) continue;
-            Vector2D p = e->get_posicion();
-            banda_hamster_id = e->get_id();
-            banda_origen_preview = Vector2D(p.x + h->get_ancho() * 0.5, p.y + h->get_alto() * 0.5);
-            estado_banda = EstadoConexionBanda::ESPERANDO_VENTILADOR;
-            return true;
-        }
-        return true;
-    }
-
-    if (estado_banda == EstadoConexionBanda::ESPERANDO_VENTILADOR) {
-        for (auto* e : ents) {
-            // No conectar con el mismo hámster origen
-            if (e->get_id() == banda_hamster_id) continue;
-
-            if (!e->contiene_punto(mouse_pos)) continue;
-
-            auto* v = dynamic_cast<Ventilador*>(e);
-            if (v) {
-                motor.agregar_entidad(new Banda(motor.generar_id(), banda_hamster_id, e->get_id()));
-                v->set_controlado_por_banda(true);
-                estado_banda = EstadoConexionBanda::INACTIVA;
-                banda_hamster_id = -1;
-                return true;
-            }
-
-            auto* cs = dynamic_cast<CajaSorpresa*>(e);
-            if (cs) {
-                motor.agregar_entidad(new Banda(motor.generar_id(), banda_hamster_id, e->get_id()));
-                estado_banda = EstadoConexionBanda::INACTIVA;
-                banda_hamster_id = -1;
-                return true;
-            }
-
-            auto* conv = dynamic_cast<Caminadora*>(e);
-            if (conv) {
-                motor.agregar_entidad(new Banda(motor.generar_id(), banda_hamster_id, e->get_id()));
-                estado_banda = EstadoConexionBanda::INACTIVA;
-                banda_hamster_id = -1;
-                return true;
-            }
         }
         return true;
     }
@@ -1238,8 +1174,6 @@ bool crear_generador_motor(MotorFisica& motor, Vector2D pos);
 bool crear_globo(MotorFisica& motor, Vector2D pos);
 bool crear_bola_beisbol(MotorFisica& motor, Vector2D pos);
 bool crear_tijera(MotorFisica& motor, Vector2D pos);
-bool crear_caja_hamster(MotorFisica& motor, Vector2D pos);
-bool crear_banda(MotorFisica& motor, Vector2D pos);
 bool crear_caja_sorpresa(MotorFisica& motor, Vector2D pos);
 bool crear_caminadora(MotorFisica& motor, Vector2D pos);
 
@@ -1288,8 +1222,6 @@ bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
         case TipoObjetoMenu::GENERADOR_MOTOR:   return crear_generador_motor(motor, pos);
         case TipoObjetoMenu::CUERDA:            return false;
         case TipoObjetoMenu::CORREA:            return false;
-        case TipoObjetoMenu::CAJA_HAMSTER:      return crear_caja_hamster(motor, pos);
-        case TipoObjetoMenu::BANDA:             return crear_banda(motor, pos);
         case TipoObjetoMenu::CAJA_SORPRESA:     return crear_caja_sorpresa(motor, pos);
         case TipoObjetoMenu::CAMINADORA:          return crear_caminadora(motor, pos);
         default: return false;
@@ -2055,43 +1987,6 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
             DrawRectangleLinesEx({cx - w/2, cy - h/2, w, h}, 1.5f, tint(Color{30, 120, 50, 255}));
             break;
         }
-        case TipoObjetoMenu::CAJA_HAMSTER: {
-            if (tex_rueda_hamster_externa.id > 0 && tex_rueda_hamster_rueda.id > 0) {
-                float scale_factor = 0.05f * escala;
-                // Base/externa
-                float w_ext = (float)tex_rueda_hamster_externa.width * scale_factor;
-                float h_ext = (float)tex_rueda_hamster_externa.height * scale_factor;
-                Rectangle src_ext = {0.0f, 0.0f, (float)tex_rueda_hamster_externa.width, (float)tex_rueda_hamster_externa.height};
-                Rectangle dst_ext = {cx - 8.0f * escala, cy, w_ext, h_ext};
-                Vector2 origin_ext = {w_ext / 2.0f, h_ext / 2.0f};
-                DrawTexturePro(tex_rueda_hamster_externa, src_ext, dst_ext, origin_ext, 0.0f, tint(WHITE));
-
-                // Rueda
-                float w_rueda = (float)tex_rueda_hamster_rueda.width * scale_factor;
-                float h_rueda = (float)tex_rueda_hamster_rueda.height * scale_factor;
-                Rectangle src_rueda = {0.0f, 0.0f, (float)tex_rueda_hamster_rueda.width, (float)tex_rueda_hamster_rueda.height};
-                Rectangle dst_rueda = {cx + 8.0f * escala, cy, w_rueda, h_rueda};
-                Vector2 origin_rueda = {w_rueda / 2.0f, h_rueda / 2.0f};
-                DrawTexturePro(tex_rueda_hamster_rueda, src_rueda, dst_rueda, origin_rueda, 0.0f, tint(WHITE));
-            } else {
-                // Caja izquierda + rueda derecha
-                float bw = 14.0f * escala, bh = 24.0f * escala;
-                float rr = 12.0f * escala;
-                DrawRectangleRec({cx - 20*escala, cy - bh/2, bw, bh}, tint(Color{140, 100, 50, 255}));
-                DrawCircle((int)(cx + 2*escala), (int)cy, rr, tint(Color{210, 170, 80, 255}));
-                DrawCircleLines((int)(cx + 2*escala), (int)cy, rr, tint(Color{80, 50, 20, 255}));
-                // hámster mini
-                DrawCircle((int)(cx + 2*escala), (int)(cy + rr*0.3f), rr*0.3f, tint(Color{230, 200, 160, 255}));
-            }
-            break;
-        }
-        case TipoObjetoMenu::BANDA: {
-            float hw = 22.0f * escala;
-            DrawLineEx({cx - hw, cy - 4*escala}, {cx + hw, cy - 4*escala}, 2.5f*escala, tint(Color{255, 180, 50, 220}));
-            DrawLineEx({cx - hw, cy + 4*escala}, {cx + hw, cy + 4*escala}, 2.5f*escala, tint(Color{255, 180, 50, 220}));
-            DrawCircle((int)(cx), (int)cy, 4*escala, tint(Color{255, 200, 80, 255}));
-            break;
-        }
         case TipoObjetoMenu::CAJA_SORPRESA: {
             if (tex_caja_base.id > 0 && tex_caja_tapa.id > 0) {
                 float w = 26.0f * escala;
@@ -2702,6 +2597,20 @@ bool crear_generador_motor(MotorFisica& motor, Vector2D pos) {
     return true;
 }
 
+// Punto del eje de una entidad para dibujar/conectar una Correa. Para objetos
+// rotativos nativos (Polea, RuedaHamster) la posicion ya es el centro; para los
+// objetos AABB con eje ficticio (Ventilador, Caminadora, CajaSorpresa) el eje
+// va al centro del AABB, no a la esquina que devuelve get_posicion().
+Vector2D centro_eje_correa(const EntidadFisica* e) {
+    TipoEntidadJuego tipo = e->get_tipo_entidad();
+    if (tipo == TipoEntidadJuego::VENTILADOR ||
+        tipo == TipoEntidadJuego::CAMINADORA ||
+        tipo == TipoEntidadJuego::CAJA_SORPRESA) {
+        return (e->get_min() + e->get_max()) * 0.5;
+    }
+    return e->get_posicion();
+}
+
 void dibujar_correas(const MotorFisica& motor) {
     for (const auto* e : motor.get_entidades()) {
         const Correa* correa = dynamic_cast<const Correa*>(e);
@@ -2716,8 +2625,8 @@ void dibujar_correas(const MotorFisica& motor) {
 
         if (!ent_a || !ent_b) continue;
 
-        Vector2D ca = ent_a->get_posicion();
-        Vector2D cb = ent_b->get_posicion();
+        Vector2D ca = centro_eje_correa(ent_a);
+        Vector2D cb = centro_eje_correa(ent_b);
         double ra = Correa::get_radio_eje(ent_a);
         double rb = Correa::get_radio_eje(ent_b);
 
@@ -2806,54 +2715,6 @@ void dibujar_previsualizacion_correa_y_banda(const MotorFisica& motor) {
         }
     }
 
-    if (estado_banda != EstadoConexionBanda::INACTIVA) {
-        Vector2D mouse(GetMouseX(), GetMouseY());
-
-        if (estado_banda == EstadoConexionBanda::ESPERANDO_HAMSTER) {
-            for (const auto* e : motor.get_entidades()) {
-                const auto* h = dynamic_cast<const CajaHamster*>(e);
-                if (!h) continue;
-                Vector2D p = e->get_posicion();
-                if (mouse.x >= p.x && mouse.x <= p.x + h->get_ancho() &&
-                    mouse.y >= p.y && mouse.y <= p.y + h->get_alto()) {
-                    DrawRectangleLinesEx({(float)p.x, (float)p.y,
-                        (float)h->get_ancho(), (float)h->get_alto()}, 3.0f, Color{255,200,50,230});
-                }
-            }
-            return;
-        }
-
-        if (estado_banda == EstadoConexionBanda::ESPERANDO_VENTILADOR) {
-            Vector2D a = banda_origen_preview;
-            Vector2D b = mouse;
-            Vector2 va = {(float)a.x, (float)a.y};
-            Vector2 vb = {(float)b.x, (float)b.y};
-            DrawLineEx(va, vb, 5.0f, Color{40, 30, 10, 180});
-            DrawLineEx(va, vb, 3.0f, Color{255, 200, 50, 220});
-            DrawCircle((int)a.x, (int)a.y, 7.0f, Color{255, 180, 30, 230});
-
-            for (const auto* e : motor.get_entidades()) {
-                Vector2D p = e->get_posicion();
-                const auto* v = dynamic_cast<const Ventilador*>(e);
-                if (v && mouse.x >= p.x && mouse.x <= p.x + v->get_ancho() &&
-                         mouse.y >= p.y && mouse.y <= p.y + v->get_alto()) {
-                    DrawRectangleLinesEx({(float)p.x, (float)p.y,
-                        (float)v->get_ancho(), (float)v->get_alto()}, 3.0f, Color{255,200,50,230});
-                }
-                const auto* cs = dynamic_cast<const CajaSorpresa*>(e);
-                if (cs && mouse.x >= p.x && mouse.x <= p.x + cs->get_ancho() &&
-                          mouse.y >= p.y && mouse.y <= p.y + cs->get_alto()) {
-                    DrawRectangleLinesEx({(float)p.x, (float)p.y,
-                        (float)cs->get_ancho(), (float)cs->get_alto()}, 3.0f, Color{255,200,50,230});
-                }
-                const auto* conv = dynamic_cast<const Caminadora*>(e);
-                if (conv && e->contiene_punto(mouse)) {
-                    DrawRectangleLinesEx({(float)p.x, (float)p.y,
-                        (float)conv->get_ancho(), (float)conv->get_alto()}, 3.0f, Color{255,200,50,230});
-                }
-            }
-        }
-    }
 }
 
 bool crear_cubeta(MotorFisica& motor, Vector2D pos) {
@@ -2900,19 +2761,6 @@ bool crear_tijera(MotorFisica& motor, Vector2D pos) {
     Tijera* t = new Tijera(motor.generar_id(), spawn_pos, w, h);
     motor.agregar_entidad(t);
     return true;
-}
-
-bool crear_caja_hamster(MotorFisica& motor, Vector2D pos) {
-    double w = 90.0, h = 80.0;
-    Vector2D spawn_pos(pos.x - w / 2.0, pos.y - h / 2.0);
-    CajaHamster* ham = new CajaHamster(motor.generar_id(), spawn_pos, w, h);
-    motor.agregar_entidad(ham);
-    return true;
-}
-
-bool crear_banda(MotorFisica& motor, Vector2D pos) {
-    (void)pos;
-    return false; // se maneja con el flujo de conexión de la banda
 }
 
 bool crear_caja_sorpresa(MotorFisica& motor, Vector2D pos) {
@@ -3103,13 +2951,6 @@ void dibujar_hud(const MotorFisica& motor) {
         if (estado_cuerda == EstadoColocacionCuerda::ESPERANDO_EXTREMO_B) paso = "Torque extra o extremo final";
         DrawText(TextFormat("Cuerda: %s", paso), margin, y + 110, 14,
                  Color{235, 220, 155, 255});
-    }
-
-    if (estado_banda != EstadoConexionBanda::INACTIVA) {
-        const char* paso_banda = estado_banda == EstadoConexionBanda::ESPERANDO_HAMSTER
-            ? "Banda: Click en la Caja Hamster"
-            : "Banda: Click en Ventilador o CajaSorpresa";
-        DrawText(paso_banda, margin, y + 128, 14, Color{255, 200, 80, 255});
     }
 
     // Indicador de pausa
@@ -4340,7 +4181,6 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             if (CheckCollisionPointRec(mouse_pos, btns.rect_play)) {
                 if (motor.get_pausado()) {
                     guardar_snapshot_simulacion(motor, gestor_eventos);
-                    motor.aplicar_transmision_bandas(); // apagar ventiladores controlados antes del primer frame
                     motor.set_pausado(false);
                     cancelar_colocacion_cuerda();
                     intentos_usuario++;
@@ -4352,7 +4192,6 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             }
             if (CheckCollisionPointRec(mouse_pos, btns.rect_reset)) {
                 restaurar_snapshot_simulacion(motor, gestor_eventos);
-                motor.aplicar_transmision_bandas();
                 motor.set_pausado(true);
                 reinicios_usuario++;
                 return;
@@ -4411,14 +4250,6 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                         spawn_error_timer = 0.5f;
                         spawn_error_pos = Vector2D(mx, my);
                     }
-                } else if (tipo == TipoObjetoMenu::BANDA) {
-                    if (motor.get_pausado()) {
-                        estado_banda = EstadoConexionBanda::ESPERANDO_HAMSTER;
-                        banda_hamster_id = -1;
-                    } else {
-                        spawn_error_timer = 0.5f;
-                        spawn_error_pos = Vector2D(mx, my);
-                    }
                 } else if (tipo != TipoObjetoMenu::NINGUNO) {
                     if (!motor.get_pausado()) {
                         spawn_error_timer = 0.5f;
@@ -4434,17 +4265,12 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             }
         } else if (punto_en_area_juego(mx, my)) {
             Vector2D mouse_pos(mx, my);
-            if (arrastrando_spawn != TipoObjetoMenu::NINGUNO && arrastrando_spawn != TipoObjetoMenu::BANDA) {
+            if (arrastrando_spawn != TipoObjetoMenu::NINGUNO) {
                 spawn_desde_menu(motor, arrastrando_spawn, mouse_pos);
                 arrastrando_spawn = TipoObjetoMenu::NINGUNO;
-            } else if (arrastrando_spawn == TipoObjetoMenu::BANDA) {
-                arrastrando_spawn = TipoObjetoMenu::NINGUNO;
-                manejar_click_conexion_banda(motor, mouse_pos);
             } else if (manejar_click_colocacion_correa(motor, mouse_pos)) {
                 entidad_arrastrada = nullptr;
             } else if (manejar_click_colocacion_cuerda(motor, mouse_pos)) {
-                entidad_arrastrada = nullptr;
-            } else if (manejar_click_conexion_banda(motor, mouse_pos)) {
                 entidad_arrastrada = nullptr;
             } else {
                 bool handle_click_detectado = false;
@@ -4656,13 +4482,11 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     if (IsKeyPressed(KEY_SPACE)) {
         if (motor.get_pausado()) {
             guardar_snapshot_simulacion(motor, gestor_eventos);
-            motor.aplicar_transmision_bandas();
             motor.set_pausado(false);
             cancelar_colocacion_cuerda();
             intentos_usuario++;
         } else {
             restaurar_snapshot_simulacion(motor, gestor_eventos);
-            motor.aplicar_transmision_bandas();
             motor.set_pausado(true);
             reinicios_usuario++;
         }
@@ -4933,7 +4757,6 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
 
     dibujar_cuerdas(motor);
     dibujar_correas(motor);
-    motor.dibujar_bandas(modo_debug);
 
     for (const auto* e : motor.get_entidades()) {
         dibujar_entidad(e);

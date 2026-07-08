@@ -49,6 +49,12 @@ protected:
     double amortiguamiento_lineal;  // Damping lineal (simula resistencia del aire)
     double amortiguamiento_angular; // Damping angular
 
+    // Marcado por una Correa cada frame si esta entidad es uno de sus extremos.
+    // Lo resetea el motor al inicio del paso físico. Permite que objetos con eje
+    // ficticio (ventilador, etc.) sepan si su giro lo gobierna una correa o si
+    // deben funcionar de forma autónoma.
+    bool conectado_a_correa = false;
+
     TipoForma tipo_forma;
 
     // ========================================================================
@@ -185,6 +191,12 @@ public:
         return velocidad + Vector2D(-w * r.y, w * r.x);
     }
 
+    // Entidades dinámicas que quieren quedar ancladas en su sitio frente a
+    // impactos (sin dejar de ser dinámicas para su propia física interna, p.ej.
+    // un eje ficticio movido por Correa) sobreescriben esto en true. La
+    // resolución de colisiones las trata como masa/inercia lineal infinita.
+    virtual bool es_inmovil_en_colision() const { return false; }
+
     virtual double get_radio_eje() const { return 1.0; }
 
     // ---- Setters ----
@@ -228,6 +240,10 @@ public:
     // necesita conocer el tipo concreto de la entidad.
     virtual bool es_activable_por_tension() const { return false; }
     virtual void activar_por_tension() {}
+
+    // Marcado de conexión a Correa (lo escribe Correa, lo resetea el motor).
+    bool get_conectado_a_correa() const { return conectado_a_correa; }
+    void set_conectado_a_correa(bool v) { conectado_a_correa = v; }
 
 protected:
     std::vector<RegistroEventoEspecial> eventos_pendientes;

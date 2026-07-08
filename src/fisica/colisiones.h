@@ -412,8 +412,10 @@ namespace Colisiones {
 
         // Si es un balancín, su masa lineal es conceptualmente infinita (inv_masa = 0.0)
         // ya que está fijo en su pivote. Conserva sin embargo su inercia rotacional.
-        double inv_masa_a = (a->get_es_estatico() || dynamic_cast<Balancin*>(a)) ? 0.0 : 1.0 / a->get_masa();
-        double inv_masa_b = (b->get_es_estatico() || dynamic_cast<Balancin*>(b)) ? 0.0 : 1.0 / b->get_masa();
+        // Entidades ancladas (p.ej. Caminadora con anclada=true) también son
+        // linealmente inmóviles: los impactos no las desplazan ni las hunden.
+        double inv_masa_a = (a->get_es_estatico() || a->es_inmovil_en_colision() || dynamic_cast<Balancin*>(a)) ? 0.0 : 1.0 / a->get_masa();
+        double inv_masa_b = (b->get_es_estatico() || b->es_inmovil_en_colision() || dynamic_cast<Balancin*>(b)) ? 0.0 : 1.0 / b->get_masa();
         double inv_masa_total = inv_masa_a + inv_masa_b;
 
         if (inv_masa_total < MathUtils::EPSILON && !dynamic_cast<Balancin*>(a) && !dynamic_cast<Balancin*>(b)) {
@@ -424,17 +426,20 @@ namespace Colisiones {
         Vector2D r_a = info.punto_contacto - a->get_posicion();
         Vector2D r_b = info.punto_contacto - b->get_posicion();
 
-        // Inversas de inercia (0 para estáticos, y bloqueado para hubs de transmisión)
+        // Inversas de inercia (0 para estáticos, y bloqueado para hubs de transmisión
+        // cuya rotación debe gobernarla solo una Correa, nunca un impacto directo).
         double I_a = a->get_inercia();
         double I_b = b->get_inercia();
         bool a_bloqueado = (a->get_tipo_entidad() == TipoEntidadJuego::RUEDA_HAMSTER ||
                             a->get_tipo_entidad() == TipoEntidadJuego::POLEA ||
                             a->get_tipo_entidad() == TipoEntidadJuego::CINTA_TRANSPORTADORA ||
-                            a->get_tipo_entidad() == TipoEntidadJuego::GENERADOR_MOTOR);
+                            a->get_tipo_entidad() == TipoEntidadJuego::GENERADOR_MOTOR ||
+                            a->es_inmovil_en_colision());
         bool b_bloqueado = (b->get_tipo_entidad() == TipoEntidadJuego::RUEDA_HAMSTER ||
                             b->get_tipo_entidad() == TipoEntidadJuego::POLEA ||
                             b->get_tipo_entidad() == TipoEntidadJuego::CINTA_TRANSPORTADORA ||
-                            b->get_tipo_entidad() == TipoEntidadJuego::GENERADOR_MOTOR);
+                            b->get_tipo_entidad() == TipoEntidadJuego::GENERADOR_MOTOR ||
+                            b->es_inmovil_en_colision());
         double inv_I_a = (!a->get_es_estatico() && !a_bloqueado && I_a > MathUtils::EPSILON) ? 1.0 / I_a : 0.0;
         double inv_I_b = (!b->get_es_estatico() && !b_bloqueado && I_b > MathUtils::EPSILON) ? 1.0 / I_b : 0.0;
 

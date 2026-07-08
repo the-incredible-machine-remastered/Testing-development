@@ -1,16 +1,18 @@
 #pragma once
-#include "obstaculo_estatico.h"
+#include "../core/entidad_fisica.h"
 #include "../sistema/assets_extern.h"
 #include <cmath>
 #include <sstream>
 
 // ============================================================================
-// CajaSorpresa — Jack-in-the-box activado por banda/hámster.
-// Al recibir energía, la tapa se abre y lanza una cabeza de payaso
-// como proyectil físico hacia arriba-derecha (parábola).
+// CajaSorpresa — Jack-in-the-box con EJE FICTICIO.
+// Se construye dinámica pero ancla su traslación cada frame (patrón de Polea).
+// Una Correa conectada a una RuedaHamster transmite torque real a este eje; al
+// superar |velocidad_angular| un umbral, la caja se dispara: la tapa se abre y
+// lanza una cabeza de payaso como proyectil físico. Dispara una sola vez.
 // ============================================================================
 
-class CajaSorpresa : public ObstaculoEstatico {
+class CajaSorpresa : public EntidadFisica {
 private:
     double ancho;
     double alto;
@@ -20,16 +22,27 @@ private:
     float tapa_angulo;      // animación de apertura de tapa (0 → -90°)
     float tiempo_abierta;   // temporizador para animación post-lanzamiento
 
+    // Umbral de disparo. El eje acoplado por la Correa asintota cerca de la
+    // velocidad de crucero de RuedaHamster (~7.5 rad/s); se dispara a 5.0 para
+    // hacerlo de forma fiable durante el arranque, sin falsos positivos.
+    static constexpr double OMEGA_DISPARO = 5.0;
+
 public:
     CajaSorpresa(int id, Vector2D pos, double w = 70.0, double h = 70.0)
-        : ObstaculoEstatico(id, pos, TipoForma::AABB),
+        : EntidadFisica(id, pos, 1.0, TipoForma::AABB, false),
           ancho(w), alto(h),
           activada(false), ya_lanzo(false),
           tapa_angulo(0.0f), tiempo_abierta(0.0f) {
+        set_inercia(0.5 * masa * 10.0 * 10.0); // eje ficticio radio 10 (= RuedaHamster)
         set_restitucion(0.2);
         set_friccion(0.6);
         tipo_menu = TipoObjetoMenu::CAJA_SORPRESA;
+        velocidad_angular = 0.0;
+        angulo = 0.0;
     }
+
+    // Radio de eje = el de RuedaHamster para que la Correa iguale su omega.
+    double get_radio_eje() const override { return 10.0; }
 
     double get_ancho() const { return ancho; }
     double get_alto()  const { return alto; }
@@ -55,8 +68,27 @@ public:
     }
 
     void actualizar_fisica(double dt) override {
+        // Patrón de Polea: el eje ficticio gira con el torque acumulado por la
+        // Correa; la traslación queda anclada (la caja no se traslada).
+        double I = get_inercia();
+        double alpha = (I > MathUtils::EPSILON) ? (torque_neto / I) : 0.0;
+        velocidad_angular += alpha * dt;
+        angulo += velocidad_angular * dt;
+        velocidad_angular *= 0.985; // damping natural
+
+        // Disparo por umbral de velocidad angular (una sola vez).
+        if (!ya_lanzo && std::abs(velocidad_angular) >= OMEGA_DISPARO) {
+            activar(); // respeta ya_lanzo internamente
+        }
+
+        // Anclar traslación.
+        velocidad = Vector2D(0.0, 0.0);
+        aceleracion = Vector2D(0.0, 0.0);
+        fuerza_neta = Vector2D(0.0, 0.0);
+        torque_neto = 0.0;
+
+        // Animación existente.
         if (activada && !ya_lanzo) {
-            // La tapa se abre rápido
             tapa_angulo -= static_cast<float>(dt) * 300.0f;
             if (tapa_angulo < -90.0f) tapa_angulo = -90.0f;
         }

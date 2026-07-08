@@ -5,33 +5,50 @@
 // a distancia dentro de una zona rectangular frente a sus aspas.
 // ============================================================================
 
-#include "obstaculo_estatico.h"
+#include "../core/entidad_fisica.h"
 #include "../sistema/assets_extern.h"
 #include <cmath>
 #include <algorithm>
 
-class Ventilador : public ObstaculoEstatico {
+// ============================================================================
+// Ventilador -- Ahora es un objeto con EJE FICTICIO: se construye dinámico pero
+// ancla su traslación cada frame (patrón de Polea). Una Correa conectada a una
+// RuedaHamster transmite torque real a este eje; la velocidad angular resultante
+// se traduce en la potencia del chorro de aire. Sin Correa conectada, el
+// ventilador sopla a su potencia_base de forma autónoma.
+// ============================================================================
+
+class Ventilador : public EntidadFisica {
 protected:
     double ancho;
     double alto;
     double rango;
     double ancho_corriente;
     double potencia;
-    double potencia_base;   // potencia cuando no hay banda (autónomo)
-    bool controlado_por_banda;
+    double potencia_base;   // potencia autónoma (sin correa conectada)
+    bool controlado_por_banda; // legacy: se conserva para compatibilidad de guardado
     Vector2D direccion;
     double fase_aspas;
 
+    // Velocidad angular de referencia (rad/s) para mapear giro -> potencia máxima.
+    // Coincide con la velocidad de crucero de RuedaHamster (~7.5 rad/s).
+    static constexpr double OMEGA_REF = 7.5;
+
 public:
     Ventilador(int id, Vector2D pos, double w = 42.0, double h = 54.0)
-        : ObstaculoEstatico(id, pos, TipoForma::AABB),
+        : EntidadFisica(id, pos, 1.0, TipoForma::AABB, false),
           ancho(w), alto(h), rango(220.0), ancho_corriente(92.0),
           potencia(0.0), potencia_base(1800.0), controlado_por_banda(false),
           direccion(1.0, 0.0), fase_aspas(0.0) {
+        set_inercia(0.5 * masa * 10.0 * 10.0); // eje ficticio radio 10 (= RuedaHamster)
         set_restitucion(0.2);
         set_friccion(0.5);
         tipo_menu = TipoObjetoMenu::VENTILADOR;
+        potencia = potencia_base; // arranca soplando de forma autónoma
     }
+
+    // Radio de eje = el de RuedaHamster para que la Correa iguale su omega.
+    double get_radio_eje() const override { return 10.0; }
 
     // --- Getters ---
     double get_ancho() const { return ancho; }
@@ -66,15 +83,38 @@ public:
 
     void set_potencia(double p) { potencia = p; }
     bool get_controlado_por_banda() const { return controlado_por_banda; }
-    void set_controlado_por_banda(bool v) {
-        controlado_por_banda = v;
-        if (v) potencia = 0.0; // apagar al conectar
-    }
+    void set_controlado_por_banda(bool v) { controlado_por_banda = v; } // legacy
     void set_direccion(const Vector2D& dir) { direccion = dir.normalizar(); }
 
     void actualizar_fisica(double dt) override {
-        if (potencia <= 0.0) return;
+        // Patrón de Polea: el eje ficticio gira con el torque acumulado por la
+        // Correa; la traslación se mantiene anclada (el ventilador no se mueve).
+        // El torque de la Correa ya fue acumulado en torque_neto antes de este paso.
+        double I = get_inercia();
+        double alpha = (I > MathUtils::EPSILON) ? (torque_neto / I) : 0.0;
+        velocidad_angular += alpha * dt;
+
+        // Modo autónomo: SOLO si no hay ninguna correa conectada, el eje tiende a
+        // su velocidad de crucero para soplar a potencia base. Si hay una correa,
+        // el giro (y por tanto la potencia) lo gobierna la rueda: si la rueda está
+        // parada, el ventilador queda apagado hasta que ésta empiece a girar.
+        if (!conectado_a_correa) {
+            velocidad_angular += (OMEGA_REF - velocidad_angular) * 4.0 * dt;
+        }
+        velocidad_angular *= 0.985; // damping natural
+
+        // Traducir giro -> potencia del chorro
+        double factor = std::min(std::abs(velocidad_angular) / OMEGA_REF, 1.0);
+        potencia = potencia_base * factor;
+
+        angulo += velocidad_angular * dt;
         fase_aspas += dt * 18.0 * (potencia / 1800.0);
+
+        // Anclar traslación: el ventilador nunca se desplaza
+        velocidad = Vector2D(0.0, 0.0);
+        aceleracion = Vector2D(0.0, 0.0);
+        fuerza_neta = Vector2D(0.0, 0.0);
+        torque_neto = 0.0;
     }
 
     // --- Métodos polimórficos ---

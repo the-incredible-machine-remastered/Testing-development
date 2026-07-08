@@ -33,8 +33,6 @@
 #include "../objetos/gancho.h"
 #include "../objetos/pistola.h"
 #include "../objetos/soporte_torque.h"
-#include "../objetos/caja_hamster.h"
-#include "../objetos/banda.h"
 #include "../objetos/caja_sorpresa.h"
 #include "../objetos/caminadora.h"
 #include "../objetos/foco.h"
@@ -164,21 +162,6 @@ public:
     const std::vector<RegistroColision>& get_colisiones_frame() const { return colisiones_frame; }
     const std::vector<RegistroEventoEspecial>& get_eventos_especiales_frame() const { return eventos_especiales_frame; }
 
-    void dibujar_bandas(bool mostrar_debug) const {
-        for (auto* e : entidades) {
-            auto* banda = dynamic_cast<Banda*>(e);
-            if (banda) banda->dibujar_con_entidades(entidades, mostrar_debug);
-        }
-    }
-
-    // Forzar una pasada de transmisión de bandas (útil antes del primer frame)
-    void aplicar_transmision_bandas() {
-        for (auto* e : entidades) {
-            auto* banda = dynamic_cast<Banda*>(e);
-            if (banda) banda->aplicar_transmision(entidades);
-        }
-    }
-
     // --- Bucle principal ---
     // Recibe el delta time real (variable) y lo subdivide en pasos fijos.
     // Esto evita inestabilidad numérica por variaciones de frame rate.
@@ -302,13 +285,6 @@ private:
             return true;
         }
 
-        auto* hamster = dynamic_cast<CajaHamster*>(e);
-        if (hamster) {
-            min = hamster->get_min();
-            max = hamster->get_max();
-            return true;
-        }
-
         auto* caja_s = dynamic_cast<CajaSorpresa*>(e);
         if (caja_s) {
             min = caja_s->get_min();
@@ -358,31 +334,21 @@ private:
         colisiones_frame.clear();
         eventos_especiales_frame.clear();
 
+        // Resetear marca de conexión a Correa; aplicar_correas() la vuelve a poner
+        // este frame en los extremos de cada correa existente.
+        for (auto* e : entidades) e->set_conectado_a_correa(false);
+
         // 1. Aplicar fuerzas globales
         aplicar_gravedad();
 
         // 1.5 Aplicar corrientes de aire de ventiladores
         FisicaVentilador::aplicar(entidades);
 
-        // 1.55 Aplicar conveyors activos y animar
-        for (auto* e : entidades) {
-            auto* conv = dynamic_cast<Caminadora*>(e);
-            if (conv) {
-                conv->Caminadora::actualizar_fisica(dt);
-                conv->aplicar_conveyor(entidades);
-            }
-        }
-
-        // 1.6 Transmitir energía de bandas (hámster → ventilador)
-        for (auto* e : entidades) {
-            auto* banda = dynamic_cast<Banda*>(e);
-            if (banda) banda->aplicar_transmision(entidades);
-        }
-
         // 1.6 Aplicar constraints de cuerdas colocadas como herramienta
         aplicar_tensiones_cuerda();
 
-        // 1.7 Aplicar transmisión por correas
+        // 1.7 Aplicar transmisión por correas (RuedaHamster/Polea → ventilador,
+        // caminadora, caja sorpresa, cinta, etc. — acopla torque a los ejes).
         aplicar_correas();
  
         // 2. Actualizar comportamiento del futbolista seguidor
@@ -403,7 +369,13 @@ private:
         for (auto* e : entidades) {
             e->actualizar_fisica(dt);
         }
- 
+
+        // 3.5 Aplicar arrastre de caminadoras (usa el estado del eje ya integrado)
+        for (auto* e : entidades) {
+            auto* conv = dynamic_cast<Caminadora*>(e);
+            if (conv) conv->aplicar_conveyor(entidades);
+        }
+
         // 4. Detectar y resolver colisiones
         detectar_y_resolver_colisiones();
 
@@ -857,26 +829,6 @@ private:
                 EntidadFisica* b = entidades[j];
 
                 if (a->get_es_estatico() && b->get_es_estatico()) continue;
-
-                // Detección especial: círculo vs rueda de hámster
-                {
-                    CajaHamster* hamster = dynamic_cast<CajaHamster*>(a);
-                    EntidadFisica* circ_ent = b;
-                    if (!hamster) { hamster = dynamic_cast<CajaHamster*>(b); circ_ent = a; }
-                    if (hamster && !circ_ent->get_es_estatico()) {
-                        Vector2D pos_circ; double radio = 0.0;
-                        if (obtener_datos_circulo(circ_ent, pos_circ, radio)) {
-                            if (hamster->circulo_toca_rueda(pos_circ, radio)) {
-                                InfoColision info_rueda;
-                                info_rueda.hay_colision = true;
-                                info_rueda.normal = Vector2D(0, -1);
-                                info_rueda.profundidad = 1.0;
-                                info_rueda.punto_contacto = pos_circ;
-                                hamster->on_collision(circ_ent, info_rueda);
-                            }
-                        }
-                    }
-                }
 
                 // Detección especial: círculo vs aros de tijera
                 {

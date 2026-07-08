@@ -54,6 +54,11 @@ public:
         EntidadFisica* b = buscar_entidad(entidades, entidad_b_id);
         if (!a || !b) return;
 
+        // Marcar ambos extremos como conectados para este frame (los objetos con
+        // eje ficticio lo consultan para saber si deben girar autónomamente o no).
+        a->set_conectado_a_correa(true);
+        b->set_conectado_a_correa(true);
+
         double R_a = get_radio_eje(a);
         double R_b = get_radio_eje(b);
 

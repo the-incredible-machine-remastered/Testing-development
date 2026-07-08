@@ -1,5 +1,5 @@
 #pragma once
-#include "obstaculo_estatico.h"
+#include "../core/entidad_fisica.h"
 #include "bola.h"
 #include "../sistema/assets_extern.h"
 #include <cmath>
@@ -7,28 +7,39 @@
 #include <algorithm>
 
 // ============================================================================
-// Caminadora — Banda transportadora horizontal.
-// Aplica una fuerza lateral a objetos dinámicos que reposan sobre ella.
-// Activado por banda/hámster; empieza apagado.
+// Caminadora — Banda transportadora horizontal con EJE FICTICIO.
+// Se construye dinámica pero ancla su traslación cada frame (patrón de Polea /
+// CintaTransportadora). Una Correa conectada a una RuedaHamster transmite torque
+// real a este eje; la velocidad angular resultante determina la velocidad de la
+// cinta y su dirección (según el signo). Aplica fuerza lateral a objetos encima.
 // ============================================================================
 
-class Caminadora : public ObstaculoEstatico {
+class Caminadora : public EntidadFisica {
 private:
     double ancho;
     double alto;
-    bool va_derecha;       // dirección de la correa
-    bool activo;
-    double velocidad_cinta; // px/s que empuja los objetos encima
+    bool va_derecha;       // dirección de la correa (derivada del signo de omega)
+    bool activo;           // derivado de si el eje supera el umbral de reposo
+    double velocidad_cinta; // px/s que empuja los objetos encima (derivada de |omega|)
     double fase_anim;       // para animar las marcas de la cinta
+    bool anclada;          // si true, los impactos no la desplazan (queda fija en el aire)
+
+    // Mapeo giro -> velocidad de cinta: a OMEGA_REF rad/s la cinta va a VEL_MAX px/s.
+    static constexpr double OMEGA_REF = 7.5;
+    static constexpr double VEL_MAX   = 400.0;
+    static constexpr double OMEGA_UMBRAL_REPOSO = 0.3; // por debajo, cinta apagada
 
 public:
     Caminadora(int id, Vector2D pos, double w = 150.0, double h = 24.0, bool derecha = true)
-        : ObstaculoEstatico(id, pos, TipoForma::AABB),
+        : EntidadFisica(id, pos, 8.0, TipoForma::AABB, false),
           ancho(w), alto(h), va_derecha(derecha),
-          activo(false), velocidad_cinta(400.0), fase_anim(0.0) {
+          activo(false), velocidad_cinta(0.0), fase_anim(0.0), anclada(true) {
+        set_inercia(0.5 * masa * 10.0 * 10.0 * 1.5);
         set_restitucion(0.05);
         set_friccion(0.1);
         tipo_menu = TipoObjetoMenu::CAMINADORA;
+        velocidad_angular = 0.0;
+        angulo = 0.0;
     }
 
     double get_ancho()  const { return ancho; }
@@ -36,9 +47,15 @@ public:
     bool   get_activo() const { return activo; }
     bool   get_va_derecha() const { return va_derecha; }
     double get_velocidad_cinta() const { return velocidad_cinta; }
+    // Radio de eje = el de RuedaHamster para que la Correa iguale su omega.
+    double get_radio_eje() const override { return 10.0; }
 
-    void set_activo(bool v) { activo = v; }
+    void set_activo(bool v) { activo = v; } // legacy: la actividad ahora deriva del eje
     void invertir() { va_derecha = !va_derecha; }
+
+    bool get_anclada() const { return anclada; }
+    void set_anclada(bool v) { anclada = v; }
+    bool es_inmovil_en_colision() const override { return anclada; }
 
     // Velocidad de la cinta ajustable (px/s que empuja los objetos al activarse).
     void set_velocidad_cinta(double v) { velocidad_cinta = std::max(0.0, v); }
@@ -57,8 +74,41 @@ public:
     // Zona superior donde empuja objetos (superficie de la cinta)
     double get_superficie_y() const { return posicion.y; }
 
+    // Velocidad de la superficie en el punto de contacto. IMPORTANTE: sólo
+    // componente horizontal (como CintaTransportadora). Si usáramos el giro
+    // genérico omega×r (posicion es la esquina, no el centro), el término
+    // vertical sería enorme y lanzaría la bola hacia arriba en cada frame.
+    Vector2D get_velocidad_en_punto(const Vector2D& punto_mundo) const override {
+        (void)punto_mundo;
+        double dir = va_derecha ? 1.0 : -1.0;
+        return Vector2D(velocidad_cinta * dir, 0.0);
+    }
+
     void actualizar_fisica(double dt) override {
-        if (activo) fase_anim += dt * velocidad_cinta * (va_derecha ? 1.0 : -1.0);
+        // Patrón de CintaTransportadora: el eje ficticio gira con el torque
+        // acumulado por la Correa; la traslación queda anclada.
+        double I = get_inercia();
+        double alpha = (I > MathUtils::EPSILON) ? (torque_neto / I) : 0.0;
+        velocidad_angular += alpha * dt;
+        angulo += velocidad_angular * dt;
+        velocidad_angular *= 0.98; // damping natural
+
+        // Derivar estado visible/físico de la cinta desde el eje.
+        double omega = velocidad_angular;
+        activo = std::abs(omega) > OMEGA_UMBRAL_REPOSO;
+        if (activo) {
+            va_derecha = (omega < 0.0);
+            velocidad_cinta = std::min(std::abs(omega) / OMEGA_REF, 1.0) * VEL_MAX;
+            fase_anim += dt * velocidad_cinta * (va_derecha ? 1.0 : -1.0);
+        } else {
+            velocidad_cinta = 0.0;
+        }
+
+        // Anclar traslación: la caminadora nunca se desplaza.
+        velocidad = Vector2D(0.0, 0.0);
+        aceleracion = Vector2D(0.0, 0.0);
+        fuerza_neta = Vector2D(0.0, 0.0);
+        torque_neto = 0.0;
     }
 
     // Aplica fuerza a entidades dinámicas que están encima
@@ -102,7 +152,8 @@ public:
            << " w=" << ancho << " h=" << alto
            << " der=" << (va_derecha ? 1 : 0)
            << " act=" << (activo ? 1 : 0)
-           << " vel=" << velocidad_cinta;
+           << " vel=" << velocidad_cinta
+           << " ancl=" << (anclada ? 1 : 0);
         return ss.str();
     }
 
