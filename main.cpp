@@ -1537,6 +1537,7 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
             DrawCircleV({cx, cy}, 5.0f * escala, tint(Color{35, 38, 42, 255}));
             break;
         }
+
         case TipoObjetoMenu::GANCHO: {
             // Eye bolt: aro arriba + cuerpo con rosca abajo
             Color gc = tint(Color{170, 178, 186, 255});
@@ -2377,13 +2378,13 @@ void dibujar_menu_lateral() {
     DrawRectangleRec(tab_dec, menu_tab == 1 ? WHITE : (hover_dec ? ColorAlpha(WHITE, 0.7f) : ColorAlpha(WHITE, 0.4f)));
     
     // Centrar texto OBJETOS
-    Vector2 obj_size = MeasureTextEx(fuente_menu, "OBJETOS", 14, 1);
+    Vector2 obj_size = MeasureTextEx(fuente_menu, "OBJETOS", 17, 1);
 
     Vector2 obj_pos = {tab_obj.x + (tab_obj.width - obj_size.x) / 2 , tab_obj.y + (tab_obj.height - obj_size.y) / 2};
     DrawTextEx(fuente_menu, "OBJETOS", obj_pos, 17, 1, MENU_TEXTO);
     
     // Centrar texto DECORACION
-    Vector2 dec_size = MeasureTextEx(fuente_menu, "DECORACION", 13, 1);
+    Vector2 dec_size = MeasureTextEx(fuente_menu, "DECORACION", 17, 1);
 
     Vector2 dec_pos = {tab_dec.x + (tab_dec.width - dec_size.x) / 2, tab_dec.y + (tab_dec.height - dec_size.y) / 2};
     DrawTextEx(fuente_menu, "DECORACION", dec_pos, 17, 1, MENU_TEXTO);
@@ -3514,11 +3515,11 @@ void cargandoTexturas() {
     tex_vic_bot = cargar_textura_datos("Assets/Victoria/bot.png");
     
     // Cargar fuente personalizada
-    fuente_menu = cargar_fuente_datos("fonts/Gamer.ttf", 32);
+    fuente_menu = cargar_fuente_datos("fonts/alagard.ttf", 32);
     if (fuente_menu.baseSize == 0) {
-        TraceLog(LOG_WARNING, "Fuente Gamer.ttf no encontrada: usando fuente por defecto");
+        TraceLog(LOG_WARNING, "Fuente Alagard.ttf no encontrada: usando fuente por defecto");
     } else {
-        TraceLog(LOG_INFO, "Fuente Gamer.ttf cargada correctamente");
+        TraceLog(LOG_INFO, "Fuente Alagard.ttf cargada correctamente");
     }
 
 }
@@ -3644,7 +3645,7 @@ void dibujar_menu_principal(MotorFisica& motor) {
 
     // Dibujar personaje animado Jose
     if (anim_menu_jose) {
-        Vector2 pos_dibujo = { pos_x_anim_jose - 400, ALTO * 0.65f + 150.0f - 50};
+        Vector2 pos_dibujo = { pos_x_anim_jose - 400, ALTO * 0.65f + 150.0f - 30};
         anim_menu_jose->dibujar(pos_dibujo, 110.0f * 1.5f, 200.0f * 1.5f);
     }
 
@@ -3656,7 +3657,7 @@ void dibujar_menu_principal(MotorFisica& motor) {
 
     // Dibujar personaje animado Manuel
     if (anim_menu_inicio) {
-        Vector2 pos_dibujo = { pos_x_anim_menu - 300 , ALTO * 0.65f + 150.0f - 50 };
+        Vector2 pos_dibujo = { pos_x_anim_menu - 300 , ALTO * 0.65f + 150.0f - 30  };
         anim_menu_inicio->dibujar(pos_dibujo, 110.0f * 1.5f + 50, 200.0f * 1.5f + 50);
     }
 
@@ -3987,7 +3988,7 @@ void dibujar_seleccion_niveles(MotorFisica& motor) {
             DrawRectangleRec(btn_rect, Color{ 255, 255, 255, 30 });
         }
         
-        Color text_color = is_active ? WHITE : (hover ? LIGHTGRAY : Color{ 180, 180, 200, 255 });
+        Color text_color = is_active ? BLACK : (hover ? LIGHTGRAY : Color{ 180, 180, 200, 255 });
         Vector2 text_size = MeasureTextEx(fuente_menu, tabs[i].label, 20.0f, 1.0f);
         DrawTextEx(fuente_menu, tabs[i].label, { btn_rect.x + 15.0f, btn_rect.y + (btn_rect.height - text_size.y)/2.0f }, 20.0f, 1.0f, text_color);
     }
@@ -5385,7 +5386,7 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
         
         const char* txt_tiempo = TextFormat("%02d:%02d.%02d", min, seg, ms);
         Vector2 ts_time = MeasureTextEx(fuente_menu, txt_tiempo, 16, 1);
-        DrawTextEx(fuente_menu, txt_tiempo, {715 + (180 - ts_time.x)/2.0f, 970 + (35 - ts_time.y)/2.0f}, 54, 9, WHITE);
+        DrawTextEx(fuente_menu, txt_tiempo, {715 + (180 - ts_time.x)/2.0f, 1040 + (35 - ts_time.y)/2.0f}, 54, 9, WHITE);
     }
 
     BotonesHUD btns = calcular_rectangulos_botones_hud();
@@ -5452,7 +5453,7 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     if (mostrar_ayuda_overlay) {
         DrawRectangle(0, 0, ANCHO, ALTO, ColorAlpha(BLACK, 0.6f));
         
-        float w = 600.0f;
+        float w = 800.0f;
         float h = 400.0f;
         Rectangle box = {(ANCHO - w)/2.0f, (ALTO - h)/2.0f, w, h};
         
@@ -5502,15 +5503,14 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             DrawTextEx(fuente_menu, key, {x_offset, y}, 18, 1, Color{210, 110, 5, 255});
             DrawTextEx(fuente_menu, desc, {x_offset + 145.0f, y}, 18, 1, Color{60, 62, 65, 255});
         };
-        
         draw_help_line("Objetivo:", "Coloca objetos para que la pelota llegue a la zona meta.", start_y, box.x + 30.0f);
         draw_help_line("Arrastrar:", "Arrastra objetos del menu lateral al canvas.", start_y + dy, box.x + 30.0f);
         draw_help_line("Mover:", "Haz click izquierdo en un objeto y arrastralo.", start_y + dy * 2, box.x + 30.0f);
         draw_help_line("Rotar / Tamano:", "F: rotar/invertir. T: alternar tamano de rampas.", start_y + dy * 3, box.x + 30.0f);
-        draw_help_line("Borrar (SUPR/X):", "Selecciona un objeto y presiona X o SUPR para eliminarlo.", start_y + dy * 4, box.x + 30.0f);
+        draw_help_line("Borrar:", "Selecciona un objeto y presiona X o SUPR para eliminarlo.", start_y + dy * 4, box.x + 30.0f);
         draw_help_line("Simulacion:", "Presiona ESPACIO para correr o pausar la fisica.", start_y + dy * 5, box.x + 30.0f);
         draw_help_line("Menu Lateral:", "Presiona TAB para ocultar/mostrar el catalogo de objetos.", start_y + dy * 6, box.x + 30.0f);
-        draw_help_line("Reiniciar (R):", "Presiona R para limpiar el nivel y reiniciar.", start_y + dy * 7, box.x + 30.0f);
+        draw_help_line("Reiniciar:", "Presiona R para limpiar el nivel y reiniciar.", start_y + dy * 7, box.x + 30.0f);
         
         DrawTextEx(fuente_menu, "Haz click en 'X' o fuera de este panel para cerrar.", {box.x + 30.0f, box.y + h - 35.0f}, 14, 1, Color{120, 122, 125, 255});
     }
