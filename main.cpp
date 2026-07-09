@@ -68,6 +68,28 @@
 #include <string>
 #include <cstdio>
 
+// ---- Soporte WebAssembly (Emscripten) ----
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+
+// Función llamada desde JS después de que el usuario interactúa con la página
+// y el AudioContext del navegador queda desbloqueado.
+// Reinicia el stream de música ya que el primer PlayMusicStream() puede haber
+// sido ignorado si el contexto estaba suspendido.
+extern "C" EMSCRIPTEN_KEEPALIVE void tim_resume_audio() {
+    extern Music musica_menu;
+    extern bool sonido_mutado;
+    if (sonido_mutado) return;
+    // IMPORTANTE: IsMusicStreamPlaying() devuelve true incluso cuando el
+    // AudioContext del navegador estaba suspendido (Raylib no lo sabe).
+    // Por eso no podemos usarlo como guard aquí.
+    // Siempre forzamos Stop + Play para que miniaudio reconecte el
+    // AudioWorkletNode al AudioContext ya activo (resumed por el usuario).
+    StopMusicStream(musica_menu);
+    PlayMusicStream(musica_menu);
+}
+#endif
+
 // Compatibilidad con versiones de Raylib sin IsMusicReady
 inline bool IsMusicReady(Music music) {
     return music.ctxData != nullptr;
@@ -5681,103 +5703,123 @@ void dibujar_y_actualizar_boton_silencio() {
 // ============================================================================
 // Punto de entrada
 // ============================================================================
+// ---- Motor de física global (necesario para emscripten_set_main_loop) ----
+static MotorFisica* g_motor = nullptr;
+
+// ---- Un frame de juego (llamado desde el bucle principal o desde Emscripten) ----
+static void loop_frame(void* /*arg*/) {
+    sincronizar_tamano_ventana();
+
+    // Actualizar el stream de musica
+    if (IsMusicReady(musica_menu)) {
+        UpdateMusicStream(musica_menu);
+    }
+
+#ifndef __EMSCRIPTEN__
+    // Manejar importación de niveles mediante drag & drop
+    // (no disponible en la build web: std::filesystem no existe en Emscripten)
+    if (IsFileDropped()) {
+        FilePathList archivos_soltados = LoadDroppedFiles();
+        if (archivos_soltados.count > 0) {
+            std::string ruta_origen = archivos_soltados.paths[0];
+            if (ruta_origen.length() > 4 && ruta_origen.substr(ruta_origen.length() - 4) == ".tim") {
+                std::string nombre_archivo = std::filesystem::path(ruta_origen).filename().string();
+                std::string ruta_destino = carpeta_partidas() + "/" + nombre_archivo;
+
+                std::error_code ec;
+                std::filesystem::copy_file(ruta_origen, ruta_destino, std::filesystem::copy_options::overwrite_existing, ec);
+
+                refrescar_lista_partidas();
+                pestana_niveles_actual = TabNiveles::MIS_NIVELES;
+                estado_actual = EstadoJuego::SELECCION_NIVELES;
+            }
+        }
+        UnloadDroppedFiles(archivos_soltados);
+    }
+#endif // __EMSCRIPTEN__
+
+    // ======== UPDATE ========
+    switch (estado_actual) {
+        case EstadoJuego::MENU_PRINCIPAL:
+            actualizar_menu_principal();
+            break;
+        case EstadoJuego::MENU_OPCIONES:
+            actualizar_menu_opciones();
+            break;
+        case EstadoJuego::SELECCION_NIVELES:
+            actualizar_seleccion_niveles(*g_motor);
+            break;
+        case EstadoJuego::JUEGO_CREATIVO:
+            actualizar_juego_core(*g_motor, false);
+            break;
+        case EstadoJuego::JUEGO_NIVEL:
+            actualizar_juego_core(*g_motor, true);
+            break;
+    }
+
+    // ======== RENDER ========
+    BeginDrawing();
+    ClearBackground(COLOR_FONDO);
+
+    switch (estado_actual) {
+        case EstadoJuego::MENU_PRINCIPAL:
+            dibujar_menu_principal(*g_motor);
+            break;
+        case EstadoJuego::MENU_OPCIONES:
+            dibujar_menu_opciones();
+            break;
+        case EstadoJuego::SELECCION_NIVELES:
+            dibujar_seleccion_niveles(*g_motor);
+            break;
+        case EstadoJuego::JUEGO_CREATIVO:
+            dibujar_juego_core(*g_motor, false);
+            break;
+        case EstadoJuego::JUEGO_NIVEL:
+            dibujar_juego_core(*g_motor, true);
+            break;
+    }
+
+    // Dibujar boton de silencio en la capa superior
+    dibujar_y_actualizar_boton_silencio();
+
+    EndDrawing();
+}
+
 int main() {
     // ---- Inicializar ventana ----
+#ifdef __EMSCRIPTEN__
+    // En web: sin HIGHDPI ni RESIZABLE (el canvas es fijo)
+    SetConfigFlags(FLAG_MSAA_4X_HINT);
+#else
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_HIGHDPI);
-    //SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
+#endif
     InitWindow(ANCHO, ALTO, "TIM - Motor de Fisica | Prototipo RK4 + Raylib");
     SetExitKey(KEY_NULL);
     InitAudioDevice(); // Inicializar dispositivo de audio de Raylib
     ANCHO = GetScreenWidth();
     ALTO = GetScreenHeight();
+#ifndef __EMSCRIPTEN__
     SetWindowMinSize(ANCHO_MIN, ALTO_MIN);
+#endif
     SetTargetFPS(60);
     cargandoTexturas();
 
     // ---- Inicializar motor de física ----
     // dt_fijo = 1/120s (120 pasos físicos por segundo)
     // Gravedad = 500 px/s² hacia abajo (Y+ en pantalla)
-    MotorFisica motor(1.0 / 120.0, Vector2D(0, 500.0));
-    crear_escena(motor);
-
-    // Animación de título (fade-out)
-    float titulo_alpha = 1.0f;
+    g_motor = new MotorFisica(1.0 / 120.0, Vector2D(0, 500.0));
+    crear_escena(*g_motor);
 
     // ---- Bucle principal ----
+#ifdef __EMSCRIPTEN__
+    // En WebAssembly el bucle principal lo controla el navegador.
+    // simulate_infinite_loop=1 hace que main() no retorne (bloquea aquí).
+    emscripten_set_main_loop_arg(loop_frame, nullptr, 0, 1);
+#else
     while (!WindowShouldClose() && !salir_juego) {
-        sincronizar_tamano_ventana();
-        
-        // Actualizar el stream de musica
-        if (IsMusicReady(musica_menu)) {
-            UpdateMusicStream(musica_menu);
-        }
-
-        // Manejar importación de niveles mediante drag & drop
-        if (IsFileDropped()) {
-            FilePathList archivos_soltados = LoadDroppedFiles();
-            if (archivos_soltados.count > 0) {
-                std::string ruta_origen = archivos_soltados.paths[0];
-                if (ruta_origen.length() > 4 && ruta_origen.substr(ruta_origen.length() - 4) == ".tim") {
-                    std::string nombre_archivo = std::filesystem::path(ruta_origen).filename().string();
-                    std::string ruta_destino = carpeta_partidas() + "/" + nombre_archivo;
-                    
-                    std::error_code ec;
-                    std::filesystem::copy_file(ruta_origen, ruta_destino, std::filesystem::copy_options::overwrite_existing, ec);
-                    
-                    refrescar_lista_partidas();
-                    pestana_niveles_actual = TabNiveles::MIS_NIVELES;
-                    estado_actual = EstadoJuego::SELECCION_NIVELES;
-                }
-            }
-            UnloadDroppedFiles(archivos_soltados);
-        }
-
-        // ======== UPDATE ========
-        switch (estado_actual) {
-            case EstadoJuego::MENU_PRINCIPAL:
-                actualizar_menu_principal();
-                break;
-            case EstadoJuego::MENU_OPCIONES:
-                actualizar_menu_opciones();
-                break;
-            case EstadoJuego::SELECCION_NIVELES:
-                actualizar_seleccion_niveles(motor);
-                break;
-            case EstadoJuego::JUEGO_CREATIVO:
-                actualizar_juego_core(motor, false);
-                break;
-            case EstadoJuego::JUEGO_NIVEL:
-                actualizar_juego_core(motor, true);
-                break;
-        }
-
-        // ======== RENDER ========
-        BeginDrawing();
-        ClearBackground(COLOR_FONDO);
-
-        switch (estado_actual) {
-            case EstadoJuego::MENU_PRINCIPAL:
-                dibujar_menu_principal(motor);
-                break;
-            case EstadoJuego::MENU_OPCIONES:
-                dibujar_menu_opciones();
-                break;
-            case EstadoJuego::SELECCION_NIVELES:
-                dibujar_seleccion_niveles(motor);
-                break;
-            case EstadoJuego::JUEGO_CREATIVO:
-                dibujar_juego_core(motor, false);
-                break;
-            case EstadoJuego::JUEGO_NIVEL:
-                dibujar_juego_core(motor, true);
-                break;
-        }
-
-        // Dibujar boton de silencio en la capa superior
-        dibujar_y_actualizar_boton_silencio();
-
-        EndDrawing();
+        loop_frame(nullptr);
     }
+#endif
 
     // ---- Cleanup ----
     for (int i = 0; i < 3; ++i) {

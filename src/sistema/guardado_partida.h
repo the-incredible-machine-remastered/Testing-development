@@ -49,8 +49,6 @@
 #include <cctype>
 #include <cstdio>
 #include <cstring>
-#include <filesystem>
-#include <fstream>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -58,7 +56,13 @@
 #include <functional>
 #include <memory>
 
+#ifndef __EMSCRIPTEN__
+// std::filesystem y fstream no están disponibles en la build WebAssembly.
+// El sistema de guardado/carga se deshabilita completamente en web.
+#include <filesystem>
+#include <fstream>
 namespace fs = std::filesystem;
+#endif // __EMSCRIPTEN__
 
 bool es_borde_nivel(const EntidadFisica* e);
 void resetear_punteros_borde();
@@ -236,6 +240,12 @@ inline void escribir_dinamica(std::ostream& out, const EntidadFisica* e) {
 
 inline bool guardar_partida(const MotorFisica& motor, GestorEventos& gestor, const std::string& nombre,
                             int ancho, int alto, int contador_bolas) {
+#ifdef __EMSCRIPTEN__
+    // El sistema de guardado en disco no está disponible en la build web.
+    mensaje_guardado = "Guardado no disponible en la version web";
+    mensaje_guardado_timer = 3.0f;
+    return false;
+#else
     std::string carpeta = carpeta_partidas();
     std::error_code ec;
     fs::create_directories(carpeta, ec);
@@ -282,10 +292,12 @@ inline bool guardar_partida(const MotorFisica& motor, GestorEventos& gestor, con
     mensaje_guardado_timer = 3.0f;
     TraceLog(LOG_INFO, "Partida guardada en %s", archivo.c_str());
     return true;
+#endif // __EMSCRIPTEN__
 }
 
 inline void refrescar_lista_partidas() {
     partidas_guardadas.clear();
+#ifndef __EMSCRIPTEN__
     std::string carpeta = carpeta_partidas();
     std::error_code ec;
     if (!fs::exists(carpeta, ec)) return;
@@ -302,6 +314,7 @@ inline void refrescar_lista_partidas() {
         [](const InfoPartidaGuardada& a, const InfoPartidaGuardada& b) {
             return a.nombre < b.nombre;
         });
+#endif // __EMSCRIPTEN__
 }
 
 using CreadorEntidad = std::function<std::unique_ptr<EntidadFisica>(int id, const std::string& linea)>;
@@ -640,6 +653,12 @@ inline bool cargar_partida(MotorFisica& motor, GestorEventos& gestor, const std:
                            int& ancho, int& alto, int& contador_bolas) {
     limpiar_estado_tras_cargar_partida();
 
+#ifdef __EMSCRIPTEN__
+    // La carga de archivos .tim no está disponible en la build web.
+    mensaje_guardado = "Carga de partidas no disponible en la version web";
+    mensaje_guardado_timer = 3.0f;
+    return false;
+#else
     std::ifstream in(ruta_archivo);
     if (!in) {
         mensaje_guardado = "No se pudo abrir la partida";
@@ -782,7 +801,9 @@ inline bool cargar_partida(MotorFisica& motor, GestorEventos& gestor, const std:
     mensaje_guardado_timer = 3.0f;
     motor.set_pausado(true);
     return true;
+#endif // __EMSCRIPTEN__
 }
+
 
 inline std::string snapshot_simulacion = "";
 
