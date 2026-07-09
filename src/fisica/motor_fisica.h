@@ -379,6 +379,12 @@ private:
         // 4. Detectar y resolver colisiones
         detectar_y_resolver_colisiones();
 
+        // 4.05 Frenar deriva horizontal de cubetas (tras la colision, para que no
+        //      se reinyecte velocidad y la cubeta termine deteniendose).
+        for (auto* e : entidades) {
+            if (auto* cub = dynamic_cast<Cubeta*>(e)) cub->amortiguar_deriva(dt);
+        }
+
         // 4.5 Tijeras activadas cortan cuerdas que pasan por su zona
         cortar_cuerdas_con_tijeras();
 

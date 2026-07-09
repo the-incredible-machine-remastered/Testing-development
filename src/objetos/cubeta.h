@@ -24,15 +24,31 @@ public:
         tipo_menu = TipoObjetoMenu::CUBETA;
     }
 
-    // Amortigua la deriva horizontal lenta: si la cubeta casi no se mueve en
-    // vertical (apoyada / cuerda floja) pero desliza en horizontal, frena esa
-    // deriva para que no se resbale sola sin fin.
+    // La cubeta es una caja rigida: NO debe rotar. La friccion de colision le
+    // inducia giro (omega), y ese giro la hacia derivar/deslizar hacia un lado.
+    // Bloqueamos su rotacion cada frame para que solo se traslade.
     void actualizar_fisica(double dt) override {
         EntidadFisica::actualizar_fisica(dt);
+        // Caja rigida: no rota (la rotacion inducida por friccion la hacia derivar).
+        set_velocidad_angular(0.0);
+        set_angulo(0.0);
+    }
+
+    // Frenado de deriva horizontal. Lo llama el motor DESPUES de resolver las
+    // colisiones (si no, la colision reinyecta velocidad y nunca se detiene).
+    void amortiguar_deriva(double dt) {
+        (void)dt;
+        // Tras la colision, la friccion angular reintroduce rotacion (omega) que
+        // hace derivar la caja. La cancelamos aqui (post-colision) y frenamos la
+        // deriva horizontal lenta hasta el reposo.
+        set_velocidad_angular(0.0);
+        set_angulo(0.0);
         Vector2D v = get_velocidad();
-        if (std::abs(v.y) < 12.0 && std::abs(v.x) > 0.5) {
-            double factor = std::max(0.0, 1.0 - 8.0 * dt); // frenado horizontal fuerte
-            set_velocidad(Vector2D(v.x * factor, v.y));
+        double vx = v.x;
+        if (std::abs(vx) < 60.0) {          // solo deriva lenta, no impulsos reales
+            vx *= 0.80;                      // frenado fuerte por frame
+            if (std::abs(vx) < 6.0) vx = 0.0; // reposo firme
+            set_velocidad(Vector2D(vx, v.y));
         }
     }
 

@@ -5317,8 +5317,14 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
         int ms = (int)(tiempo_nivel * 100) % 100;
         
         const char* txt_tiempo = TextFormat("%02d:%02d.%02d", min, seg, ms);
-        Vector2 ts_time = MeasureTextEx(fuente_menu, txt_tiempo, 16, 1);
-        DrawTextEx(fuente_menu, txt_tiempo, {715 + (180 - ts_time.x)/2.0f, 1040 + (35 - ts_time.y)/2.0f}, 54, 9, WHITE);
+        // Numero grande blanco, centrado sobre el bloque de casillas "TIME" del HUD.
+        const float t_size = 34.0f, t_spacing = 4.0f;
+        const float casillas_cx = 883.0f;      // centro X del bloque de casillas negras
+        const float caja_cy = 1012.0f, caja_h = 46.0f;
+        Vector2 ts_time = MeasureTextEx(fuente_menu, txt_tiempo, t_size, t_spacing);
+        DrawTextEx(fuente_menu, txt_tiempo,
+                   {casillas_cx - ts_time.x / 2.0f, caja_cy + (caja_h - ts_time.y) / 2.0f},
+                   t_size, t_spacing, WHITE);
     }
 
     BotonesHUD btns = calcular_rectangulos_botones_hud();
