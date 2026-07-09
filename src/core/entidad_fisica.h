@@ -27,6 +27,8 @@ class EntidadFisica {
 protected:
     int id_objeto;
     bool es_fijo = true;
+    bool en_inventario = false;
+    bool atraviesa_ladrillos = false;
     TipoObjetoMenu tipo_menu = TipoObjetoMenu::NINGUNO;
 
     // ---- Cinemática lineal ----
@@ -180,6 +182,7 @@ public:
     double get_angulo() const { return angulo; }
     double get_velocidad_angular() const { return velocidad_angular; }
     bool get_es_estatico() const { return es_estatico; }
+    void set_es_estatico(bool v) { es_estatico = v; }
     double get_restitucion() const { return coef_restitucion; }
     double get_friccion() const { return coef_friccion; }
     TipoForma get_tipo_forma() const { return tipo_forma; }
@@ -215,6 +218,16 @@ public:
     TipoObjetoMenu get_tipo_menu() const { return tipo_menu; }
     void set_tipo_menu(TipoObjetoMenu t) { tipo_menu = t; }
 
+    // Objeto reservado en el Inventario del Jugador (modo creativo): existe en el
+    // motor para poder guardarse, pero no se dibuja en el canvas ni se simula.
+    bool get_en_inventario() const { return en_inventario; }
+    void set_en_inventario(bool v) { en_inventario = v; }
+
+    // Proyectil que atraviesa Ladrillos sin colisionar con ellos (payaso de la
+    // caja sorpresa). No afecta la colision con otros objetos (dinamita, etc.).
+    bool get_atraviesa_ladrillos() const { return atraviesa_ladrillos; }
+    void set_atraviesa_ladrillos(bool v) { atraviesa_ladrillos = v; }
+
     // ---- Métodos polimórficos ----
     virtual void dibujar(bool modo_debug) const {}
     virtual bool contiene_punto(const Vector2D& p) const { return false; }
@@ -230,6 +243,7 @@ public:
            << " omega=" << velocidad_angular
            << " fijo=" << (es_fijo ? 1 : 0)
            << " tipo_menu=" << static_cast<int>(tipo_menu);
+        if (en_inventario) ss << " reserv=1";
         return ss.str();
     }
     virtual void on_collision(EntidadFisica* otro, const InfoColision& info) {}

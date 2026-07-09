@@ -44,6 +44,17 @@ public:
     // Radio de eje = el de RuedaHamster para que la Correa iguale su omega.
     double get_radio_eje() const override { return 10.0; }
 
+    // La caja esta anclada (no se traslada): en colisiones actua como cuerpo
+    // inmovil, para que las bolas reboten/rueden sobre ella sin catapultarse.
+    bool es_inmovil_en_colision() const override { return true; }
+
+    // El eje ficticio gira por la Correa (velocidad_angular alta), pero ese giro
+    // NO debe transmitirse a las colisiones: para contacto la caja esta quieta.
+    // (Sin esto, la velocidad rotacional se inyecta en la bola y explota numericamente.)
+    Vector2D get_velocidad_en_punto(const Vector2D&) const override {
+        return Vector2D(0.0, 0.0);
+    }
+
     double get_ancho() const { return ancho; }
     double get_alto()  const { return alto; }
     bool get_activada()  const { return activada; }
@@ -58,9 +69,44 @@ public:
         return Vector2D(posicion.x + ancho * 0.5, posicion.y);
     }
 
-    // Velocidad inicial de la cabeza: parábola arriba-derecha
+    // Altura maxima que asoma la cabeza sobre la caja (con leve desvio a la derecha).
+    double get_altura_asomada() const { return alto * 1.15; }
+    double get_radio_cabeza() const { return ancho * 0.28; }
+
+    // Centro de la cabeza de payaso mientras esta asomada (sujeta al resorte).
+    // Movimiento jack-in-the-box: brinca de golpe hasta el pico y baja rebotando
+    // UNA vez hasta quedar asomando poco sobre la caja abierta.
+    Vector2D get_centro_cabeza() const {
+        double frac_altura;
+        if (!ya_lanzo) {
+            frac_altura = 0.0;
+        } else {
+            float t = tiempo_abierta;
+            const float t_pico = 0.15f; // sube al pico
+            const float t_fin  = 0.55f; // termina de asentarse
+            const float reposo = 0.45f; // altura final asomada (fraccion del pico)
+            if (t <= t_pico) {
+                frac_altura = t / t_pico;                 // 0 -> 1 (sube)
+            } else if (t <= t_fin) {
+                float u = (t - t_pico) / (t_fin - t_pico); // 0 -> 1 (baja rebotando)
+                // De 1.0 baja hasta 'reposo' con un solo rebote suave (coseno).
+                frac_altura = reposo + (1.0f - reposo) * (0.5f * (1.0f + std::cos(u * MathUtils::TIM_PI)));
+            } else {
+                frac_altura = reposo;                      // asentado
+            }
+        }
+        double subida = get_altura_asomada() * frac_altura;
+        double desvio = subida * std::tan(5.0 * MathUtils::TIM_PI / 180.0); // ~5 grados derecha
+        return Vector2D(posicion.x + ancho * 0.5 + desvio,
+                        posicion.y - subida);
+    }
+
+    // Velocidad inicial de la cabeza de payaso: sale casi vertical (bien alto) con
+    // una leve inclinacion de ~5 grados hacia la derecha.
     Vector2D get_velocidad_lanzamiento() const {
-        return Vector2D(280.0, -520.0); // vx derecha, vy arriba
+        const double V = 640.0;                 // magnitud (mas alto que antes)
+        const double ang = 5.0 * MathUtils::TIM_PI / 180.0; // 5 grados a la derecha
+        return Vector2D(V * std::sin(ang), -V * std::cos(ang));
     }
 
     void activar() {
@@ -146,18 +192,16 @@ public:
 
         // --- Tapa ---
         if (!abierta) {
+            // Caja CERRADA: el mono (caja_tapa) cubre la boca abierta de la base.
+            // Se dibuja alto para tapar la parte superior y verse como regalo cerrado.
             if (tex_caja_tapa.id > 0) {
+                float mono_h = h * 0.55f;
                 Rectangle src = {0.0f, 0.0f, (float)tex_caja_tapa.width, (float)tex_caja_tapa.height};
-                Rectangle dst = {px - 3.0f, py, w + 6.0f, h * 0.18f};
+                Rectangle dst = {px - 4.0f, py - mono_h * 0.30f, w + 8.0f, mono_h};
                 DrawTexturePro(tex_caja_tapa, src, dst, {0,0}, 0.0f, WHITE);
             } else {
-                DrawRectangleRec({px - 3.0f, py, w + 6.0f, h * 0.18f}, Color{180, 30, 30, 255});
-                DrawRectangleLinesEx({px - 3.0f, py, w + 6.0f, h * 0.18f}, 2.0f, Color{140, 20, 20, 255});
-            }
-            // Resorte (espiral) visible a través de la ranura
-            for (int i = 0; i < 4; i++) {
-                float sy = py + h * 0.20f + i * h * 0.08f;
-                DrawLineEx({cx - w*0.08f, sy}, {cx + w*0.08f, sy + h*0.04f}, 1.5f, Color{180,180,180,200});
+                DrawRectangleRec({px - 3.0f, py, w + 6.0f, h * 0.28f}, Color{180, 30, 30, 255});
+                DrawRectangleLinesEx({px - 3.0f, py, w + 6.0f, h * 0.28f}, 2.0f, Color{140, 20, 20, 255});
             }
         } else {
             // Tapa abierta
@@ -179,37 +223,40 @@ public:
                 DrawLineEx({bisagra_x, bisagra_y}, {tip_x, tip_y}, tapa_h, Color{180,30,30,200});
             }
 
-            // Cabeza de payaso animada
-            if (!ya_lanzo || tiempo_abierta < 0.15f) {
-                float spring_ext = std::min(tiempo_abierta / 0.15f, 1.0f);
-                float head_y = py - h * 0.25f * spring_ext;
-                float hr = w * 0.28f;
-                // Resorte
-                int pasos = 6;
+            // Cabeza de payaso SUJETA a la caja por el resorte (jack-in-the-box):
+            // brinca hacia arriba y se queda asomada (no se separa).
+            {
+                Vector2D headc = get_centro_cabeza();
+                float head_cx = static_cast<float>(headc.x);
+                float head_cy = static_cast<float>(headc.y);
+                float hr = static_cast<float>(get_radio_cabeza());
+
+                // Resorte: desde la boca de la caja hasta la base de la cabeza.
+                float base_x = cx;
+                float base_y = py + h * 0.10f;
+                int pasos = 7;
                 for (int i = 0; i < pasos; i++) {
                     float t0 = (float)i / pasos;
-                    float t1 = (float)(i+1) / pasos;
-                    float sx0 = cx + std::sin(t0 * MathUtils::TIM_PI * 4) * w * 0.1f;
-                    float sy0 = py + h*0.18f + (head_y - py - h*0.18f) * t0 + hr;
-                    float sx1 = cx + std::sin(t1 * MathUtils::TIM_PI * 4) * w * 0.1f;
-                    float sy1 = py + h*0.18f + (head_y - py - h*0.18f) * t1 + hr;
-                    DrawLineEx({sx0,sy0},{sx1,sy1}, 2.0f, Color{160,160,160,220});
+                    float t1 = (float)(i + 1) / pasos;
+                    float sx0 = base_x + (head_cx - base_x) * t0 + std::sin(t0 * MathUtils::TIM_PI * 4) * w * 0.12f;
+                    float sy0 = base_y + (head_cy + hr - base_y) * t0;
+                    float sx1 = base_x + (head_cx - base_x) * t1 + std::sin(t1 * MathUtils::TIM_PI * 4) * w * 0.12f;
+                    float sy1 = base_y + (head_cy + hr - base_y) * t1;
+                    DrawLineEx({sx0, sy0}, {sx1, sy1}, 2.0f, Color{160, 160, 160, 230});
                 }
-                // Cara del payaso
+
+                // Cara del payaso.
                 if (tex_payaso.id > 0) {
                     Rectangle src = {0.0f, 0.0f, (float)tex_payaso.width, (float)tex_payaso.height};
-                    Rectangle dst = {cx, head_y, hr * 2.0f, hr * 2.0f};
+                    Rectangle dst = {head_cx, head_cy, hr * 2.0f, hr * 2.0f};
                     Vector2 origin = {hr, hr};
                     DrawTexturePro(tex_payaso, src, dst, origin, 0.0f, WHITE);
                 } else {
-                    DrawCircle((int)cx, (int)(head_y), hr, Color{255, 220, 170, 255});
-                    DrawCircleLines((int)cx, (int)(head_y), hr, Color{180, 130, 60, 255});
-                    DrawCircle((int)(cx - hr*0.35f), (int)(head_y - hr*0.2f), hr*0.15f, BLACK);
-                    DrawCircle((int)(cx + hr*0.35f), (int)(head_y - hr*0.2f), hr*0.15f, BLACK);
-                    DrawCircle((int)cx, (int)(head_y + hr*0.1f), hr*0.2f, Color{220,40,40,255});
-                    DrawCircleLines((int)cx, (int)(head_y + hr*0.15f), hr*0.3f, Color{80,40,10,255});
-                    DrawRectangleRec({cx - hr*0.4f, head_y - hr*1.35f, hr*0.8f, hr*0.5f}, Color{80,20,120,255});
-                    DrawRectangleRec({cx - hr*0.55f, head_y - hr*1.05f, hr*1.1f, hr*0.15f}, Color{80,20,120,255});
+                    DrawCircle((int)head_cx, (int)head_cy, hr, Color{255, 220, 170, 255});
+                    DrawCircleLines((int)head_cx, (int)head_cy, hr, Color{180, 130, 60, 255});
+                    DrawCircle((int)(head_cx - hr*0.35f), (int)(head_cy - hr*0.2f), hr*0.15f, BLACK);
+                    DrawCircle((int)(head_cx + hr*0.35f), (int)(head_cy - hr*0.2f), hr*0.15f, BLACK);
+                    DrawCircle((int)head_cx, (int)(head_cy + hr*0.1f), hr*0.2f, Color{220,40,40,255});
                 }
             }
         }

@@ -68,6 +68,9 @@ void limpiar_estado_tras_restaurar_snapshot();
 extern std::unordered_map<TipoObjetoMenu, int> inventario_maximo;
 extern std::unordered_map<TipoObjetoMenu, int> inventario_actual;
 extern std::unordered_map<TipoObjetoMenu, std::vector<std::unique_ptr<EntidadFisica>>> inventario_entidades;
+// Reservas por contador para objetos que no son entidades sueltas (cuerda/correa),
+// definidas en el editor creativo.
+extern std::unordered_map<TipoObjetoMenu, int> inventario_reserva;
 extern EstadoJuego estado_actual;
 
 inline TipoObjetoMenu mapear_tipo_entidad_a_menu(TipoEntidadJuego t, const EntidadFisica* e) {
@@ -257,6 +260,15 @@ inline bool guardar_partida(const MotorFisica& motor, GestorEventos& gestor, con
         if (!s.empty()) {
             out << s << "\n";
         }
+    }
+
+    // Reservas de inventario que no son entidades sueltas (cuerda/correa),
+    // definidas por contador en el editor creativo.
+    {
+        int n_cuerda = inventario_reserva[TipoObjetoMenu::CUERDA];
+        int n_correa = inventario_reserva[TipoObjetoMenu::CORREA];
+        if (n_cuerda > 0) out << "inv_reserva " << static_cast<int>(TipoObjetoMenu::CUERDA) << " " << n_cuerda << "\n";
+        if (n_correa > 0) out << "inv_reserva " << static_cast<int>(TipoObjetoMenu::CORREA) << " " << n_correa << "\n";
     }
 
     out << "siguiente_id_evento " << gestor.siguiente_id_evento << "\n";
@@ -536,7 +548,12 @@ inline void instanciar_desde_linea(MotorFisica& motor, const std::string& linea,
         if (e) {
             bool fijo = (leer_valor_i(linea, "fijo=", 1) != 0);
             e->set_es_fijo(fijo);
-            
+
+            bool en_inv = (leer_valor_i(linea, "reserv=", 0) != 0);
+            if (en_inv) {
+                e->set_en_inventario(true); // no cae ni colisiona (excluido en el motor)
+            }
+
             int tm = leer_valor_i(linea, "tipo_menu=", -1);
             TipoObjetoMenu tipo_menu = TipoObjetoMenu::NINGUNO;
             if (e->get_tipo_entidad() == TipoEntidadJuego::BOLA) {
@@ -604,6 +621,15 @@ inline bool cargar_partida(MotorFisica& motor, GestorEventos& gestor, const std:
                 ancho = std::stoi(linea.substr(6));
             } else if (linea.rfind("alto", 0) == 0) {
                 alto = std::stoi(linea.substr(5));
+            } else if (linea.rfind("inv_reserva ", 0) == 0) {
+                std::stringstream ss(linea.substr(12));
+                int tipo_val, cant_val;
+                if (ss >> tipo_val >> cant_val) {
+                    TipoObjetoMenu tm = static_cast<TipoObjetoMenu>(tipo_val);
+                    inventario_reserva[tm] = cant_val;
+                    inventario_maximo[tm] += cant_val;
+                    inventario_actual[tm] += cant_val;
+                }
             } else if (linea.rfind("ent ", 0) == 0) {
                 instanciar_desde_linea(motor, linea, max_id, false);
             } else if (linea.rfind("evt ", 0) == 0) {

@@ -108,6 +108,7 @@ const Color COLOR_CONTROLES   = {130, 130, 160, 200};   // Texto controles
 std::unordered_map<TipoObjetoMenu, int> inventario_maximo;
 std::unordered_map<TipoObjetoMenu, int> inventario_actual;
 std::unordered_map<TipoObjetoMenu, std::vector<std::unique_ptr<EntidadFisica>>> inventario_entidades;
+std::unordered_map<TipoObjetoMenu, int> inventario_reserva;
 int nivel_campana_actual = -1;
 std::string nivel_usuario_actual_path = "";
 
@@ -800,6 +801,7 @@ InfoHandles calcular_handles(const ParedRectangular* p) {
 EntidadFisica* obtener_entidad_bajo_mouse(const MotorFisica& motor, Vector2D mouse_pos) {
     for (auto* e : motor.get_entidades()) {
         if (es_borde_nivel(e)) continue;
+        if (e->get_en_inventario()) continue; // reservado en inventario: no seleccionable
         if (e->contiene_punto(mouse_pos)) {
             return e;
         }
@@ -853,6 +855,7 @@ void limpiar_estado_tras_cargar_partida() {
     inventario_maximo.clear();
     inventario_actual.clear();
     inventario_entidades.clear();
+    inventario_reserva.clear();
     snapshot_simulacion = "";
     menu_tab = 0;
     menu_pagina = 0;
@@ -895,6 +898,7 @@ void crear_escena(MotorFisica& motor) {
 // ============================================================================
 bool posicion_valida_para_spawn(const MotorFisica& motor, Vector2D pos, TipoForma forma, double w_r, double h) {
     for (const auto* e : motor.get_entidades()) {
+        if (e->get_en_inventario()) continue; // reservados en inventario no ocupan espacio
         TipoForma forma_e = e->get_tipo_forma();
 
         if (forma == TipoForma::CIRCULO) {
@@ -1182,6 +1186,21 @@ bool crear_zona_meta(MotorFisica& motor, Vector2D pos) {
     return true;
 }
 
+// Devuelve la siguiente posicion de "deposito" para objetos que se agregan al
+// Inventario del Jugador desde el panel: los apila en una cuadricula en la
+// esquina superior izquierda del canvas para que no estorben en el mapa.
+Vector2D siguiente_pos_deposito_inventario() {
+    static int contador = 0;
+    const double base_x = 70.0;
+    const double base_y = 70.0;
+    const double paso = 64.0;
+    const int cols = 3;
+    int col = contador % cols;
+    int fila = contador / cols;
+    contador++;
+    return Vector2D(base_x + col * paso, base_y + fila * paso);
+}
+
 bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
     bool creado = false;
     switch (tipo) {
@@ -1225,6 +1244,38 @@ bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
         case TipoObjetoMenu::CAJA_SORPRESA:     return crear_caja_sorpresa(motor, pos);
         case TipoObjetoMenu::CAMINADORA:          return crear_caminadora(motor, pos);
         default: return false;
+    }
+}
+
+// Agrega un objeto oculto (reservado en inventario) al motor. Devuelve true si pudo.
+bool agregar_objeto_inventario_oculto(MotorFisica& motor, TipoObjetoMenu tipo) {
+    Vector2D pos = siguiente_pos_deposito_inventario();
+    if (!spawn_desde_menu(motor, tipo, pos)) return false;
+    const auto& ents = motor.get_entidades();
+    if (!ents.empty()) {
+        ents.back()->set_es_fijo(false);
+        ents.back()->set_en_inventario(true); // no cae ni colisiona (excluido en el motor)
+    }
+    return true;
+}
+
+// Aplica las solicitudes diferidas de los botones +/- del inventario (main loop).
+void procesar_solicitudes_inventario(MotorFisica& motor) {
+    if (solicitar_clonar_inventario != TipoObjetoMenu::NINGUNO) {
+        agregar_objeto_inventario_oculto(motor, solicitar_clonar_inventario);
+        solicitar_clonar_inventario = TipoObjetoMenu::NINGUNO;
+    }
+    if (solicitar_quitar_inventario != TipoObjetoMenu::NINGUNO) {
+        // Quitar la ultima entidad oculta de ese tipo.
+        int id_quitar = -1;
+        for (auto* e : motor.get_entidades()) {
+            if (!e->get_es_fijo() && e->get_en_inventario() &&
+                e->get_tipo_menu() == solicitar_quitar_inventario) {
+                id_quitar = e->get_id();
+            }
+        }
+        if (id_quitar >= 0) motor.remover_entidad(id_quitar);
+        solicitar_quitar_inventario = TipoObjetoMenu::NINGUNO;
     }
 }
 
@@ -4099,6 +4150,10 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     if (modo_panel_guardado != ModoPanelGuardado::CERRADO) {
         if (estado_actual != EstadoJuego::JUEGO_NIVEL) {
             manejar_teclas_panel_guardado(motor, gestor_eventos, ANCHO, ALTO, contador_bolas);
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                manejar_click_panel_guardado(GetMouseX(), GetMouseY(), motor, gestor_eventos,
+                                             ANCHO, ALTO, contador_bolas);
+            }
         }
         return;
     }
@@ -4218,37 +4273,36 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
 
         if (punto_en_panel_izquierdo(mx, my)) {
             entidad_seleccionada = nullptr;  // Deseleccionar al interactuar con el panel de eventos
+            manejar_click_contadores_inventario(motor, mx, my); // botones +/- del inventario
+            procesar_solicitudes_inventario(motor); // aplica clonar/quitar diferidos
         } else if (punto_en_menu(mx, my)) {
             entidad_seleccionada = nullptr;  // Deseleccionar al clickear en el menú
             if (manejar_click_menu(mx, my, motor)) {
                 // UI consumió el click
             } else {
                 TipoObjetoMenu tipo = tipo_en_celda(mx, my, celdas_menu_cache);
-                if (tipo == TipoObjetoMenu::CUERDA) {
-                    if (motor.get_pausado()) {
-                        if (estado_actual == EstadoJuego::JUEGO_NIVEL && inventario_actual[TipoObjetoMenu::CUERDA] <= 0) {
+                if (tipo == TipoObjetoMenu::CUERDA || tipo == TipoObjetoMenu::CORREA) {
+                    // En creativo: iniciar arrastre; si se suelta en el panel izquierdo
+                    // se reserva por contador, si se suelta en el canvas inicia la
+                    // colocacion de 2 puntos. En nivel: modo colocacion directo.
+                    if (!motor.get_pausado()) {
+                        spawn_error_timer = 0.5f;
+                        spawn_error_pos = Vector2D(mx, my);
+                    } else if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
+                        if (inventario_actual[tipo] <= 0) {
                             spawn_error_timer = 0.5f;
                             spawn_error_pos = Vector2D(mx, my);
                         } else {
                             cancelar_colocacion_cuerda();
-                            estado_cuerda = EstadoColocacionCuerda::ESPERANDO_EXTREMO_A;
+                            if (tipo == TipoObjetoMenu::CUERDA)
+                                estado_cuerda = EstadoColocacionCuerda::ESPERANDO_EXTREMO_A;
+                            else
+                                estado_correa = EstadoColocacionCorrea::ESPERANDO_EJE_A;
                         }
                     } else {
-                        spawn_error_timer = 0.5f;
-                        spawn_error_pos = Vector2D(mx, my);
-                    }
-                } else if (tipo == TipoObjetoMenu::CORREA) {
-                    if (motor.get_pausado()) {
-                        if (estado_actual == EstadoJuego::JUEGO_NIVEL && inventario_actual[TipoObjetoMenu::CORREA] <= 0) {
-                            spawn_error_timer = 0.5f;
-                            spawn_error_pos = Vector2D(mx, my);
-                        } else {
-                            cancelar_colocacion_cuerda();
-                            estado_correa = EstadoColocacionCorrea::ESPERANDO_EJE_A;
-                        }
-                    } else {
-                        spawn_error_timer = 0.5f;
-                        spawn_error_pos = Vector2D(mx, my);
+                        // Creativo: arrastrar como los demas (release decide accion).
+                        cancelar_colocacion_cuerda();
+                        arrastrando_spawn = tipo;
                     }
                 } else if (tipo != TipoObjetoMenu::NINGUNO) {
                     if (!motor.get_pausado()) {
@@ -4390,7 +4444,42 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
 
     if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
         if (arrastrando_spawn != TipoObjetoMenu::NINGUNO) {
-            if (punto_en_area_juego(mx, my)) {
+            // Modo creativo: soltar un objeto del menu sobre el panel izquierdo
+            // lo agrega directamente al Inventario del Jugador (no fijo).
+            bool soltado_en_panel_inv =
+                estado_actual == EstadoJuego::JUEGO_CREATIVO &&
+                panel_izquierdo_visible &&
+                CheckCollisionPointRec({(float)mx, (float)my},
+                                       {12.0f, (float)(ALTO - 390), 236.0f, 260.0f});
+            if (soltado_en_panel_inv) {
+                // Cuerda/Correa: solo reserva por contador (no son entidades sueltas).
+                if (arrastrando_spawn == TipoObjetoMenu::CUERDA ||
+                    arrastrando_spawn == TipoObjetoMenu::CORREA) {
+                    inventario_reserva[arrastrando_spawn]++;
+                } else {
+                    // Resto: existe en el motor (para guardarse) pero marcado en_inventario
+                    // -> no se dibuja en el canvas ni se simula.
+                    Vector2D pos_inv = siguiente_pos_deposito_inventario();
+                    if (spawn_desde_menu(motor, arrastrando_spawn, pos_inv)) {
+                        const auto& ents = motor.get_entidades();
+                        if (!ents.empty()) {
+                            ents.back()->set_es_fijo(false);
+                            ents.back()->set_en_inventario(true); // no cae ni colisiona (excluido en el motor)
+                        }
+                    }
+                }
+                arrastrando_spawn = TipoObjetoMenu::NINGUNO;
+            } else if ((arrastrando_spawn == TipoObjetoMenu::CUERDA ||
+                        arrastrando_spawn == TipoObjetoMenu::CORREA) &&
+                       punto_en_area_juego(mx, my)) {
+                // Soltar cuerda/correa en el canvas: iniciar colocacion de 2 puntos.
+                cancelar_colocacion_cuerda();
+                if (arrastrando_spawn == TipoObjetoMenu::CUERDA)
+                    estado_cuerda = EstadoColocacionCuerda::ESPERANDO_EXTREMO_A;
+                else
+                    estado_correa = EstadoColocacionCorrea::ESPERANDO_EJE_A;
+                arrastrando_spawn = TipoObjetoMenu::NINGUNO;
+            } else if (punto_en_area_juego(mx, my)) {
                 bool spawn_exito = false;
                 if (estado_actual == EstadoJuego::JUEGO_NIVEL) {
                     if (!inventario_entidades[arrastrando_spawn].empty()) {
@@ -4431,7 +4520,11 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                             e->set_posicion_editor(pos_destino);
                             e->set_velocidad(Vector2D(0, 0));
                             e->set_velocidad_angular(0);
-                            
+                            // Al colocarlo en el nivel deja de estar "reservado": se vuelve
+                            // visible y simulable como un objeto normal (conserva su
+                            // es_estatico natural, que nunca se altero).
+                            e->set_en_inventario(false);
+
                             auto* ramp = dynamic_cast<PlanoInclinado*>(e.get());
                             if (ramp) ramp->recalcular_vertices();
 
@@ -4465,7 +4558,6 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                 Rectangle rect_panel = { (float)panel_x, (float)panel_y, (float)panel_w, (float)panel_h };
                 if (panel_izquierdo_visible && CheckCollisionPointRec(GetMousePosition(), rect_panel)) {
                     entidad_arrastrada->set_es_fijo(false);
-                    TraceLog(LOG_INFO, "Entidad #%d arrastrada al inventario, es_fijo = false", entidad_arrastrada->get_id());
                 }
             }
             entidad_arrastrada = nullptr;
@@ -4759,9 +4851,12 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     dibujar_correas(motor);
 
     for (const auto* e : motor.get_entidades()) {
+        // Objetos reservados en el inventario (creativo) no se dibujan en el canvas.
+        if (e->get_en_inventario()) continue;
+
         dibujar_entidad(e);
         dibujar_debug(e);
-        
+
         if (estado_actual == EstadoJuego::JUEGO_CREATIVO && !e->get_es_fijo()) {
             Color inv_color = Color{76, 219, 138, 130};
             TipoForma forma = e->get_tipo_forma();

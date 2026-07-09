@@ -9,7 +9,17 @@
 #include <unordered_map>
 
 extern EntidadFisica* entidad_arrastrada;
+extern std::unordered_map<TipoObjetoMenu, int> inventario_reserva;
 inline bool panel_izquierdo_visible = true;
+
+// Botones +/- de las filas del inventario del jugador (panel izquierdo), regenerados
+// cada frame al dibujar. Cada uno mapea un rect a (tipo, delta).
+struct BotonContadorInv { Rectangle rect; TipoObjetoMenu tipo; int delta; };
+inline std::vector<BotonContadorInv> botones_contador_inventario;
+
+// Solicitudes de modificacion diferidas (procesadas fuera del dibujo, en main).
+inline TipoObjetoMenu solicitar_clonar_inventario = TipoObjetoMenu::NINGUNO;
+inline TipoObjetoMenu solicitar_quitar_inventario = TipoObjetoMenu::NINGUNO;
 
 enum class ModoEventoUI {
     INACTIVO,
@@ -194,9 +204,17 @@ inline void dibujar_seleccion_tipo_ui(int px, int& py, int w, const char* titulo
     py += ((tipos.size() + 1) / 2) * (btn_h + 6) + 10;
 }
 
+// Devuelve la etiqueta legible de una variante de menu (Balon Playa, Rueda Hamster, ...)
+inline const char* nombre_objeto_menu(TipoObjetoMenu tipo) {
+    for (int i = 0; i < CATALOGO_MENU_COUNT; ++i) {
+        if (CATALOGO_MENU[i].tipo == tipo) return CATALOGO_MENU[i].etiqueta;
+    }
+    return "Objeto";
+}
+
 inline void dibujar_panel_eventos_izquierdo(const MotorFisica& motor, GestorEventos& gestor, int alto_pantalla) {
     int px = 0;
-    int w = 260; 
+    int w = 260;
 
     // Botón abrir en el borde izquierdo si está oculto
     if (!panel_izquierdo_visible) {
@@ -433,31 +451,86 @@ inline void dibujar_panel_eventos_izquierdo(const MotorFisica& motor, GestorEven
         DrawText("INVENTARIO DEL JUGADOR", panel_x + 10, panel_y + 10, 11, is_hover ? GREEN : SKYBLUE);
         DrawLine(panel_x + 10, panel_y + 26, panel_x + panel_w - 10, panel_y + 26, Color{50, 50, 60, 255});
 
-        std::unordered_map<TipoEntidadJuego, int> items_inventario;
-        for (const auto* e : motor.get_entidades()) {
-            if (!e->get_es_fijo()) {
-                items_inventario[e->get_tipo_entidad()]++;
+        // Recolectar todas las cantidades del inventario por variante de menu:
+        //  - entidades ocultas (objetos normales reservados)  -> se cuentan
+        //  - reservas por contador (cuerda/correa)            -> se cuentan
+        std::vector<std::pair<TipoObjetoMenu, int>> items_inventario;
+        auto sumar = [&](TipoObjetoMenu tm, int n) {
+            for (auto& par : items_inventario) {
+                if (par.first == tm) { par.second += n; return; }
             }
+            items_inventario.push_back({tm, n});
+        };
+        for (const auto* e : motor.get_entidades()) {
+            if (!e->get_es_fijo()) sumar(e->get_tipo_menu(), 1);
+        }
+        for (const auto& [tm, n] : inventario_reserva) {
+            if (n > 0) sumar(tm, n);
         }
 
+        botones_contador_inventario.clear();
         int item_y = panel_y + 36;
         if (items_inventario.empty()) {
             DrawText("Arrastra objetos aqui", panel_x + 15, item_y, 10, GRAY);
             DrawText("para agregarlos al", panel_x + 15, item_y + 14, 10, GRAY);
-            DrawText("inventario (no fijos)", panel_x + 15, item_y + 28, 10, GRAY);
+            DrawText("inventario del jugador", panel_x + 15, item_y + 28, 10, GRAY);
         } else {
+            Vector2 mp = GetMousePosition();
             for (auto const& [tipo, cant] : items_inventario) {
-                if (item_y + 16 > panel_y + panel_h - 10) {
+                if (item_y + 20 > panel_y + panel_h - 10) {
                     DrawText("...", panel_x + 15, item_y, 10, GRAY);
                     break;
                 }
-                const char* nombre = nombre_tipo_entidad(tipo);
-                DrawText(TextFormat("- %s:", nombre), panel_x + 15, item_y, 11, LIGHTGRAY);
-                DrawText(TextFormat("x%d", cant), panel_x + panel_w - 40, item_y, 11, ORANGE);
-                item_y += 18;
+                const char* nombre = nombre_objeto_menu(tipo);
+                DrawText(TextFormat("%s", nombre), panel_x + 15, item_y + 3, 11, LIGHTGRAY);
+
+                Rectangle bmenos = { (float)(panel_x + panel_w - 82), (float)item_y, 18, 18 };
+                Rectangle bmas   = { (float)(panel_x + panel_w - 30), (float)item_y, 18, 18 };
+                DrawRectangleRec(bmenos, CheckCollisionPointRec(mp, bmenos) ? Color{90,90,110,255} : Color{55,58,72,255});
+                DrawRectangleRec(bmas,   CheckCollisionPointRec(mp, bmas)   ? Color{90,90,110,255} : Color{55,58,72,255});
+                DrawText("-", (int)bmenos.x + 6, (int)bmenos.y + 2, 14, WHITE);
+                DrawText("+", (int)bmas.x + 4,  (int)bmas.y + 2, 14, WHITE);
+                DrawText(TextFormat("%d", cant), panel_x + panel_w - 60, item_y + 3, 12, ORANGE);
+
+                botones_contador_inventario.push_back({bmenos, tipo, -1});
+                botones_contador_inventario.push_back({bmas, tipo, +1});
+                item_y += 22;
             }
         }
     }
+}
+
+// Maneja clics en los botones +/- de las filas del inventario del jugador.
+// Devuelve true si consumio el clic. Al llegar a 0 la fila desaparece sola.
+inline bool manejar_click_contadores_inventario(MotorFisica& motor, int mx, int my) {
+    if (estado_actual != EstadoJuego::JUEGO_CREATIVO) return false;
+    Vector2 p = { (float)mx, (float)my };
+    for (const auto& b : botones_contador_inventario) {
+        if (CheckCollisionPointRec(p, b.rect)) {
+            if (b.tipo == TipoObjetoMenu::CUERDA || b.tipo == TipoObjetoMenu::CORREA) {
+                int& n = inventario_reserva[b.tipo];
+                n += b.delta;
+                if (n < 0) n = 0;
+            } else {
+                // Objetos normales: +1 = clona una entidad oculta; -1 = quita una.
+                if (b.delta > 0) {
+                    // Buscar una entidad oculta existente de este tipo para clonar posicion.
+                    for (auto* e : motor.get_entidades()) {
+                        if (!e->get_es_fijo() && e->get_en_inventario() &&
+                            e->get_tipo_menu() == b.tipo) {
+                            solicitar_clonar_inventario = b.tipo; // procesado fuera del dibujo
+                            break;
+                        }
+                    }
+                } else {
+                    // Quitar una entidad oculta de este tipo.
+                    solicitar_quitar_inventario = b.tipo;
+                }
+            }
+            return true;
+        }
+    }
+    return false;
 }
 
 inline bool manejar_click_evento_ui(GestorEventos& gestor, EntidadFisica* clicked) {

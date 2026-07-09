@@ -407,6 +407,7 @@ private:
 
     void aplicar_gravedad() {
         for (auto* e : entidades) {
+            if (e->get_en_inventario()) continue; // reservado en inventario, no cae
             if (!e->get_es_estatico() && e->get_masa() > MathUtils::EPSILON) {
                 if (dynamic_cast<Balancin*>(e)) continue; // El balancín está pivotado y fijo linealmente
                 // F = m * g
@@ -611,25 +612,42 @@ private:
     void lanzar_cajas_sorpresa() {
         for (auto* e : entidades) {
             auto* caja = dynamic_cast<CajaSorpresa*>(e);
-            if (!caja || !caja->get_activada() || caja->get_ya_lanzo()) continue;
-            caja->set_ya_lanzo();
+            if (!caja) continue;
+            // Marcar disparada una sola vez (activa la animacion de la cabeza).
+            if (caja->get_activada() && !caja->get_ya_lanzo()) {
+                caja->set_ya_lanzo();
 
-            // Buscar entidades dinámicas encima/sobre la caja y empujarlas
-            Vector2D cmin = caja->get_min();
-            Vector2D cmax = caja->get_max();
-            double zona_x0 = cmin.x - 10.0;
-            double zona_x1 = cmax.x + 10.0;
-            double zona_y0 = cmin.y - 80.0; // zona de búsqueda encima
-            double zona_y1 = cmax.y + 5.0;
-
-            Vector2D impulso = caja->get_velocidad_lanzamiento(); // (280, -520)
-
+                // Al abrirse, empuja hacia arriba las bolas que esten encima
+                // (como el Barril del Chavo, con fuerza moderada, leve desvio derecha).
+                Vector2D cmin = caja->get_min();
+                Vector2D cmax = caja->get_max();
+                double zx0 = cmin.x - 8.0, zx1 = cmax.x + 8.0;
+                double zy0 = cmin.y - 60.0, zy1 = cmin.y + 12.0; // zona encima de la caja
+                double ang = MathUtils::grados_a_radianes(-85.0); // casi vertical, 5 grados derecha
+                Vector2D dir(std::cos(ang), std::sin(ang));
+                const double FUERZA = 560.0; // moderada (barril usa 750)
+                for (auto* otro : entidades) {
+                    if (otro == e || otro->get_es_estatico()) continue;
+                    if (otro->get_tipo_entidad() != TipoEntidadJuego::BOLA) continue;
+                    Vector2D p = otro->get_posicion();
+                    if (p.x >= zx0 && p.x <= zx1 && p.y >= zy0 && p.y <= zy1) {
+                        otro->set_velocidad(dir * FUERZA);
+                        otro->set_velocidad_angular(2.0);
+                    }
+                }
+            }
+            // Mientras la cabeza de payaso esta asomada, su hitbox circular puede
+            // encender dinamitas que toque (atraviesa ladrillos: no los mira).
+            if (!caja->get_ya_lanzo()) continue;
+            Vector2D pc = caja->get_centro_cabeza();
+            double rc = caja->get_radio_cabeza();
+            double rc2 = (rc) * (rc);
             for (auto* otro : entidades) {
-                if (otro == e || otro->get_es_estatico()) continue;
-                Vector2D pos = otro->get_posicion();
-                if (pos.x >= zona_x0 && pos.x <= zona_x1 &&
-                    pos.y >= zona_y0 && pos.y <= zona_y1) {
-                    otro->set_velocidad(impulso);
+                auto* dina = dynamic_cast<Dinamita*>(otro);
+                if (!dina) continue;
+                Vector2D dc = dina->get_centro();
+                if ((dc - pc).magnitud_cuadrada() <= rc2 + rc * 40.0) {
+                    dina->encender();
                 }
             }
         }
@@ -827,6 +845,19 @@ private:
             for (size_t j = i + 1; j < entidades.size(); j++) {
                 EntidadFisica* a = entidades[i];
                 EntidadFisica* b = entidades[j];
+
+                // Objetos reservados en el inventario del jugador no colisionan.
+                if (a->get_en_inventario() || b->get_en_inventario()) continue;
+
+                // Payaso (atraviesa_ladrillos) pasa a traves de Ladrillos sin resolver.
+                {
+                    bool a_pay = a->get_atraviesa_ladrillos();
+                    bool b_pay = b->get_atraviesa_ladrillos();
+                    if ((a_pay && dynamic_cast<Ladrillo*>(b)) ||
+                        (b_pay && dynamic_cast<Ladrillo*>(a))) {
+                        continue;
+                    }
+                }
 
                 if (a->get_es_estatico() && b->get_es_estatico()) continue;
 
