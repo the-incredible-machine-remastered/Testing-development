@@ -342,8 +342,9 @@ inline void dibujar_panel_eventos_izquierdo(const MotorFisica& motor, GestorEven
         py += 20;
         
         std::string txt_guia = "Selecciona el primer objeto...";
-        if (condicion_en_creacion_ui == TipoCondicion::ENTIDAD_EN_ZONA ||
-            condicion_en_creacion_ui == TipoCondicion::TIPO_EN_ZONA) {
+        if (condicion_en_creacion_ui == TipoCondicion::ENTIDAD_EN_ZONA) {
+            txt_guia = "Selecciona el OBJETO que entra...";
+        } else if (condicion_en_creacion_ui == TipoCondicion::TIPO_EN_ZONA) {
             txt_guia = "Selecciona la Zona Meta...";
         } else if (condicion_en_creacion_ui == TipoCondicion::BARRIL_ACTIVADO) {
             txt_guia = "Selecciona el Barril...";
@@ -367,7 +368,7 @@ inline void dibujar_panel_eventos_izquierdo(const MotorFisica& motor, GestorEven
 
         std::string txt_guia = "Selecciona el segundo objeto...";
         if (condicion_en_creacion_ui == TipoCondicion::ENTIDAD_EN_ZONA) {
-            txt_guia = "Selecciona el Objeto que entra...";
+            txt_guia = "Ahora selecciona la ZONA META...";
         }
         
         DrawText(txt_guia.c_str(), px + 12, py, 10, LIGHTGRAY);

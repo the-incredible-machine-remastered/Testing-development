@@ -1,0 +1,18 @@
+tim_save 1
+nombre TocarElHamster
+ancho 1920
+alto 1080
+gravedad_y 500
+contador_bolas 0
+siguiente_id 33
+ent RUEDA_HAMSTER id=10 x=1223 y=539 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=RUEDA_HAMSTER r=35 corr=0 sh=0
+ent BOLA id=11 x=231 y=435 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=BOLA_NORMAL r=33 m=12 ci=1 ti=2
+ent RAMPA id=28 x=-10 y=10 b=160 h=120 inv=0 fijo=0 tipo_menu=RAMPA
+ent TRAMPOLIN id=29 x=94 y=60 w=80 h=20 fijo=0 tipo_menu=TRAMPOLIN
+ent TRAMPOLIN id=30 x=158 y=60 w=80 h=20 fijo=0 tipo_menu=TRAMPOLIN
+ent TRAMPOLIN id=31 x=30 y=124 w=80 h=20 fijo=0 tipo_menu=TRAMPOLIN
+ent TRAMPOLIN id=32 x=94 y=124 w=80 h=20 fijo=0 tipo_menu=TRAMPOLIN
+siguiente_id_evento 2
+evt_grupo id=-1 op=AND
+  evt_cond id=1 tipo=CONTACTO_ENT ea=11 eb=10
+evt_grupo_fin

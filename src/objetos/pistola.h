@@ -12,13 +12,16 @@ private:
     double velocidad_bala;
     double angulo_rotacion;     // Ángulo acumulado del círculo giratorio
     double velocidad_rotacion;  // Velocidad de giro actual (grados/segundo)
+    double retroceso_t;         // temporizador del efecto de retroceso (segundos)
 
 public:
     Pistola(int id, Vector2D pos, double ang_grados = 0.0)
         : EntidadFisica(id, pos, 0.0, TipoForma::AABB, true),
           angulo(ang_grados * MathUtils::TIM_PI / 180.0),
-          disparada(false), ya_disparo(false), velocidad_bala(600.0),
-          angulo_rotacion(0.0), velocidad_rotacion(0.0) {}
+          disparada(false), ya_disparo(false), velocidad_bala(1300.0),
+          angulo_rotacion(0.0), velocidad_rotacion(0.0), retroceso_t(0.0) {
+        tipo_menu = TipoObjetoMenu::PISTOLA;
+    }
 
     double get_angulo() const { return angulo; }
     double get_angulo_grados() const { return angulo * 180.0 / MathUtils::TIM_PI; }
@@ -32,6 +35,7 @@ public:
             disparada = true;
             ya_disparo = true;
             velocidad_rotacion = 1200.0; // Inicia el giro rápido al disparar
+            retroceso_t = 0.18;          // efecto de retroceso (patada del arma)
         }
     }
     double get_velocidad_bala() const { return velocidad_bala; }
@@ -63,6 +67,17 @@ public:
         disparada = true;
         ya_disparo = true;
         velocidad_rotacion = 1200.0; // Inicia el giro rápido al disparar
+        retroceso_t = 0.18;          // efecto de retroceso (patada del arma)
+    }
+
+    // Offset de retroceso: la pistola se echa hacia ATRÁS (opuesto al disparo) y
+    // vuelve. Devuelve el desplazamiento a aplicar al dibujo.
+    Vector2D get_offset_retroceso() const {
+        if (retroceso_t <= 0.0) return Vector2D(0.0, 0.0);
+        const double dur = 0.18;
+        double f = retroceso_t / dur;            // 1 -> 0
+        double magnitud = 10.0 * std::sin(f * MathUtils::TIM_PI); // sube y baja: patada+regreso
+        return get_dir_disparo() * (-magnitud);  // hacia atras
     }
 
     void actualizar_fisica(double dt) override {
@@ -74,6 +89,10 @@ public:
             if (velocidad_rotacion < 0.0) {
                 velocidad_rotacion = 0.0;
             }
+        }
+        if (retroceso_t > 0.0) {
+            retroceso_t -= dt;
+            if (retroceso_t < 0.0) retroceso_t = 0.0;
         }
     }
 
@@ -91,22 +110,22 @@ public:
 
     std::string serializar() const override {
         std::stringstream ss;
-        ss << "ent PISTOLA id=" << get_id()
-           << " x=" << posicion.x << " y=" << posicion.y
-           << " ang=" << get_angulo_grados();
+        ss << "ent PISTOLA id=" << get_id() << serializar_base()
+           << " deg=" << get_angulo_grados();
         return ss.str();
     }
 
     void dibujar(bool debug) const override {
-        float px = static_cast<float>(posicion.x);
-        float py = static_cast<float>(posicion.y);
+        Vector2D off = get_offset_retroceso();
+        float px = static_cast<float>(posicion.x + off.x);
+        float py = static_cast<float>(posicion.y + off.y);
 
         bool apunta_izq = (std::cos(angulo) < 0);
         float d = apunta_izq ? -1.0f : 1.0f; // +1 = derecha, -1 = izquierda
 
         if (tex_pistola.id > 0) {
-            float w = 56.0f;
-            float h = 36.0f;
+            float w = 56.0f * 1.4f;
+            float h = 36.0f * 1.4f;
             float flip = apunta_izq ? 1.0f : -1.0f;
             
             // Ya no se oscurece la pistola al activarse (usamos WHITE)
@@ -117,17 +136,17 @@ public:
             Vector2 origin = {w / 2.0f, h / 2.0f};
             DrawTexturePro(tex_pistola, src, dst, origin, 0.0f, tint_color);
 
-            // Dibujar el círculo giratorio
+            // Dibujar el círculo giratorio (escala con la pistola *1.4)
             if (tex_pistola_gira.id > 0) {
-                float circle_w = 20.0f;
-                float circle_h = 20.0f;
-                
+                float circle_w = 20.0f * 1.4f;
+                float circle_h = 20.0f * 1.4f;
+
                 // Rotación acumulada durante la simulación física (frena progresivamente)
                 float rotation = (float)angulo_rotacion;
-                
+
                 Rectangle c_src = {0.0f, 0.0f, (float)tex_pistola_gira.width, (float)tex_pistola_gira.height};
                 // El círculo está colocado con un ligero offset del centro para quedar alineado en el tambor/centro del arma
-                Rectangle c_dst = {px - 4.0f * d, py - 7, circle_w, circle_h};
+                Rectangle c_dst = {px - 4.0f * 1.4f * d, py - 7.0f * 1.4f, circle_w, circle_h};
                 Vector2 c_origin = {circle_w / 2.0f, circle_h / 2.0f};
                 
                 DrawTexturePro(tex_pistola_gira, c_src, c_dst, c_origin, rotation, WHITE);

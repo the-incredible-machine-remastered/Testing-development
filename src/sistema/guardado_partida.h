@@ -437,7 +437,7 @@ inline const std::unordered_map<std::string, CreadorEntidad>& obtener_registro_f
         {"PISTOLA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
             return std::make_unique<Pistola>(id,
                 Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
-                leer_valor(linea, "ang=", 0.0));
+                leer_valor(linea, "deg=", 0.0));
         }},
         {"FOCO", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
             return std::make_unique<Foco>(id,
@@ -452,7 +452,7 @@ inline const std::unordered_map<std::string, CreadorEntidad>& obtener_registro_f
         {"CANON", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
             return std::make_unique<Canon>(id,
                 Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
-                leer_valor(linea, "ang=", 180.0));
+                leer_valor(linea, "deg=", 180.0));
         }},
         {"LINTERNA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
             return std::make_unique<Linterna>(id,

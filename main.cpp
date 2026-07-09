@@ -3843,7 +3843,9 @@ void cargar_nivel_campana(MotorFisica& motor, int lvl_idx) {
     else if (lvl_idx == 3) path = "Assets/campaign/4_messi_gol_gol_gol.tim";
     else if (lvl_idx == 4) path = "Assets/campaign/5_bajar_cubetas.tim";
     else if (lvl_idx == 5) path = "Assets/campaign/6_ball_in_hoop.tim";
-    else path = "Assets/campaign/7_canon.tim";
+    else if (lvl_idx == 6) path = "Assets/campaign/7_canon.tim";
+    else if (lvl_idx == 7) path = "Assets/campaign/8_tocar_hamster.tim";
+    else path = "Assets/campaign/9_triple_shoot.tim";
 
     if (FileExists(path.c_str())) {
         int w = ANCHO;
@@ -3970,9 +3972,11 @@ void dibujar_seleccion_niveles(MotorFisica& motor) {
             { "4. Messi gol gol gol", "Ayuda a Messi a meter un golazo", "usando los trampolines.", "DIFICIL", RED },
             { "5. Bajar las Cubetas", "Haz que las 3 cubetas bajen", "y toquen la plataforma.", "MEDIO", ORANGE },
             { "6. Ball in Hoop", "Encesta la bola usando las", "cintas y los ladrillos.", "DIFICIL", RED },
-            { "7. Canon", "Dispara el canon con la cadena", "de luz para acertar.", "FACIL", GREEN }
+            { "7. Canon", "Dispara el canon con la cadena", "de luz para acertar.", "FACIL", GREEN },
+            { "8. Tocar el Hamster", "Haz que la bola llegue a tocar", "la rueda del hamster.", "FACIL", GREEN },
+            { "9. Triple Shoot", "Encadena los disparos para", "resolver el triple tiro.", "DIFICIL", RED }
         };
-        const int NUM_NIVELES_CAMPANA = 7;
+        const int NUM_NIVELES_CAMPANA = 9;
 
         for (int i = 0; i < NUM_NIVELES_CAMPANA; ++i) {
             int r = i / cols;
@@ -4225,7 +4229,7 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                 reintentar_nivel_actual(motor);
             }
             else if (CheckCollisionPointRec(mouse_pos, btn_siguiente)) {
-                if (nivel_campana_actual != -1 && nivel_campana_actual < 6) {
+                if (nivel_campana_actual != -1 && nivel_campana_actual < 8) {
                     cargar_nivel_campana(motor, nivel_campana_actual + 1);
                     gestor_eventos.victoria_alcanzada = false;
                     gestor_eventos.timer_victoria = 0.0f;
@@ -5305,7 +5309,7 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
         
         Vector2 mouse_pos = GetMousePosition();
         bool hover_reintentar = CheckCollisionPointRec(mouse_pos, btn_reintentar);
-        bool hover_siguiente = CheckCollisionPointRec(mouse_pos, btn_siguiente) && (nivel_campana_actual != -1 && nivel_campana_actual < 6);
+        bool hover_siguiente = CheckCollisionPointRec(mouse_pos, btn_siguiente) && (nivel_campana_actual != -1 && nivel_campana_actual < 8);
         bool hover_salir = CheckCollisionPointRec(mouse_pos, btn_salir);
         
         auto dibujar_boton = [&](Rectangle btn, const char* text, Color bg, Color border, Color text_color, bool is_hovered, int icon_type) {

@@ -48,6 +48,7 @@ public:
           ancho(w), alto(h), fue_activada(false), permanentemente_activada(false), ya_corto_cuerdas(false) {
         set_restitucion(0.05);
         set_friccion(0.15); // poco roce para que la bola resbale
+        tipo_menu = TipoObjetoMenu::TIJERA;
     }
 
     double get_ancho() const { return ancho; }

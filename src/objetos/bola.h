@@ -13,7 +13,8 @@ class Bola : public EntidadFisica {
 private:
     double radio;
     int color_idx;  // Índice en paleta de colores (para el renderizador)
-    int texture_idx; 
+    int texture_idx;
+    unsigned char alpha_tint = 255; // opacidad (255 = opaca; menor = translucida)
 
 public:
     Bola(int id, Vector2D pos_inicial, double r, double m)
@@ -35,6 +36,8 @@ public:
     // --- Setters ---
     void set_color_idx(int idx) { color_idx = idx; }
     void set_texture_idx(int idx) { texture_idx = idx; }
+    void set_alpha(unsigned char a) { alpha_tint = a; }
+    unsigned char get_alpha() const { return alpha_tint; }
 
     // --- Métodos polimórficos ---
     TipoEntidadJuego get_tipo_entidad() const override {
@@ -70,6 +73,7 @@ public:
             } else if (tipo_menu == TipoObjetoMenu::BOLA_TENIS) {
                 tint_color = {180, 255, 50, 255};
             }
+            tint_color.a = alpha_tint; // opacidad (balas de pistola son translucidas)
 
             DrawTexturePro(
                 tex_bola[tex_idx],

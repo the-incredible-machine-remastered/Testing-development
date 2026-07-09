@@ -64,6 +64,9 @@ private:
     bool resetear_tensiones_cuerdas;
     int siguiente_id;
     std::vector<RegistroColision> colisiones_frame;
+    // Balas de pistola con vida limitada: (id, segundos restantes). Al expirar se eliminan.
+    struct BalaTemporal { int id; double t; };
+    std::vector<BalaTemporal> balas_temporales;
     std::vector<RegistroEventoEspecial> eventos_especiales_frame;
 
 public:
@@ -133,6 +136,7 @@ public:
     void limpiar() {
         entidades.clear();
         entidades_owner.clear();
+        balas_temporales.clear();
         siguiente_id = 1;
         tiempo_simulacion = 0.0;
         acumulador_tiempo = 0.0;
@@ -402,6 +406,7 @@ private:
         // 4.6 Pistolas activadas disparan
         disparar_pistolas();
         disparar_canones();
+        actualizar_balas_temporales(dt); // balas de pistola desaparecen tras su vida
         lanzar_cajas_sorpresa();
 
         // 4.7 Dinamitas que explotaron: destruyen ladrillos y empujan dinámicos
@@ -714,14 +719,31 @@ private:
 
             Vector2D dir = pistola->get_dir_disparo();
             Vector2D pos = pistola->get_punto_bala();
-            Bola* bala = new Bola(generar_id(), pos, 8.0, 0.5);
+            // masa = 4  para que empuje mas 
+            Bola* bala = new Bola(generar_id(), pos, 8.0, 2.0);
             bala->set_velocidad(dir * pistola->get_velocidad_bala());  // necesita getter
             bala->set_restitucion(0.3);
             bala->set_amortiguamiento(0.01);
+            bala->set_alpha(120); // translucida
             nuevas.push_back(bala);
+            balas_temporales.push_back({bala->get_id(), 1.2}); // vida 1.2s, luego desaparece
             pistola->resetear_disparo();
         }
         for (auto* n : nuevas) entidades.push_back(n);
+    }
+
+    // Descuenta la vida de las balas de pistola y elimina las que expiraron.
+    void actualizar_balas_temporales(double dt) {
+        for (auto& b : balas_temporales) b.t -= dt;
+        std::vector<int> expiradas;
+        for (auto& b : balas_temporales) {
+            if (b.t <= 0.0) expiradas.push_back(b.id);
+        }
+        for (int id : expiradas) remover_entidad(id);
+        balas_temporales.erase(
+            std::remove_if(balas_temporales.begin(), balas_temporales.end(),
+                [](const BalaTemporal& b) { return b.t <= 0.0; }),
+            balas_temporales.end());
     }
 
     void aplicar_correas() {

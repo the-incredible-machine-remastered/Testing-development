@@ -1,0 +1,37 @@
+tim_save 1
+nombre TripleShoot
+ancho 1920
+alto 1080
+gravedad_y 500
+contador_bolas 0
+siguiente_id 43
+ent BALANCIN id=5 x=433 y=489 vx=0 vy=0 ang=0.261799 omega=0 fijo=1 tipo_menu=BALANCIN largo=200 esp=6 ang0=0.261799
+ent LADRILLO_HORIZONTAL id=8 x=959 y=762 w=149 h=24 fijo=1
+ent BOLA_BEISBOL id=9 x=1081 y=307 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=BOLA_TENIS r=12
+ent BOLA id=10 x=365 y=399 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=BOLA_BOLOS r=25 m=60 ci=2 ti=0
+ent BALANCIN id=12 x=426 y=736 vx=0 vy=0 ang=-0.261799 omega=0 fijo=1 tipo_menu=BALANCIN largo=200 esp=6 ang0=-0.261799
+ent BOLA id=13 x=490 y=664 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=BOLA_BOLOS r=25 m=60 ci=2 ti=0
+ent LADRILLO_VERTICAL id=15 x=917 y=725 w=40 h=65 fijo=1
+ent LADRILLO_VERTICAL id=16 x=1084 y=564 w=29 h=195 fijo=1
+ent LADRILLO_VERTICAL id=17 x=1201 y=289 w=27 h=468 fijo=1
+ent BOLA_BEISBOL id=18 x=993 y=259 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=BOLA_TENIS r=12
+ent BOLA_BEISBOL id=19 x=1026 y=422 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=BOLA_TENIS r=12
+ent BOLA id=20 x=1030 y=321 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=BOLA_TENIS r=18 m=2.5 ci=3 ti=0
+ent BOLA id=21 x=968 y=376 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=BOLA_TENIS r=18 m=2.5 ci=3 ti=0
+ent BOLA id=22 x=1061 y=480 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=BOLA_TENIS r=18 m=2.5 ci=3 ti=0
+ent BOLA id=23 x=942 y=489 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=BOLA_TENIS r=18 m=2.5 ci=3 ti=0
+ent PISTOLA id=31 x=70 y=70 vx=0 vy=0 ang=0 omega=0 fijo=0 tipo_menu=PISTOLA reserv=1 deg=0
+ent PISTOLA id=32 x=134 y=70 vx=0 vy=0 ang=0 omega=0 fijo=0 tipo_menu=PISTOLA reserv=1 deg=0
+ent PISTOLA id=33 x=198 y=70 vx=0 vy=0 ang=0 omega=0 fijo=0 tipo_menu=PISTOLA reserv=1 deg=0
+ent LADRILLO_HORIZONTAL id=37 x=1115 y=748 w=83 h=26 fijo=1
+ent SOPORTE id=38 x=70 y=70 r=16 fijo=0 tipo_menu=SOPORTE_TORQUE
+ent SOPORTE id=39 x=134 y=70 r=16 fijo=0 tipo_menu=SOPORTE_TORQUE
+ent SOPORTE id=40 x=198 y=70 r=16 fijo=0 tipo_menu=SOPORTE_TORQUE
+ent ZONA_META id=42 x=1157 y=705 w=80 h=80 fijo=1 tipo_menu=32
+inv_reserva 9 3
+siguiente_id_evento 15
+evt_grupo id=-1 op=AND
+  evt_cond id=12 tipo=ENT_EN_ZONA ez=42 ee=19
+  evt_cond id=13 tipo=ENT_EN_ZONA ez=42 ee=9
+  evt_cond id=14 tipo=ENT_EN_ZONA ez=42 ee=18
+evt_grupo_fin

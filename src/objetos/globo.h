@@ -17,6 +17,7 @@ public:
         set_restitucion(0.02);
         set_friccion(0.1);
         set_amortiguamiento(0.004);
+        tipo_menu = TipoObjetoMenu::GLOBO;
     }
 
     double get_radio() const { return radio; }

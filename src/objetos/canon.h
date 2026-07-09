@@ -131,9 +131,8 @@ public:
     
     std::string serializar() const override {
         std::stringstream ss;
-        ss << "ent CANON id=" << get_id()
-           << " x=" << posicion.x << " y=" << posicion.y
-           << " ang=" << get_angulo_grados();
+        ss << "ent CANON id=" << get_id() << serializar_base()
+           << " deg=" << get_angulo_grados();
         return ss.str();
     }
 
