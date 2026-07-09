@@ -81,12 +81,27 @@ def emit_header(entries: list[dict]) -> str:
         )
     table = "\n".join(rows)
 
+    # Generate switch cases for string conversion
+    cases = []
+    for e in entries:
+        cases.append(f'        case TipoObjetoMenu::{e["id"]}: return "{e["id"]}";')
+    cases_str = "\n".join(cases)
+
+    # Generate map entries for string to enum conversion
+    map_entries = []
+    for e in entries:
+        map_entries.append(f'        {{"{e["id"]}", TipoObjetoMenu::{e["id"]}}},')
+    map_entries_str = "\n".join(map_entries)
+
     return f"""#pragma once
 // ============================================================================
 // GENERADO AUTOMATICAMENTE — NO EDITAR A MANO
 // Ejecutar: python tools/generar_catalogo_menu.py
 // Fuente: etiquetas // TIM_MENU_SPAWN en src/objetos/*.h
 // ============================================================================
+
+#include <string>
+#include <unordered_map>
 
 enum class TipoObjetoMenu {{
     {enum_lines}
@@ -107,6 +122,22 @@ static const ItemCatalogo CATALOGO_MENU[] = {{
 
 static const int CATALOGO_MENU_COUNT =
     static_cast<int>(sizeof(CATALOGO_MENU) / sizeof(CATALOGO_MENU[0]));
+
+inline const char* tipo_objeto_menu_a_string(TipoObjetoMenu t) {{
+    switch (t) {{
+{cases_str}
+        default: return "NINGUNO";
+    }}
+}}
+
+inline TipoObjetoMenu string_a_tipo_objeto_menu(const std::string& s) {{
+    static const std::unordered_map<std::string, TipoObjetoMenu> tabla = {{
+{map_entries_str}
+    }};
+    auto it = tabla.find(s);
+    if (it != tabla.end()) return it->second;
+    return TipoObjetoMenu::NINGUNO;
+}}
 """
 
 

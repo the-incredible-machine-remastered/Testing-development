@@ -242,8 +242,12 @@ public:
            << " ang=" << angulo
            << " omega=" << velocidad_angular
            << " fijo=" << (es_fijo ? 1 : 0)
+<<<<<<< HEAD
            << " tipo_menu=" << static_cast<int>(tipo_menu);
         if (en_inventario) ss << " reserv=1";
+=======
+           << " tipo_menu=" << tipo_objeto_menu_a_string(tipo_menu);
+>>>>>>> 98517c00f0b7dd311681ddd94fdec4f5cfed7bf2
         return ss.str();
     }
     virtual void on_collision(EntidadFisica* otro, const InfoColision& info) {}
