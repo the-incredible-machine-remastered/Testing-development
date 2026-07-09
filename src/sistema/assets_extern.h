@@ -47,6 +47,8 @@ extern Texture2D tex_canon_base;
 extern Texture2D tex_dinamita;
 extern Texture2D tex_foco_apagado;
 extern Texture2D tex_foco_prendido;
+extern Texture2D tex_linterna_apagada;
+extern Texture2D tex_linterna_encendida;
 extern Texture2D tex_ladrillos_cuadrado;
 extern Texture2D tex_ladrillos_horizontal;
 extern Texture2D tex_ladrillos_vertical;

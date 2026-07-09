@@ -49,8 +49,7 @@ public:
 
     std::string serializar() const override {
         std::stringstream ss;
-        ss << "ent FOCO id=" << get_id()
-           << " x=" << posicion.x << " y=" << posicion.y
+        ss << "ent FOCO id=" << get_id() << serializar_base()
            << " r=" << radio;
         return ss.str();
     }

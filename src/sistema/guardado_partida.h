@@ -31,6 +31,7 @@
 #include "../objetos/foco.h"
 #include "../objetos/lupa.h"
 #include "../objetos/canon.h"
+#include "../objetos/linterna.h"
 #include "../objetos/ladrillo.h"
 #include "../objetos/ladrillo_vertical.h"
 #include "../objetos/ladrillo_horizontal.h"
@@ -114,6 +115,7 @@ inline TipoObjetoMenu mapear_tipo_entidad_a_menu(TipoEntidadJuego t, const Entid
         case TipoEntidadJuego::FOCO: return TipoObjetoMenu::FOCO;
         case TipoEntidadJuego::LUPA: return TipoObjetoMenu::LUPA;
         case TipoEntidadJuego::CANON: return TipoObjetoMenu::CANON;
+        case TipoEntidadJuego::LINTERNA: return TipoObjetoMenu::LINTERNA;
         case TipoEntidadJuego::DINAMITA: return TipoObjetoMenu::DINAMITA;
         case TipoEntidadJuego::DINAMITA_DETONADOR: return TipoObjetoMenu::DINAMITA_DETONADOR;
         case TipoEntidadJuego::GATO: return TipoObjetoMenu::GATO;
@@ -451,6 +453,11 @@ inline const std::unordered_map<std::string, CreadorEntidad>& obtener_registro_f
             return std::make_unique<Canon>(id,
                 Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
                 leer_valor(linea, "ang=", 180.0));
+        }},
+        {"LINTERNA", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
+            return std::make_unique<Linterna>(id,
+                Vector2D(leer_valor(linea, "x=", 0), leer_valor(linea, "y=", 0)),
+                leer_valor(linea, "deg=", 180.0));
         }},
         {"LADRILLO_VERTICAL", [](int id, const std::string& linea) -> std::unique_ptr<EntidadFisica> {
             return std::make_unique<LadrilloVertical>(id,

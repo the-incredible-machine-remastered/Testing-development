@@ -40,6 +40,7 @@ enum class TipoEntidadJuego {
     FOCO,
     LUPA,
     CANON,
+    LINTERNA,
     LADRILLO,
     DINAMITA,
     DINAMITA_DETONADOR,
@@ -84,6 +85,7 @@ inline const char* nombre_tipo_entidad(TipoEntidadJuego t) {
         case TipoEntidadJuego::FOCO:              return "Foco";
         case TipoEntidadJuego::LUPA:              return "Lupa";
         case TipoEntidadJuego::CANON:            return "Canon";
+        case TipoEntidadJuego::LINTERNA:         return "Linterna";
         case TipoEntidadJuego::LADRILLO:         return "Ladrillo";
         case TipoEntidadJuego::DINAMITA:         return "Dinamita";
         case TipoEntidadJuego::DINAMITA_DETONADOR: return "Dina Detonador";

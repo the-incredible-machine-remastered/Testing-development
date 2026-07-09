@@ -45,6 +45,7 @@
 #include "objetos/foco.h"
 #include "objetos/lupa.h"
 #include "objetos/canon.h"
+#include "objetos/linterna.h"
 #include "objetos/ladrillo.h"
 #include "objetos/ladrillo_vertical.h"
 #include "objetos/ladrillo_horizontal.h"
@@ -691,6 +692,8 @@ Texture2D tex_canon_base;
 Texture2D tex_dinamita;
 Texture2D tex_foco_apagado;
 Texture2D tex_foco_prendido;
+Texture2D tex_linterna_apagada;
+Texture2D tex_linterna_encendida;
 Texture2D tex_ladrillos_cuadrado;
 Texture2D tex_ladrillos_horizontal;
 Texture2D tex_ladrillos_vertical;
@@ -1112,6 +1115,11 @@ bool crear_canon(MotorFisica& motor, Vector2D pos) {
     return true;
 }
 
+bool crear_linterna(MotorFisica& motor, Vector2D pos) {
+    motor.agregar_entidad(new Linterna(motor.generar_id(), pos, 180.0)); // apunta izquierda (como la textura)
+    return true;
+}
+
 
 bool crear_dinamita(MotorFisica& motor, Vector2D pos) {
     Vector2D spawn(pos.x - 13.0, pos.y - 23.0);
@@ -1226,6 +1234,7 @@ bool spawn_desde_menu(MotorFisica& motor, TipoObjetoMenu tipo, Vector2D pos) {
         case TipoObjetoMenu::FOCO:              return crear_foco(motor, pos);
         case TipoObjetoMenu::LUPA:              return crear_lupa(motor, pos);
         case TipoObjetoMenu::CANON:             return crear_canon(motor, pos);
+        case TipoObjetoMenu::LINTERNA:          return crear_linterna(motor, pos);
         case TipoObjetoMenu::LADRILLO_VERTICAL:  return crear_ladrillo_vertical(motor, pos);
         case TipoObjetoMenu::LADRILLO_HORIZONTAL: return crear_ladrillo_horizontal(motor, pos);
         case TipoObjetoMenu::DINAMITA:          return crear_dinamita(motor, pos);
@@ -1740,6 +1749,21 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
                 DrawLineEx({cx - r*0.35f, cy - escala}, {cx, cy - r*0.4f - 2*escala}, 1.6f, tint(Color{255,150,30,255}));
                 DrawLineEx({cx, cy - r*0.4f - 2*escala}, {cx + r*0.35f, cy - escala}, 1.6f, tint(Color{255,150,30,255}));
                 DrawRectangleRec({cx - r*0.45f, cy + r*0.7f - 2*escala, r*0.9f, r*0.55f}, tint(Color{150,155,160,255}));
+            }
+            break;
+        }
+        case TipoObjetoMenu::LINTERNA: {
+            if (tex_linterna_apagada.id > 0) {
+                float w = 26.0f * escala;
+                float h = w * ((float)tex_linterna_apagada.height / (float)tex_linterna_apagada.width);
+                Rectangle src = {0.0f, 0.0f, (float)tex_linterna_apagada.width, (float)tex_linterna_apagada.height};
+                Rectangle dst = {cx, cy, w, h};
+                Vector2 origin = {w / 2.0f, h / 2.0f};
+                DrawTexturePro(tex_linterna_apagada, src, dst, origin, 0.0f, tint(WHITE));
+            } else {
+                float bw = 22.0f * escala, bh = 10.0f * escala;
+                DrawRectangleRec({cx - bw/2, cy - bh/2, bw, bh}, tint(Color{70,75,82,255}));
+                DrawCircle((int)(cx + bw/2), (int)cy, bh*0.6f, tint(Color{255,220,90,255}));
             }
             break;
         }
@@ -3211,6 +3235,8 @@ void cargandoTexturas() {
     tex_dinamita = cargar_textura_datos("Assets/Objetos/dinamita.png");
     tex_foco_apagado = cargar_textura_datos("Assets/Objetos/foco_apagado.png");
     tex_foco_prendido = cargar_textura_datos("Assets/Objetos/foco_prendido.png");
+    tex_linterna_apagada = cargar_textura_datos("Assets/Objetos/linterna_apagada.png");
+    tex_linterna_encendida = cargar_textura_datos("Assets/Objetos/linterna_encendida.png");
     tex_ladrillos_cuadrado = cargar_textura_datos("Assets/Objetos/ladrillos_cuadrado.png");
     tex_ladrillos_horizontal = cargar_textura_datos("Assets/Objetos/ladrillos_horizontal.png");
     tex_ladrillos_vertical = cargar_textura_datos("Assets/Objetos/ladrillos_vertical.png");
@@ -4697,6 +4723,12 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                                 if (can) {
                                     can->invertir();
                                     modificado = true;
+                                } else {
+                                    auto* lin = dynamic_cast<Linterna*>(entidad_seleccionada);
+                                    if (lin) {
+                                        lin->invertir();
+                                        modificado = true;
+                                    }
                                 }
                             }
                         }
@@ -4706,6 +4738,19 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
             if (modificado) {
                 movimientos_usuario++;
             }
+        }
+    }
+
+    // Inclinar cañon/linterna con Q (subir la boca) / E (bajar la boca), en pausa.
+    if ((IsKeyPressed(KEY_Q) || IsKeyPressed(KEY_E)) && entidad_seleccionada &&
+        motor.get_pausado() &&
+        !(estado_actual == EstadoJuego::JUEGO_NIVEL && entidad_seleccionada->get_es_fijo())) {
+        if (auto* can = dynamic_cast<Canon*>(entidad_seleccionada)) {
+            can->inclinar(IsKeyPressed(KEY_Q));
+            movimientos_usuario++;
+        } else if (auto* lin = dynamic_cast<Linterna*>(entidad_seleccionada)) {
+            lin->inclinar(IsKeyPressed(KEY_Q));
+            movimientos_usuario++;
         }
     }
 
@@ -4814,7 +4859,13 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     }
 
     motor.actualizar(GetFrameTime());
-    gestor_eventos.evaluar(motor.get_colisiones_frame(), motor.get_eventos_especiales_frame(), motor.get_entidades(), GetFrameTime());
+    // Solo evaluar condiciones de victoria mientras la simulacion CORRE. En pausa,
+    // el motor conserva las colisiones del ultimo frame simulado; evaluarlas haria
+    // que un nivel recien recargado (con las mismas colisiones viejas en buffer)
+    // dispare la victoria al instante sin haber jugado.
+    if (!motor.get_pausado()) {
+        gestor_eventos.evaluar(motor.get_colisiones_frame(), motor.get_eventos_especiales_frame(), motor.get_entidades(), GetFrameTime());
+    }
 
     if (anim_seguidor_corriendo) {
         anim_seguidor_corriendo->actualizar(GetFrameTime());
@@ -5742,6 +5793,8 @@ int main() {
     if (tex_dinamita.id > 0) UnloadTexture(tex_dinamita);
     if (tex_foco_apagado.id > 0) UnloadTexture(tex_foco_apagado);
     if (tex_foco_prendido.id > 0) UnloadTexture(tex_foco_prendido);
+    if (tex_linterna_apagada.id > 0) UnloadTexture(tex_linterna_apagada);
+    if (tex_linterna_encendida.id > 0) UnloadTexture(tex_linterna_encendida);
     if (tex_ladrillos_cuadrado.id > 0) UnloadTexture(tex_ladrillos_cuadrado);
     if (tex_ladrillos_horizontal.id > 0) UnloadTexture(tex_ladrillos_horizontal);
     if (tex_ladrillos_vertical.id > 0) UnloadTexture(tex_ladrillos_vertical);

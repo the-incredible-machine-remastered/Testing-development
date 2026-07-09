@@ -38,6 +38,7 @@
 #include "../objetos/foco.h"
 #include "../objetos/lupa.h"
 #include "../objetos/canon.h"
+#include "../objetos/linterna.h"
 #include "../objetos/ladrillo.h"
 #include "../objetos/dinamita.h"
 #include "../objetos/dinamita_detonador.h"
@@ -310,6 +311,13 @@ private:
         if (dinamita) {
             min = dinamita->get_min();
             max = dinamita->get_max();
+            return true;
+        }
+
+        auto* linterna = dynamic_cast<Linterna*>(e);
+        if (linterna) {
+            min = linterna->get_min();
+            max = linterna->get_max();
             return true;
         }
 
@@ -753,6 +761,21 @@ private:
             if (!lupa || !lupa->get_activa()) continue;
             Vector2D origen = lupa->get_posicion();
             Vector2D fin = lupa->get_punto_final(); // origen + dir*rango
+            for (auto* e2 : entidades) {
+                auto* canon = dynamic_cast<Canon*>(e2);
+                if (!canon || canon->get_ya_disparo()) continue;
+                if (segmento_cruza_aabb(origen, fin, canon->get_min(), canon->get_max()))
+                    canon->encender_mecha();
+            }
+        }
+
+        // 3. Haz de LINTERNA encendida -> enciende la mecha de cañones que cruce
+        //    (igual que la lupa, pero la linterna emite su propio haz direccional).
+        for (auto* e : entidades) {
+            auto* lin = dynamic_cast<Linterna*>(e);
+            if (!lin || !lin->get_encendida()) continue;
+            Vector2D origen = lin->get_punto_boca();
+            Vector2D fin = lin->get_punto_final();
             for (auto* e2 : entidades) {
                 auto* canon = dynamic_cast<Canon*>(e2);
                 if (!canon || canon->get_ya_disparo()) continue;

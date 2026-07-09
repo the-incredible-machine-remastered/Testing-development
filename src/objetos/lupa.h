@@ -65,8 +65,7 @@ public:
 
     std::string serializar() const override {
         std::stringstream ss;
-        ss << "ent LUPA id=" << get_id()
-           << " x=" << posicion.x << " y=" << posicion.y
+        ss << "ent LUPA id=" << get_id() << serializar_base()
            << " rango=" << rango;
         return ss.str();
     }

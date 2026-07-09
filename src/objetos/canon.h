@@ -54,6 +54,30 @@ public:
         if (angulo > MathUtils::TIM_PI) angulo -= 2.0 * MathUtils::TIM_PI;
     }
 
+    // Inclina el cañon en pasos, hacia ARRIBA (sube la boca) o hacia abajo. Respeta
+    // el lado al que apunta (izq/der) y limita la inclinacion a +-60 grados sobre
+    // la horizontal para que no se pase de vertical.
+    void inclinar(bool hacia_arriba) {
+        const double paso = 10.0 * MathUtils::TIM_PI / 180.0;   // 10 grados por pulsacion
+        const double lim  = 60.0 * MathUtils::TIM_PI / 180.0;   // tope respecto a horizontal
+        bool apunta_der = (std::cos(angulo) >= 0.0);
+        // En Y-down, subir la boca = disminuir el angulo (der) o aumentarlo (izq).
+        double delta = (hacia_arriba ? -paso : paso) * (apunta_der ? 1.0 : -1.0);
+        double nuevo = angulo + delta;
+        // Limitar respecto a la horizontal del lado correspondiente.
+        if (apunta_der) {
+            nuevo = MathUtils::clamp(nuevo, -lim, lim);
+        } else {
+            // Izquierda: angulo cerca de +-PI. Normalizamos midiendo la desviacion.
+            double base = MathUtils::TIM_PI;
+            double desv = nuevo - base;
+            if (desv < -MathUtils::TIM_PI) desv += 2.0 * MathUtils::TIM_PI;
+            desv = MathUtils::clamp(desv, -lim, lim);
+            nuevo = base + desv;
+        }
+        angulo = nuevo;
+    }
+
     Vector2D get_dir_disparo() const { return Vector2D(std::cos(angulo), std::sin(angulo)); }
     // Boca del cañón (de donde sale la bala). Cañón grande: tubo largo.
     Vector2D get_punto_boca() const { return posicion + get_dir_disparo() * 50.0; }
@@ -82,12 +106,14 @@ public:
     bool tiene_disparo_pendiente() const { return disparado; }
     void resetear_disparo() { disparado = false; }
     Bola* crear_bala(int nuevo_id) {
-        // Bala de cañón: grande y PESADA (masa alta), con gran fuerza y poco rebote.
+        // Bala de cañón: bola NEGRA (bolos), grande y PESADA, con gran fuerza.
         Bola* bala = new Bola(nuevo_id, get_punto_boca(), radio_bala, 12.0);
         bala->set_velocidad(get_dir_disparo() * velocidad_bala);
         bala->set_restitucion(0.15);      // apenas rebota (es de hierro)
         bala->set_amortiguamiento(0.005);
-        bala->set_color_idx(0);
+        bala->set_tipo_menu(TipoObjetoMenu::BOLA_BOLOS); // negra
+        bala->set_color_idx(2);
+        bala->set_texture_idx(0);
         resetear_disparo();
         return bala;
     }
@@ -122,7 +148,11 @@ public:
             float w_tubo = 110.0f;
             float h_tubo = w_tubo * ((float)tex_canon_tubo.height / (float)tex_canon_tubo.width);
             float flip_tubo = apunta_izq ? -1.0f : 1.0f;
-            Vector2 origin_tubo = apunta_izq ? Vector2{w_tubo -30.0f, h_tubo / 2.0f} : Vector2{0.0f, h_tubo / 2.0f};
+            // El lado izquierdo se ve bien con origin {w_tubo-30, h/2}. El derecho
+            // usaba {0, h/2}, que dejaba el tubo corrido respecto a la base: usamos
+            // el mismo offset trasero (30px) para que calce igual en ambos lados.
+            Vector2 origin_tubo = apunta_izq ? Vector2{w_tubo - 30.0f, h_tubo / 2.0f}
+                                             : Vector2{30.0f, h_tubo / 2.0f};
             float angulo_rot = apunta_izq ? (float)(angulo - MathUtils::TIM_PI) : (float)angulo;
             float rotacion_grados = angulo_rot * (180.0f / (float)MathUtils::TIM_PI);
 

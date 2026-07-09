@@ -24,6 +24,7 @@ enum class TipoObjetoMenu {
     FOCO,
     GANCHO,
     GLOBO,
+    LINTERNA,
     LUPA,
     PARED_LARGA,
     PLATAFORMA,
@@ -76,10 +77,11 @@ static const ItemCatalogo CATALOGO_MENU[] = {
     { TipoObjetoMenu::FOCO, "Foco", 1, 0, 0, true },
     { TipoObjetoMenu::GANCHO, "Gancho", 2, 0, 0, true },
     { TipoObjetoMenu::GLOBO, "Globo", 2, 0, 0, true },
+    { TipoObjetoMenu::LINTERNA, "Linterna", 2, 0, 0, true },
     { TipoObjetoMenu::LUPA, "Lupa", 2, 0, 0, true },
     { TipoObjetoMenu::PARED_LARGA, "Pared", 2, 0, 0, true },
     { TipoObjetoMenu::PLATAFORMA, "Plataforma", 2, 0, 0, true },
-    { TipoObjetoMenu::PISTOLA, "Pistola", 2, 0, 0, true },
+    { TipoObjetoMenu::PISTOLA, "Pistola", 3, 0, 0, true },
     { TipoObjetoMenu::RAMPA, "Rampa", 3, 0, 0, true },
     { TipoObjetoMenu::SOPORTE_TORQUE, "Torque", 3, 0, 0, true },
     { TipoObjetoMenu::TIJERA, "Tijera", 3, 0, 0, true },
@@ -122,6 +124,7 @@ inline const char* tipo_objeto_menu_a_string(TipoObjetoMenu t) {
         case TipoObjetoMenu::FOCO: return "FOCO";
         case TipoObjetoMenu::GANCHO: return "GANCHO";
         case TipoObjetoMenu::GLOBO: return "GLOBO";
+        case TipoObjetoMenu::LINTERNA: return "LINTERNA";
         case TipoObjetoMenu::LUPA: return "LUPA";
         case TipoObjetoMenu::PARED_LARGA: return "PARED_LARGA";
         case TipoObjetoMenu::PLATAFORMA: return "PLATAFORMA";
@@ -167,6 +170,7 @@ inline TipoObjetoMenu string_a_tipo_objeto_menu(const std::string& s) {
         {"FOCO", TipoObjetoMenu::FOCO},
         {"GANCHO", TipoObjetoMenu::GANCHO},
         {"GLOBO", TipoObjetoMenu::GLOBO},
+        {"LINTERNA", TipoObjetoMenu::LINTERNA},
         {"LUPA", TipoObjetoMenu::LUPA},
         {"PARED_LARGA", TipoObjetoMenu::PARED_LARGA},
         {"PLATAFORMA", TipoObjetoMenu::PLATAFORMA},
