@@ -517,6 +517,52 @@ inline const std::unordered_map<std::string, CreadorEntidad>& obtener_registro_f
     return registro;
 }
 
+inline TipoObjetoMenu traducir_tipo_menu_viejo(int old_id) {
+    switch (old_id) {
+        case 0: return TipoObjetoMenu::BALANCIN;
+        case 1: return TipoObjetoMenu::BOLA_NORMAL;
+        case 2: return TipoObjetoMenu::BOLA_REBOTADORA;
+        case 3: return TipoObjetoMenu::CUBETA;
+        case 4: return TipoObjetoMenu::CUERDA;
+        case 5: return TipoObjetoMenu::PARED_LARGA;
+        case 6: return TipoObjetoMenu::PLATAFORMA;
+        case 7: return TipoObjetoMenu::RAMPA;
+        case 8: return TipoObjetoMenu::SOPORTE_TORQUE;
+        case 9: return TipoObjetoMenu::TRAMPOLIN;
+        case 10: return TipoObjetoMenu::BARRIL_CHAVO;
+        case 11: return TipoObjetoMenu::SEGUIDOR_BOOSTER;
+        case 12: return TipoObjetoMenu::VENTILADOR;
+        case 13: return TipoObjetoMenu::ZONA_META;
+        case 14: return TipoObjetoMenu::PLATAFORMA_DECOR;
+        default: return TipoObjetoMenu::NINGUNO;
+    }
+}
+
+inline std::string leer_valor_s(const std::string& linea, const char* clave, const std::string& defecto) {
+    size_t p = linea.find(clave);
+    if (p == std::string::npos) return defecto;
+    size_t start = p + std::strlen(clave);
+    size_t end = linea.find(' ', start);
+    if (end == std::string::npos) end = linea.length();
+    return linea.substr(start, end - start);
+}
+
+inline TipoObjetoMenu leer_tipo_menu(const std::string& linea) {
+    std::string tm_str = leer_valor_s(linea, "tipo_menu=", "");
+    if (tm_str.empty()) return TipoObjetoMenu::NINGUNO;
+
+    if (std::isdigit(static_cast<unsigned char>(tm_str[0])) || tm_str[0] == '-') {
+        try {
+            int old_id = std::stoi(tm_str);
+            return traducir_tipo_menu_viejo(old_id);
+        } catch (...) {
+            return TipoObjetoMenu::NINGUNO;
+        }
+    }
+
+    return string_a_tipo_objeto_menu(tm_str);
+}
+
 inline void instanciar_desde_linea(MotorFisica& motor, const std::string& linea, int& max_id, bool es_snapshot = false) {
     if (linea.rfind("ent ", 0) != 0) return;
 
@@ -537,14 +583,14 @@ inline void instanciar_desde_linea(MotorFisica& motor, const std::string& linea,
             bool fijo = (leer_valor_i(linea, "fijo=", 1) != 0);
             e->set_es_fijo(fijo);
             
-            int tm = leer_valor_i(linea, "tipo_menu=", -1);
             TipoObjetoMenu tipo_menu = TipoObjetoMenu::NINGUNO;
             if (e->get_tipo_entidad() == TipoEntidadJuego::BOLA) {
                 tipo_menu = mapear_tipo_entidad_a_menu(e->get_tipo_entidad(), e.get());
-            } else if (tm >= 0 && tm < static_cast<int>(TipoObjetoMenu::COUNT)) {
-                tipo_menu = static_cast<TipoObjetoMenu>(tm);
             } else {
-                tipo_menu = mapear_tipo_entidad_a_menu(e->get_tipo_entidad(), e.get());
+                tipo_menu = leer_tipo_menu(linea);
+                if (tipo_menu == TipoObjetoMenu::NINGUNO) {
+                    tipo_menu = mapear_tipo_entidad_a_menu(e->get_tipo_entidad(), e.get());
+                }
             }
             e->set_tipo_menu(tipo_menu);
 
@@ -712,7 +758,7 @@ inline void guardar_snapshot_simulacion(const MotorFisica& motor, GestorEventos&
     out << "siguiente_id " << motor.get_siguiente_id() << "\n";
     
     for (const auto& pair : inventario_actual) {
-        out << "inv_item " << static_cast<int>(pair.first) << " " << pair.second << "\n";
+        out << "inv_item " << tipo_objeto_menu_a_string(pair.first) << " " << pair.second << "\n";
     }
 
     for (const auto* e : motor.get_entidades()) {
@@ -763,9 +809,18 @@ inline void restaurar_snapshot_simulacion(MotorFisica& motor, GestorEventos& ges
                 max_id = std::stoi(linea.substr(13));
             } else if (linea.rfind("inv_item ", 0) == 0) {
                 std::stringstream ss(linea.substr(9));
-                int tipo_val, cant_val;
-                if (ss >> tipo_val >> cant_val) {
-                    inventario_actual[static_cast<TipoObjetoMenu>(tipo_val)] = cant_val;
+                std::string tipo_str;
+                int cant_val;
+                if (ss >> tipo_str >> cant_val) {
+                    TipoObjetoMenu tipo_menu = TipoObjetoMenu::NINGUNO;
+                    if (std::isdigit(static_cast<unsigned char>(tipo_str[0])) || tipo_str[0] == '-') {
+                        tipo_menu = traducir_tipo_menu_viejo(std::stoi(tipo_str));
+                    } else {
+                        tipo_menu = string_a_tipo_objeto_menu(tipo_str);
+                    }
+                    if (tipo_menu != TipoObjetoMenu::NINGUNO) {
+                        inventario_actual[tipo_menu] = cant_val;
+                    }
                 }
             } else if (linea.rfind("ent ", 0) == 0) {
                 instanciar_desde_linea(motor, linea, max_id, true);
@@ -958,6 +1013,19 @@ inline bool manejar_click_panel_guardado(int mx, int my, MotorFisica& motor, Ges
     rect_btn_guardar_partida = btn_guardar;
     rect_btn_ver_partidas = btn_ver;
 
+    // --- Clicks en los botones principales (siempre activos) ---
+    if (CheckCollisionPointRec(p_click, btn_guardar)) {
+        buffer_nombre_partida[0] = '\0';
+        modo_panel_guardado = ModoPanelGuardado::PEDIR_NOMBRE_GUARDAR;
+        return true;
+    }
+    if (CheckCollisionPointRec(p_click, btn_ver)) {
+        refrescar_lista_partidas();
+        indice_partida_lista = -1;
+        modo_panel_guardado = ModoPanelGuardado::LISTA_PARTIDAS;
+        return true;
+    }
+
     if (modo_panel_guardado == ModoPanelGuardado::PEDIR_NOMBRE_GUARDAR) {
         if (CheckCollisionPointRec(p_click, panel)) {
             return true;
@@ -982,19 +1050,6 @@ inline bool manejar_click_panel_guardado(int mx, int my, MotorFisica& motor, Ges
         return false;
     }
 
-    if (modo_panel_guardado != ModoPanelGuardado::CERRADO) return false;
-
-    if (CheckCollisionPointRec(p_click, btn_guardar)) {
-        buffer_nombre_partida[0] = '\0';
-        modo_panel_guardado = ModoPanelGuardado::PEDIR_NOMBRE_GUARDAR;
-        return true;
-    }
-    if (CheckCollisionPointRec(p_click, btn_ver)) {
-        refrescar_lista_partidas();
-        indice_partida_lista = -1;
-        modo_panel_guardado = ModoPanelGuardado::LISTA_PARTIDAS;
-        return true;
-    }
     return false;
 }
 

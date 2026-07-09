@@ -2401,9 +2401,11 @@ void dibujar_menu_lateral() {
         DrawRectangleLinesEx(Rectangle{static_cast<float>(px + MENU_ANCHO - MENU_MARGEN - flecha_w), static_cast<float>(py), static_cast<float>(flecha_w), static_cast<float>(flecha_h)}, 1.5f, RED);
 
         // Panel de guardado y sus botones (Rojo)
-        DrawRectangleLinesEx(rect_panel_guardado, 2.0f, RED);
-        DrawRectangleLinesEx(rect_btn_guardar_partida, 1.5f, RED);
-        DrawRectangleLinesEx(rect_btn_ver_partidas, 1.5f, RED);
+        if (estado_actual != EstadoJuego::JUEGO_NIVEL) {
+            DrawRectangleLinesEx(rect_panel_guardado, 2.0f, RED);
+            DrawRectangleLinesEx(rect_btn_guardar_partida, 1.5f, RED);
+            DrawRectangleLinesEx(rect_btn_ver_partidas, 1.5f, RED);
+        }
     }
 }
 
@@ -4110,6 +4112,11 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
     if (modo_panel_guardado != ModoPanelGuardado::CERRADO) {
         if (estado_actual != EstadoJuego::JUEGO_NIVEL) {
             manejar_teclas_panel_guardado(motor, gestor_eventos, ANCHO, ALTO, contador_bolas);
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                int mx = GetMouseX();
+                int my = GetMouseY();
+                manejar_click_panel_guardado(mx, my, motor, gestor_eventos, ANCHO, ALTO, contador_bolas);
+            }
         }
         return;
     }

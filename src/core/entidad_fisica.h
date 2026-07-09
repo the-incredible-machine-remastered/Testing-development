@@ -229,7 +229,7 @@ public:
            << " ang=" << angulo
            << " omega=" << velocidad_angular
            << " fijo=" << (es_fijo ? 1 : 0)
-           << " tipo_menu=" << static_cast<int>(tipo_menu);
+           << " tipo_menu=" << tipo_objeto_menu_a_string(tipo_menu);
         return ss.str();
     }
     virtual void on_collision(EntidadFisica* otro, const InfoColision& info) {}

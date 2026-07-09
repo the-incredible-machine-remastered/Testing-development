@@ -45,7 +45,7 @@ public:
         ss << "ent CORREA id=" << get_id()
            << " aid=" << entidad_a_id << " bid=" << entidad_b_id
            << " fijo=" << (es_fijo ? 1 : 0)
-           << " tipo_menu=" << static_cast<int>(tipo_menu);
+           << " tipo_menu=" << tipo_objeto_menu_a_string(tipo_menu);
         return ss.str();
     }
 
