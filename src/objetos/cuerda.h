@@ -92,7 +92,8 @@ private:
         Vector2D vel = e->get_velocidad();
         Vector2D vel_radial = dir_hacia_soporte * Vector2D::dot(vel, dir_hacia_soporte);
         Vector2D vel_lateral = vel - vel_radial;
-        double amortiguacion_lateral = 18.0;
+        // Amortiguacion lateral alta: evita que la cubeta derive/deslice sin frenar.
+        double amortiguacion_lateral = 55.0;
         e->aplicar_fuerza(vel_lateral * (-amortiguacion_lateral * e->get_masa()));
     }
 

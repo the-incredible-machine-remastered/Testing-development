@@ -15,7 +15,7 @@ private:
     static constexpr double ANCHO_MIN = 15.0;
     static constexpr double ANCHO_MAX = 40.0;
     static constexpr double ALTO_MIN  = 40.0;
-    static constexpr double ALTO_MAX  = 240.0;
+    static constexpr double ALTO_MAX  = 2400.0;
 
 public:
     LadrilloVertical(int id, Vector2D pos, double w = ANCHO_MAX, double h = 120.0)

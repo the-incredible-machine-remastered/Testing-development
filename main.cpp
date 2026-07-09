@@ -4164,14 +4164,9 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
         if (estado_actual != EstadoJuego::JUEGO_NIVEL) {
             manejar_teclas_panel_guardado(motor, gestor_eventos, ANCHO, ALTO, contador_bolas);
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-<<<<<<< HEAD
-                manejar_click_panel_guardado(GetMouseX(), GetMouseY(), motor, gestor_eventos,
-                                             ANCHO, ALTO, contador_bolas);
-=======
                 int mx = GetMouseX();
                 int my = GetMouseY();
                 manejar_click_panel_guardado(mx, my, motor, gestor_eventos, ANCHO, ALTO, contador_bolas);
->>>>>>> 98517c00f0b7dd311681ddd94fdec4f5cfed7bf2
             }
         }
         return;

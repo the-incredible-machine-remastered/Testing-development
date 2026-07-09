@@ -64,9 +64,24 @@ public:
         }
 
         if (tex.id > 0) {
-            Rectangle src = {0.0f, 0.0f, (float)tex.width, (float)tex.height};
-            Rectangle dst = {px, py, w, h};
-            DrawTexturePro(tex, src, dst, {0,0}, 0.0f, WHITE);
+            // Mosaico (tiling) con baldosa cuadrada fija: tomamos una porcion
+            // cuadrada de la textura y la repetimos, para que el patron de ladrillos
+            // se vea uniforme y no se estire al redimensionar. El borde se recorta
+            // proporcionalmente (src parcial) para no deformar.
+            const float BALDOSA = 48.0f; // tamaño en pantalla de cada baldosa
+            // Lado cuadrado de la textura fuente que corresponde a una baldosa.
+            float lado_src = static_cast<float>(std::min(tex.width, tex.height));
+            for (float oy = 0.0f; oy < h; oy += BALDOSA) {
+                float ch = std::min(BALDOSA, h - oy);        // alto en pantalla
+                float sh = lado_src * (ch / BALDOSA);        // alto recortado en textura
+                for (float ox = 0.0f; ox < w; ox += BALDOSA) {
+                    float cw = std::min(BALDOSA, w - ox);    // ancho en pantalla
+                    float sw = lado_src * (cw / BALDOSA);    // ancho recortado en textura
+                    Rectangle src = {0.0f, 0.0f, sw, sh};
+                    Rectangle dst = {px + ox, py + oy, cw, ch};
+                    DrawTexturePro(tex, src, dst, {0, 0}, 0.0f, WHITE);
+                }
+            }
         } else {
             Color rojo   = Color{170, 70, 55, 255};
             Color mortero = Color{205, 195, 180, 255};

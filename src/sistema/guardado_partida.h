@@ -151,6 +151,8 @@ inline ModoPanelGuardado modo_panel_guardado = ModoPanelGuardado::CERRADO;
 inline char buffer_nombre_partida[48] = "";
 inline std::vector<InfoPartidaGuardada> partidas_guardadas;
 inline int indice_partida_lista = -1;
+inline int scroll_partidas = 0; // primera partida visible en la lista (scroll)
+constexpr int PARTIDAS_VISIBLES = 4; // filas visibles a la vez
 inline std::string mensaje_guardado;
 inline float mensaje_guardado_timer = 0.0f;
 
@@ -594,17 +596,12 @@ inline void instanciar_desde_linea(MotorFisica& motor, const std::string& linea,
         if (e) {
             bool fijo = (leer_valor_i(linea, "fijo=", 1) != 0);
             e->set_es_fijo(fijo);
-<<<<<<< HEAD
 
             bool en_inv = (leer_valor_i(linea, "reserv=", 0) != 0);
             if (en_inv) {
                 e->set_en_inventario(true); // no cae ni colisiona (excluido en el motor)
             }
 
-            int tm = leer_valor_i(linea, "tipo_menu=", -1);
-=======
-            
->>>>>>> 98517c00f0b7dd311681ddd94fdec4f5cfed7bf2
             TipoObjetoMenu tipo_menu = TipoObjetoMenu::NINGUNO;
             if (e->get_tipo_entidad() == TipoEntidadJuego::BOLA) {
                 tipo_menu = mapear_tipo_entidad_a_menu(e->get_tipo_entidad(), e.get());
@@ -999,12 +996,23 @@ inline void dibujar_panel_guardado(int px, int py_base, int ancho_panel, Font fu
         DrawTextEx(fuente, "[ENTER] Guardar  [ESC] Cancelar",
                  {panel.x + 10, panel.y + 148}, 11, 1, ui_guardado::INACTIVO);
     } else if (modo_panel_guardado == ModoPanelGuardado::LISTA_PARTIDAS) {
+        int total = static_cast<int>(partidas_guardadas.size());
+        int max_scroll = std::max(0, total - PARTIDAS_VISIBLES);
+
+        // Rueda del mouse: desplaza la lista si el cursor esta sobre el panel.
+        if (CheckCollisionPointRec(mouse, panel)) {
+            float w = GetMouseWheelMove();
+            if (w != 0.0f) scroll_partidas -= static_cast<int>(w);
+        }
+        if (scroll_partidas < 0) scroll_partidas = 0;
+        if (scroll_partidas > max_scroll) scroll_partidas = max_scroll;
+
         DrawTextEx(fuente, "Clic para cargar:", {panel.x + 10, panel.y + 92}, 12, 1, ui_guardado::TEXTO);
         float ly = panel.y + 112;
-        for (size_t i = 0; i < partidas_guardadas.size() && i < 4; ++i) {
+        for (int i = scroll_partidas; i < total && i < scroll_partidas + PARTIDAS_VISIBLES; ++i) {
             Rectangle fila = {panel.x + 10, ly, panel.width - 20, 22};
             bool hot = CheckCollisionPointRec(mouse, fila);
-            bool sel = static_cast<int>(i) == indice_partida_lista;
+            bool sel = i == indice_partida_lista;
             DrawRectangleRec(fila, sel ? ui_guardado::AZUL : (hot ? ui_guardado::CELDA : ColorAlpha(WHITE, 40)));
             DrawText(partidas_guardadas[i].nombre.c_str(),
                      static_cast<int>(fila.x + 6), static_cast<int>(fila.y + 4), 12, ui_guardado::TEXTO);
@@ -1014,7 +1022,20 @@ inline void dibujar_panel_guardado(int px, int py_base, int ancho_panel, Font fu
             DrawText("Sin partidas guardadas", static_cast<int>(panel.x + 10),
                      static_cast<int>(ly), 12, ui_guardado::INACTIVO);
         }
-        DrawTextEx(fuente, "[ESC] Cerrar", {panel.x + 10, panel.y + alto_panel - 22},
+        // Indicadores de scroll (hay mas arriba / abajo) y contador.
+        if (scroll_partidas > 0)
+            DrawText("^", static_cast<int>(panel.x + panel.width - 22),
+                     static_cast<int>(panel.y + 110), 14, ui_guardado::TEXTO);
+        if (scroll_partidas < max_scroll)
+            DrawText("v", static_cast<int>(panel.x + panel.width - 22),
+                     static_cast<int>(panel.y + 112 + PARTIDAS_VISIBLES * 24 - 18), 14, ui_guardado::TEXTO);
+        if (total > PARTIDAS_VISIBLES) {
+            DrawText(TextFormat("%d-%d/%d", scroll_partidas + 1,
+                     std::min(scroll_partidas + PARTIDAS_VISIBLES, total), total),
+                     static_cast<int>(panel.x + panel.width - 70),
+                     static_cast<int>(panel.y + 92), 11, ui_guardado::INACTIVO);
+        }
+        DrawTextEx(fuente, "[ESC] Cerrar  (rueda: scroll)", {panel.x + 10, panel.y + alto_panel - 22},
                    11, 1, ui_guardado::INACTIVO);
     }
 
@@ -1053,6 +1074,7 @@ inline bool manejar_click_panel_guardado(int mx, int my, MotorFisica& motor, Ges
     if (CheckCollisionPointRec(p_click, btn_ver)) {
         refrescar_lista_partidas();
         indice_partida_lista = -1;
+        scroll_partidas = 0;
         modo_panel_guardado = ModoPanelGuardado::LISTA_PARTIDAS;
         return true;
     }
@@ -1065,8 +1087,9 @@ inline bool manejar_click_panel_guardado(int mx, int my, MotorFisica& motor, Ges
     }
 
     if (modo_panel_guardado == ModoPanelGuardado::LISTA_PARTIDAS) {
+        int total = static_cast<int>(partidas_guardadas.size());
         float ly = btn_ver.y + 62;
-        for (size_t i = 0; i < partidas_guardadas.size() && i < 4; ++i) {
+        for (int i = scroll_partidas; i < total && i < scroll_partidas + PARTIDAS_VISIBLES; ++i) {
             Rectangle fila = {btn_ver.x, ly, btn_ver.width, 22};
             if (CheckCollisionPointRec(p_click, fila)) {
                 cargar_partida(motor, gestor, partidas_guardadas[i].ruta_archivo, ancho, alto, contador_bolas);

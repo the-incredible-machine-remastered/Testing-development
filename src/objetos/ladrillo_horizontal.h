@@ -13,7 +13,7 @@ private:
     // REDUCIR desde ALTO_MAX (su valor "fijo" original) hasta ALTO_MIN, pero NO aumentar
     // más allá de ALTO_MAX.
     static constexpr double ANCHO_MIN = 40.0;
-    static constexpr double ANCHO_MAX = 300.0;
+    static constexpr double ANCHO_MAX = 3000.0;
     static constexpr double ALTO_MIN  = 15.0;
     static constexpr double ALTO_MAX  = 40.0;
 

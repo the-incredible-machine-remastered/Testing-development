@@ -19,6 +19,9 @@ private:
 
     bool activada;          // recibió señal de activación
     bool ya_lanzo;          // solo lanza una vez
+    bool balancin_golpeado = false; // la cabeza ya impulso un balancin (una vez)
+    bool cabeza_frenada = false;    // la cabeza choco con algo y se detuvo
+    double cabeza_tope_y = 0.0;     // Y donde la cabeza quedo frenada
     float tapa_angulo;      // animación de apertura de tapa (0 → -90°)
     float tiempo_abierta;   // temporizador para animación post-lanzamiento
 
@@ -59,6 +62,12 @@ public:
     double get_alto()  const { return alto; }
     bool get_activada()  const { return activada; }
     bool get_ya_lanzo()  const { return ya_lanzo; }
+    bool get_balancin_golpeado() const { return balancin_golpeado; }
+    void set_balancin_golpeado()       { balancin_golpeado = true; }
+
+    // La cabeza choco con algo (p.ej. un balancin) y se detiene a esa altura:
+    // deja de subir; luego seguira su fase de bajada normal.
+    void frenar_cabeza_en(double y) { cabeza_frenada = true; cabeza_tope_y = y; }
     void set_ya_lanzo()        { ya_lanzo = true; }
 
     Vector2D get_min() const override { return posicion; }
@@ -96,9 +105,11 @@ public:
             }
         }
         double subida = get_altura_asomada() * frac_altura;
-        double desvio = subida * std::tan(5.0 * MathUtils::TIM_PI / 180.0); // ~5 grados derecha
-        return Vector2D(posicion.x + ancho * 0.5 + desvio,
-                        posicion.y - subida);
+        double desvio = subida * std::tan(10.0 * MathUtils::TIM_PI / 180.0); // ~35 grados derecha
+        double cy = posicion.y - subida;
+        // Si la cabeza choco con algo, no sube mas alla del punto de choque.
+        if (cabeza_frenada && cy < cabeza_tope_y) cy = cabeza_tope_y;
+        return Vector2D(posicion.x + ancho * 0.5 + desvio, cy);
     }
 
     // Velocidad inicial de la cabeza de payaso: sale casi vertical (bien alto) con

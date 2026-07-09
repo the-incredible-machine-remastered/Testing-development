@@ -1,0 +1,19 @@
+tim_save 1
+nombre canon
+ancho 1920
+alto 1080
+gravedad_y 500
+contador_bolas 0
+siguiente_id 16
+ent LADRILLO_HORIZONTAL id=5 x=662 y=301 w=609 h=15 fijo=1
+ent LADRILLO_VERTICAL id=6 x=1251 y=325 w=21 h=325 fijo=1
+ent BALANCIN id=7 x=459 y=449 vx=0 vy=0 ang=-0.261799 omega=0 fijo=1 tipo_menu=BALANCIN largo=200 esp=6 ang0=-0.261799
+ent BOLA id=8 x=501 y=297 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=BOLA_BOLOS r=25 m=60 ci=2 ti=0
+ent CANON id=9 x=740 y=443 ang=0
+ent SOPORTE id=12 x=388 y=620 r=16 fijo=1 tipo_menu=SOPORTE_TORQUE
+ent SOPORTE id=13 x=637 y=619 r=16 fijo=1 tipo_menu=SOPORTE_TORQUE
+ent FOCO id=14 x=623 y=434 r=18
+ent LUPA id=15 x=669 y=436 rango=200
+siguiente_id_evento 1
+evt_grupo id=-1 op=AND
+evt_grupo_fin

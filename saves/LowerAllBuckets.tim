@@ -1,0 +1,24 @@
+tim_save 1
+nombre LowerAllBuckets
+ancho 1920
+alto 1080
+gravedad_y 500
+contador_bolas 0
+siguiente_id 23
+ent LADRILLO_HORIZONTAL id=5 x=600 y=378 w=120 h=19 fijo=1
+ent CUBETA id=6 x=637 y=539 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=CUBETA w=58 h=52
+ent CUBETA id=7 x=843 y=456 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=CUBETA w=58 h=52
+ent CUBETA id=8 x=1029 y=536 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=CUBETA w=58 h=52
+ent SOPORTE id=9 x=1061 y=414 r=16 fijo=1 tipo_menu=SOPORTE_TORQUE
+ent SOPORTE id=10 x=872 y=307 r=16 fijo=1 tipo_menu=SOPORTE_TORQUE
+ent TRAMPOLIN id=11 x=961 y=485 w=80 h=20 fijo=1 tipo_menu=TRAMPOLIN
+ent TIJERA id=12 x=933 y=350.5 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=TIJERA w=100 h=51
+ent CUERDA id=13 aid=8 at=0 bid=7 bt=0 len=495.488 sop=9,10 fijo=1 tipo_menu=CUERDA
+ent GANCHO id=16 x=662 y=412
+ent CUERDA id=17 aid=16 at=5 bid=6 bt=0 len=131.061 sop= fijo=1 tipo_menu=CUERDA
+ent TIJERA id=18 x=602 y=465.5 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=TIJERA w=100 h=51
+ent LADRILLO_HORIZONTAL id=20 x=603 y=710 w=300 h=23 fijo=1
+ent LADRILLO_HORIZONTAL id=21 x=900 y=708 w=270 h=27 fijo=1
+siguiente_id_evento 1
+evt_grupo id=-1 op=AND
+evt_grupo_fin

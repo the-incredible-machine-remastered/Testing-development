@@ -637,17 +637,56 @@ private:
                 }
             }
             // Mientras la cabeza de payaso esta asomada, su hitbox circular puede
-            // encender dinamitas que toque (atraviesa ladrillos: no los mira).
+            // encender dinamitas y GOLPEAR balancines (atraviesa ladrillos: no los mira).
             if (!caja->get_ya_lanzo()) continue;
             Vector2D pc = caja->get_centro_cabeza();
             double rc = caja->get_radio_cabeza();
             double rc2 = (rc) * (rc);
             for (auto* otro : entidades) {
-                auto* dina = dynamic_cast<Dinamita*>(otro);
-                if (!dina) continue;
-                Vector2D dc = dina->get_centro();
-                if ((dc - pc).magnitud_cuadrada() <= rc2 + rc * 40.0) {
-                    dina->encender();
+                // Encender dinamita que toque.
+                if (auto* dina = dynamic_cast<Dinamita*>(otro)) {
+                    Vector2D dc = dina->get_centro();
+                    if ((dc - pc).magnitud_cuadrada() <= rc2 + rc * 40.0) {
+                        dina->encender();
+                    }
+                    continue;
+                }
+                // Golpear balancin: la cabeza empuja hacia ARRIBA el lado que toca,
+                // asi ese extremo sube y eleva la bola que tenga encima. La cabeza se
+                // detiene al chocar (no sigue subiendo).
+                if (auto* bal = dynamic_cast<Balancin*>(otro)) {
+                    if (caja->get_balancin_golpeado()) continue; // una sola vez
+                    Vector2D piv = bal->get_posicion();
+                    Vector2D ext_izq = bal->get_punto_extremo_izquierdo();
+                    Vector2D ext_der = bal->get_punto_extremo_derecho();
+                    double alcance = rc + 26.0;
+                    double d_izq = (pc - ext_izq).magnitud();
+                    double d_der = (pc - ext_der).magnitud();
+                    if (std::min(d_izq, d_der) <= alcance) {
+                        // El lado golpeado SUBE. En Y-down, el extremo derecho esta en
+                        // posicion + (cos,sin)*L/2, asi que sube cuando el angulo DECRECE
+                        // (omega negativo). El izquierdo, al reves.
+                        bool golpea_derecha = (pc.x >= piv.x);
+                        double omega = golpea_derecha ? -4.0 : 4.0; // giro fuerte (al limite)
+                        bal->set_velocidad_angular(omega);
+                        bal->marcar_impacto_si_brusco();
+                        // La cabeza se detiene aqui: fija su tope de altura.
+                        caja->frenar_cabeza_en(pc.y);
+                        caja->set_balancin_golpeado();
+
+                        // La bola apoyada en el extremo que SUBE sale en parabola hacia
+                        // el lado del golpe (no recto arriba): componente horizontal fuerte.
+                        Vector2D ext_sube = golpea_derecha ? ext_der : ext_izq;
+                        double vx = golpea_derecha ? 620.0 : -620.0;
+                        for (auto* obj : entidades) {
+                            if (obj->get_tipo_entidad() != TipoEntidadJuego::BOLA) continue;
+                            Vector2D bp = obj->get_posicion();
+                            if ((bp - ext_sube).magnitud() <= 60.0 && bp.y <= ext_sube.y + 22.0) {
+                                obj->set_velocidad(Vector2D(vx, -640.0)); // parabola lateral
+                                obj->set_velocidad_angular(4.0);
+                            }
+                        }
+                    }
                 }
             }
         }

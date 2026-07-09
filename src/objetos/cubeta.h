@@ -5,6 +5,8 @@
 
 #include "../core/entidad_fisica.h"
 #include "../sistema/assets_extern.h"
+#include <cmath>
+#include <algorithm>
 
 class Cubeta : public EntidadFisica {
 private:
@@ -15,11 +17,23 @@ public:
     Cubeta(int id, Vector2D pos_inicial, double w = 58.0, double h = 52.0, double m = 25.0)
         : EntidadFisica(id, pos_inicial, m, TipoForma::AABB, false),
           ancho(w), alto(h) {
-        set_restitucion(0.15);
-        set_friccion(0.55);
-        set_amortiguamiento(0.01);
+        set_restitucion(0.05);   // apenas rebota al caer
+        set_friccion(0.95);      // agarra el suelo: casi no se resbala
+        set_amortiguamiento(0.02);
         set_inercia((1.0 / 12.0) * m * (w * w + h * h));
         tipo_menu = TipoObjetoMenu::CUBETA;
+    }
+
+    // Amortigua la deriva horizontal lenta: si la cubeta casi no se mueve en
+    // vertical (apoyada / cuerda floja) pero desliza en horizontal, frena esa
+    // deriva para que no se resbale sola sin fin.
+    void actualizar_fisica(double dt) override {
+        EntidadFisica::actualizar_fisica(dt);
+        Vector2D v = get_velocidad();
+        if (std::abs(v.y) < 12.0 && std::abs(v.x) > 0.5) {
+            double factor = std::max(0.0, 1.0 - 8.0 * dt); // frenado horizontal fuerte
+            set_velocidad(Vector2D(v.x * factor, v.y));
+        }
     }
 
     double get_ancho() const { return ancho; }
