@@ -3840,7 +3840,10 @@ void cargar_nivel_campana(MotorFisica& motor, int lvl_idx) {
     if (lvl_idx == 0) path = "Assets/campaign/1_primer_impacto.tim";
     else if (lvl_idx == 1) path = "Assets/campaign/2_rebote_perfecto.tim";
     else if (lvl_idx == 2) path = "Assets/campaign/3_el_soplido.tim";
-    else path = "Assets/campaign/4_messi_gol_gol_gol.tim";
+    else if (lvl_idx == 3) path = "Assets/campaign/4_messi_gol_gol_gol.tim";
+    else if (lvl_idx == 4) path = "Assets/campaign/5_bajar_cubetas.tim";
+    else if (lvl_idx == 5) path = "Assets/campaign/6_ball_in_hoop.tim";
+    else path = "Assets/campaign/7_canon.tim";
 
     if (FileExists(path.c_str())) {
         int w = ANCHO;
@@ -3964,10 +3967,14 @@ void dibujar_seleccion_niveles(MotorFisica& motor) {
             { "1. Primer Impacto", "Entiende la gravedad haciendo caer", "una pelota dentro de la cubeta.", "FACIL", GREEN },
             { "2. Rebote Perfecto", "Utiliza el trampolin para desviar", "la trayectoria de la bola.", "FACIL", GREEN },
             { "3. El Soplido", "Usa la corriente de viento del", "ventilador para empujar objetos.", "MEDIO", ORANGE },
-            { "4. Messi gol gol gol", "Ayuda a Messi a meter un golazo", "usando los trampolines.", "DIFICIL", RED }
+            { "4. Messi gol gol gol", "Ayuda a Messi a meter un golazo", "usando los trampolines.", "DIFICIL", RED },
+            { "5. Bajar las Cubetas", "Haz que las 3 cubetas bajen", "y toquen la plataforma.", "MEDIO", ORANGE },
+            { "6. Ball in Hoop", "Encesta la bola usando las", "cintas y los ladrillos.", "DIFICIL", RED },
+            { "7. Canon", "Dispara el canon con la cadena", "de luz para acertar.", "FACIL", GREEN }
         };
-        
-        for (int i = 0; i < 4; ++i) {
+        const int NUM_NIVELES_CAMPANA = 7;
+
+        for (int i = 0; i < NUM_NIVELES_CAMPANA; ++i) {
             int r = i / cols;
             int c = i % cols;
             float x = content_x + c * (card_w + spacing_x);
@@ -4218,7 +4225,7 @@ void actualizar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
                 reintentar_nivel_actual(motor);
             }
             else if (CheckCollisionPointRec(mouse_pos, btn_siguiente)) {
-                if (nivel_campana_actual != -1 && nivel_campana_actual < 3) {
+                if (nivel_campana_actual != -1 && nivel_campana_actual < 6) {
                     cargar_nivel_campana(motor, nivel_campana_actual + 1);
                     gestor_eventos.victoria_alcanzada = false;
                     gestor_eventos.timer_victoria = 0.0f;
@@ -5298,7 +5305,7 @@ void dibujar_juego_core(MotorFisica& motor, bool es_modo_nivel) {
         
         Vector2 mouse_pos = GetMousePosition();
         bool hover_reintentar = CheckCollisionPointRec(mouse_pos, btn_reintentar);
-        bool hover_siguiente = CheckCollisionPointRec(mouse_pos, btn_siguiente) && (nivel_campana_actual != -1 && nivel_campana_actual < 3);
+        bool hover_siguiente = CheckCollisionPointRec(mouse_pos, btn_siguiente) && (nivel_campana_actual != -1 && nivel_campana_actual < 6);
         bool hover_salir = CheckCollisionPointRec(mouse_pos, btn_salir);
         
         auto dibujar_boton = [&](Rectangle btn, const char* text, Color bg, Color border, Color text_color, bool is_hovered, int icon_type) {

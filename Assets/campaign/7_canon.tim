@@ -1,0 +1,38 @@
+tim_save 1
+nombre canon
+ancho 1920
+alto 1080
+gravedad_y 500
+contador_bolas 0
+siguiente_id 55
+ent LADRILLO_HORIZONTAL id=5 x=662 y=301 w=609 h=27 fijo=1
+ent LADRILLO_VERTICAL id=6 x=1251 y=324 w=21 h=325 fijo=1
+ent CANON id=9 x=718 y=440 ang=-20
+ent LADRILLO_HORIZONTAL id=17 x=643 y=511 w=383 h=23 fijo=1
+ent LADRILLO_VERTICAL id=18 x=1134 y=420 w=26 h=176 fijo=1
+ent CANON id=19 x=1105 y=688 ang=200
+ent LADRILLO_VERTICAL id=20 x=644 y=534 w=24 h=201 fijo=1
+ent LADRILLO_VERTICAL id=21 x=780 y=645 w=36 h=106 fijo=1
+ent CANON id=22 x=820 y=818 ang=-10
+ent LINTERNA id=23 x=563 y=445 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=LINTERNA deg=0
+ent BOLA_BEISBOL id=24 x=562 y=296 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=BOLA_TENIS r=12
+ent LUPA id=33 x=70 y=70 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=LUPA rango=200
+ent LUPA id=34 x=134 y=70 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=LUPA rango=200
+ent LUPA id=35 x=198 y=70 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=LUPA rango=200
+ent LINTERNA id=36 x=70 y=134 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=LINTERNA deg=180
+ent LINTERNA id=37 x=134 y=134 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=LINTERNA deg=180
+ent ZONA_META id=38 x=1320 y=811 w=80 h=80 fijo=1 tipo_menu=32
+ent LINTERNA id=40 x=198 y=134 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=LINTERNA deg=180
+ent LINTERNA id=41 x=70 y=198 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=LINTERNA deg=180
+ent LUPA id=43 x=134 y=198 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=LUPA rango=200
+ent LUPA id=44 x=198 y=198 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=LUPA rango=200
+ent LUPA id=45 x=70 y=262 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=LUPA rango=200
+ent LINTERNA id=49 x=70 y=70 vx=0 vy=0 ang=0 omega=0 fijo=0 tipo_menu=LINTERNA reserv=1 deg=180
+ent LUPA id=51 x=134 y=70 vx=0 vy=0 ang=0 omega=0 fijo=0 tipo_menu=LUPA reserv=1 rango=200
+ent LUPA id=52 x=198 y=70 vx=0 vy=0 ang=0 omega=0 fijo=0 tipo_menu=LUPA reserv=1 rango=200
+ent LUPA id=53 x=70 y=134 vx=0 vy=0 ang=0 omega=0 fijo=0 tipo_menu=LUPA reserv=1 rango=200
+ent LINTERNA id=54 x=134 y=134 vx=0 vy=0 ang=0 omega=0 fijo=0 tipo_menu=LINTERNA reserv=1 deg=180
+siguiente_id_evento 2
+evt_grupo id=-1 op=AND
+  evt_cond id=1 tipo=TIPO_EN_ZONA ez=38 te=BOLA
+evt_grupo_fin

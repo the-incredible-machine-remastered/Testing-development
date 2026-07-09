@@ -1,0 +1,37 @@
+tim_save 1
+nombre BallInHoop
+ancho 1920
+alto 1080
+gravedad_y 500
+contador_bolas 0
+siguiente_id 44
+ent CONVEYOR id=5 x=525 y=729 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=24 w=204 h=24 der=1 act=0 vel=0 ancl=1
+ent BOLA id=6 x=555 y=703 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=1 r=25 m=60 ci=2 ti=0
+ent BOLA id=8 x=413 y=663 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=1 r=25 m=60 ci=2 ti=0
+ent CONVEYOR id=9 x=748 y=578 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=24 w=201 h=24 der=1 act=0 vel=0 ancl=1
+ent CONVEYOR id=10 x=913 y=383 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=24 w=199 h=24 der=1 act=0 vel=0 ancl=1
+ent BOLA id=11 x=944 y=351 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=2 r=33 m=12 ci=1 ti=2
+ent BOLA id=12 x=772 y=550 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=1 r=25 m=60 ci=2 ti=0
+ent ESCALON id=14 x=1155 y=496 b=50 h=26 inv=0 fijo=1
+ent ESCALON id=15 x=1286 y=494 b=50 h=26 inv=1 fijo=1
+ent LADRILLO_VERTICAL id=16 x=1335 y=399 w=20 h=155 fijo=1
+ent LADRILLO_HORIZONTAL id=18 x=514 y=822 w=120 h=26 fijo=1
+ent LADRILLO_HORIZONTAL id=19 x=633 y=822 w=120 h=27 fijo=1
+ent LADRILLO_HORIZONTAL id=20 x=753 y=820 w=120 h=29 fijo=1
+ent LADRILLO_HORIZONTAL id=21 x=872 y=821 w=120 h=26 fijo=1
+ent LADRILLO_HORIZONTAL id=22 x=991 y=820 w=120 h=28 fijo=1
+ent LADRILLO_HORIZONTAL id=23 x=1112 y=822 w=120 h=25 fijo=1
+ent LADRILLO_HORIZONTAL id=24 x=1232 y=821 w=120 h=29 fijo=1
+ent LADRILLO_HORIZONTAL id=25 x=1335 y=820 w=120 h=29 fijo=1
+ent ZONA_META id=28 x=1238 y=511 w=80 h=80 fijo=1 tipo_menu=31
+ent RUEDA_HAMSTER id=35 x=70 y=70 vx=0 vy=0 ang=0 omega=0 fijo=0 tipo_menu=28 inv=1 r=35 corr=0 sh=0
+ent RUEDA_HAMSTER id=36 x=134 y=70 vx=0 vy=0 ang=0 omega=0 fijo=0 tipo_menu=28 inv=1 r=35 corr=0 sh=0
+ent RUEDA_HAMSTER id=37 x=198 y=70 vx=0 vy=0 ang=0 omega=0 fijo=0 tipo_menu=28 inv=1 r=35 corr=0 sh=0
+ent ESCALON id=39 x=1281 y=494 b=50 h=26 inv=1 fijo=1
+ent ESCALON id=41 x=1282 y=493 b=50 h=26 inv=1 fijo=1
+ent ESCALON id=43 x=1273 y=497 b=50 h=26 inv=1 fijo=1
+inv_reserva 33 3
+siguiente_id_evento 2
+evt_grupo id=-1 op=AND
+  evt_cond id=1 tipo=TIPO_EN_ZONA ez=28 te=BOLA
+evt_grupo_fin
