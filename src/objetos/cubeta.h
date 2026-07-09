@@ -51,16 +51,23 @@ public:
         float pw = static_cast<float>(ancho);
         float ph = static_cast<float>(alto);
 
-        DrawRectangleRec({px + 5.0f, py + 12.0f, pw - 10.0f, ph - 12.0f},
-                         Color{112, 140, 155, 255});
-        DrawRectangleLinesEx({px + 5.0f, py + 12.0f, pw - 10.0f, ph - 12.0f},
-                             2.0f, Color{45, 55, 65, 255});
-        DrawLineEx({px + 9.0f, py + 14.0f}, {px + pw * 0.5f, py + 4.0f},
-                   2.5f, Color{215, 225, 230, 255});
-        DrawLineEx({px + pw - 9.0f, py + 14.0f}, {px + pw * 0.5f, py + 4.0f},
-                   2.5f, Color{215, 225, 230, 255});
-        DrawCircle(static_cast<int>(px + pw * 0.5f), static_cast<int>(py + 4.0f),
-                   5.0f, Color{35, 40, 45, 255});
+        if (tex_cubeta.id > 0) {
+            Rectangle src = {0.0f, 0.0f, (float)tex_cubeta.width, (float)tex_cubeta.height};
+            Rectangle dst = {px + pw / 2.0f, py + ph / 2.0f, pw, ph};
+            Vector2 origin = {pw / 2.0f, ph / 2.0f};
+            DrawTexturePro(tex_cubeta, src, dst, origin, 0.0f, WHITE);
+        } else {
+            DrawRectangleRec({px + 5.0f, py + 12.0f, pw - 10.0f, ph - 12.0f},
+                             Color{112, 140, 155, 255});
+            DrawRectangleLinesEx({px + 5.0f, py + 12.0f, pw - 10.0f, ph - 12.0f},
+                                 2.0f, Color{45, 55, 65, 255});
+            DrawLineEx({px + 9.0f, py + 14.0f}, {px + pw * 0.5f, py + 4.0f},
+                       2.5f, Color{215, 225, 230, 255});
+            DrawLineEx({px + pw - 9.0f, py + 14.0f}, {px + pw * 0.5f, py + 4.0f},
+                       2.5f, Color{215, 225, 230, 255});
+            DrawCircle(static_cast<int>(px + pw * 0.5f), static_cast<int>(py + 4.0f),
+                       5.0f, Color{35, 40, 45, 255});
+        }
 
         if (debug) {
             DrawRectangleLines(static_cast<int>(px), static_cast<int>(py),

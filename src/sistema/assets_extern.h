@@ -61,4 +61,5 @@ extern Texture2D tex_gato_caminando;
 extern Texture2D tex_gato_corriendo;
 extern Texture2D tex_rata_quieta;
 extern Texture2D tex_rata_caminando;
+extern Texture2D tex_cubeta;
 

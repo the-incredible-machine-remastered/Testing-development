@@ -114,14 +114,11 @@ public:
 
         // 5. Draw Hamster inside the cage
         // Hamster runs inside the wheel. Its angular position is offset from the center.
-        double hamster_angle = 0.0;
+        double hamster_angle = MathUtils::TIM_PI / 2.0; // Rest at the very bottom
         if (hamster_corriendo) {
-            // Keep running at a speed relative to animation time, oscillating slightly up and down
-            double offset_side = sentido_horario ? 0.6 : -0.6;
-            hamster_angle = -MathUtils::TIM_PI / 2.0 + offset_side + 0.3 * std::sin(hamster_anim_time * 12.0);
-        } else {
-            // Rest at the very bottom
-            hamster_angle = MathUtils::TIM_PI / 2.0;
+            // Climbs slightly to the side in the direction of rotation
+            double offset_side = sentido_horario ? -0.35 : 0.35;
+            hamster_angle += offset_side;
         }
 
         float h_dist = r - 12.0f; // Distance from center
@@ -129,33 +126,61 @@ public:
         float hy = py + h_dist * std::sin(hamster_angle);
 
         // Draw Hamster body
-        Color hamster_color = hamster_corriendo ? Color{215, 145, 80, 255} : Color{180, 130, 90, 255};
-        DrawCircle(static_cast<int>(hx), static_cast<int>(hy), 7.0f, hamster_color);
-        
-        // Head angle offset depends on direction of movement (sentido_horario)
-        double head_offset = sentido_horario ? MathUtils::TIM_PI / 2.0 : -MathUtils::TIM_PI / 2.0;
-        double head_angle = hamster_angle + head_offset;
-        DrawCircle(static_cast<int>(hx + 4.0f * std::cos(head_angle)),
-                   static_cast<int>(hy + 4.0f * std::sin(head_angle)), 4.5f, hamster_color); // Head
-        
-        // Draw Hamster ears
-        DrawCircle(static_cast<int>(hx + 2.0f * std::cos(head_angle) - 3.0f * std::sin(head_angle)),
-                   static_cast<int>(hy + 2.0f * std::sin(head_angle) + 3.0f * std::cos(head_angle)),
-                   2.0f, Color{235, 180, 180, 255});
-        
-        // Draw little running legs if active (micro-animation!)
-        if (hamster_corriendo) {
-            float leg_cycle = std::sin(hamster_anim_time * 24.0);
-            float leg_offset = leg_cycle * 3.0f;
-            DrawLineEx({hx - 3.0f, hy + 5.0f}, {hx - 3.0f + leg_offset, hy + 9.0f}, 1.5f, hamster_color);
-            DrawLineEx({hx + 3.0f, hy + 5.0f}, {hx + 3.0f - leg_offset, hy + 9.0f}, 1.5f, hamster_color);
-        } else {
-            // Dormido (asleep): draw zZZ particles!
+        float d = sentido_horario ? 1.0f : -1.0f;
+        if (hamster_corriendo && tex_rata_caminando.id > 0) {
+            int frame = ((int)(hamster_anim_time * 16.0)) % 8;
+            int frame_w = tex_rata_caminando.width / 8;
+            int frame_h = tex_rata_caminando.height;
+            float hw = 28.0f;
+            float hh = 16.0f;
+            Rectangle src = {(float)(frame * frame_w), 0.0f, (float)frame_w * d, (float)frame_h};
+            Rectangle dst = {hx, hy, hw, hh};
+            Vector2 origin = {hw / 2.0f, hh / 2.0f};
+            DrawTexturePro(tex_rata_caminando, src, dst, origin, 0.0f, WHITE);
+        } else if (!hamster_corriendo && tex_rata_quieta.id > 0) {
+            float hw = 28.0f;
+            float hh = 16.0f;
+            Rectangle src = {0.0f, 0.0f, (float)tex_rata_quieta.width * d, (float)tex_rata_quieta.height};
+            Rectangle dst = {hx, hy, hw, hh};
+            Vector2 origin = {hw / 2.0f, hh / 2.0f};
+            DrawTexturePro(tex_rata_quieta, src, dst, origin, 0.0f, WHITE);
+            
             float sleep_cycle = std::fmod(GetTime(), 3.0f);
             if (sleep_cycle < 1.5f) {
-                float z_offset_x = 10.0f + sleep_cycle * 8.0f;
+                float z_offset_x = 8.0f + sleep_cycle * 8.0f;
                 float z_offset_y = -8.0f - sleep_cycle * 12.0f;
                 DrawText("zZ", static_cast<int>(hx + z_offset_x), static_cast<int>(hy + z_offset_y), 9, Color{140, 160, 190, 200});
+            }
+        } else {
+            // Fallback (original procedural drawing code)
+            Color hamster_color = hamster_corriendo ? Color{215, 145, 80, 255} : Color{180, 130, 90, 255};
+            DrawCircle(static_cast<int>(hx), static_cast<int>(hy), 7.0f, hamster_color);
+            
+            // Head angle offset depends on direction of movement (sentido_horario)
+            double head_offset = sentido_horario ? MathUtils::TIM_PI / 2.0 : -MathUtils::TIM_PI / 2.0;
+            double head_angle = hamster_angle + head_offset;
+            DrawCircle(static_cast<int>(hx + 4.0f * std::cos(head_angle)),
+                       static_cast<int>(hy + 4.0f * std::sin(head_angle)), 4.5f, hamster_color); // Head
+            
+            // Draw Hamster ears
+            DrawCircle(static_cast<int>(hx + 2.0f * std::cos(head_angle) - 3.0f * std::sin(head_angle)),
+                       static_cast<int>(hy + 2.0f * std::sin(head_angle) + 3.0f * std::cos(head_angle)),
+                       2.0f, Color{235, 180, 180, 255});
+            
+            // Draw little running legs if active (micro-animation!)
+            if (hamster_corriendo) {
+                float leg_cycle = std::sin(hamster_anim_time * 24.0);
+                float leg_offset = leg_cycle * 3.0f;
+                DrawLineEx({hx - 3.0f, hy + 5.0f}, {hx - 3.0f + leg_offset, hy + 9.0f}, 1.5f, hamster_color);
+                DrawLineEx({hx + 3.0f, hy + 5.0f}, {hx + 3.0f - leg_offset, hy + 9.0f}, 1.5f, hamster_color);
+            } else {
+                // Dormido (asleep): draw zZZ particles!
+                float sleep_cycle = std::fmod(GetTime(), 3.0f);
+                if (sleep_cycle < 1.5f) {
+                    float z_offset_x = 10.0f + sleep_cycle * 8.0f;
+                    float z_offset_y = -8.0f - sleep_cycle * 12.0f;
+                    DrawText("zZ", static_cast<int>(hx + z_offset_x), static_cast<int>(hy + z_offset_y), 9, Color{140, 160, 190, 200});
+                }
             }
         }
     }

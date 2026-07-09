@@ -704,6 +704,7 @@ Texture2D tex_gato_caminando;
 Texture2D tex_gato_corriendo;
 Texture2D tex_rata_quieta;
 Texture2D tex_rata_caminando;
+Texture2D tex_cubeta;
 
 // Animaciones del SeguidorBooster
 Animacion* anim_seguidor_corriendo = nullptr;
@@ -1424,20 +1425,29 @@ void dibujar_icono_objeto(TipoObjetoMenu tipo, float cx, float cy, float escala,
             break;
         }
         case TipoObjetoMenu::CUBETA: {
-            float w = 34.0f * escala;
-            float h = 30.0f * escala;
-            float x = cx - w / 2.0f;
-            float y = cy - h / 2.0f + 4.0f * escala;
-            DrawRectangleRec({x + 4 * escala, y + 6 * escala, w - 8 * escala, h - 6 * escala},
-                             tint(Color{120, 145, 160, 255}));
-            DrawRectangleLinesEx({x + 4 * escala, y + 6 * escala, w - 8 * escala, h - 6 * escala},
-                                 1.5f, tint(Color{50, 60, 70, 255}));
-            DrawLineEx({x + 6 * escala, y + 8 * escala}, {x + w / 2, y - 4 * escala},
-                       2.0f, tint(Color{210, 220, 225, 255}));
-            DrawLineEx({x + w - 6 * escala, y + 8 * escala}, {x + w / 2, y - 4 * escala},
-                       2.0f, tint(Color{210, 220, 225, 255}));
-            DrawCircle(static_cast<int>(cx), static_cast<int>(y - 4 * escala), 3.5f * escala,
-                       tint(Color{40, 45, 50, 255}));
+            if (tex_cubeta.id > 0) {
+                float w = 26.0f * escala;
+                float h = w * ((float)tex_cubeta.height / (float)tex_cubeta.width);
+                Rectangle src = {0.0f, 0.0f, (float)tex_cubeta.width, (float)tex_cubeta.height};
+                Rectangle dst = {cx, cy + 2.0f * escala, w, h};
+                Vector2 origin = {w / 2.0f, h / 2.0f};
+                DrawTexturePro(tex_cubeta, src, dst, origin, 0.0f, tint(WHITE));
+            } else {
+                float w = 34.0f * escala;
+                float h = 30.0f * escala;
+                float x = cx - w / 2.0f;
+                float y = cy - h / 2.0f + 4.0f * escala;
+                DrawRectangleRec({x + 4 * escala, y + 6 * escala, w - 8 * escala, h - 6 * escala},
+                                 tint(Color{120, 145, 160, 255}));
+                DrawRectangleLinesEx({x + 4 * escala, y + 6 * escala, w - 8 * escala, h - 6 * escala},
+                                     1.5f, tint(Color{50, 60, 70, 255}));
+                DrawLineEx({x + 6 * escala, y + 8 * escala}, {x + w / 2, y - 4 * escala},
+                           2.0f, tint(Color{210, 220, 225, 255}));
+                DrawLineEx({x + w - 6 * escala, y + 8 * escala}, {x + w / 2, y - 4 * escala},
+                           2.0f, tint(Color{210, 220, 225, 255}));
+                DrawCircle(static_cast<int>(cx), static_cast<int>(y - 4 * escala), 3.5f * escala,
+                           tint(Color{40, 45, 50, 255}));
+            }
             break;
         }
         case TipoObjetoMenu::CUERDA: {
@@ -3162,6 +3172,7 @@ void cargandoTexturas() {
     tex_gato_corriendo = cargar_textura_datos("Assets/Objetos/anim/gato-anim-run.png");
     tex_rata_quieta = cargar_textura_datos("Assets/Objetos/anim/rata.png");
     tex_rata_caminando = cargar_textura_datos("Assets/Objetos/anim/rata-animacion.png");
+    tex_cubeta = cargar_textura_datos("Assets/Objetos/cubeta.png");
 
 
 
@@ -3504,9 +3515,9 @@ void dibujar_menu_principal(MotorFisica& motor) {
 
     // Título y Subtítulo
     if (tex_menu_titulo.id > 0) {
-        float logo_w = 600.0f ; // scaled size
+        float logo_w = 500.0f ; // scaled size
         float logo_h = logo_w * (static_cast<float>(tex_menu_titulo.height) / tex_menu_titulo.width);
-        Rectangle logo_rect = { (ANCHO - logo_w)/2.0f, ALTO * 0.15f - 100.0f, logo_w, logo_h };
+        Rectangle logo_rect = { (ANCHO - logo_w)/2.0f +10, ALTO * 0.15f - 100.0f, logo_w, logo_h };
         DrawTexturePro(tex_menu_titulo, {0.0f, 0.0f, (float)tex_menu_titulo.width, (float)tex_menu_titulo.height}, logo_rect, {0.0f, 0.0f}, 0.0f, WHITE);
     } else {
         const char* titulo = "THE INCREDIBLE MACHINE";
@@ -5641,6 +5652,7 @@ int main() {
     if (tex_gato_corriendo.id > 0) UnloadTexture(tex_gato_corriendo);
     if (tex_rata_quieta.id > 0) UnloadTexture(tex_rata_quieta);
     if (tex_rata_caminando.id > 0) UnloadTexture(tex_rata_caminando);
+    if (tex_cubeta.id > 0) UnloadTexture(tex_cubeta);
 
     if (tex_seguidor_quieto.id > 0) UnloadTexture(tex_seguidor_quieto);
     if (tex_seguidor_corriendo.id > 0) UnloadTexture(tex_seguidor_corriendo);
@@ -5699,7 +5711,6 @@ int main() {
     if (tex_robotin_anim.id > 0) {
         UnloadTexture(tex_robotin_anim);
     }
-
 
     if (tex_trampolin.id > 0) UnloadTexture(tex_trampolin);
     if (tex_balancin_base.id > 0) UnloadTexture(tex_balancin_base);
