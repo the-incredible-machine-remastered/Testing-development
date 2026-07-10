@@ -4,16 +4,16 @@ ancho 1920
 alto 1080
 gravedad_y 500
 contador_bolas 0
-siguiente_id 56
+siguiente_id 66
 ent LADRILLO_HORIZONTAL id=5 x=662 y=301 w=609 h=27 fijo=1
 ent LADRILLO_VERTICAL id=6 x=1251 y=324 w=21 h=325 fijo=1
-ent CANON id=9 x=705 y=439 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=CANON deg=0
+ent CANON id=9 x=703 y=438 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=CANON deg=-10
 ent LADRILLO_HORIZONTAL id=17 x=643 y=511 w=383 h=23 fijo=1
 ent LADRILLO_VERTICAL id=18 x=1134 y=420 w=26 h=176 fijo=1
-ent CANON id=19 x=1105 y=688 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=CANON deg=180
+ent CANON id=19 x=1121 y=669 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=CANON deg=200
 ent LADRILLO_VERTICAL id=20 x=644 y=534 w=24 h=201 fijo=1
 ent LADRILLO_VERTICAL id=21 x=780 y=645 w=36 h=106 fijo=1
-ent CANON id=22 x=820 y=818 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=CANON deg=0
+ent CANON id=22 x=829 y=882 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=CANON deg=-20
 ent LINTERNA id=23 x=563 y=445 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=LINTERNA deg=0
 ent BOLA_BEISBOL id=24 x=562 y=296 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=BOLA_TENIS r=12
 ent LUPA id=33 x=70 y=70 vx=0 vy=0 ang=0 omega=0 fijo=1 tipo_menu=LUPA rango=200

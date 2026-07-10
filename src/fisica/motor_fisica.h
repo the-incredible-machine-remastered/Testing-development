@@ -791,18 +791,22 @@ private:
             }
         }
 
-        // 3. Haz de LINTERNA encendida -> enciende la mecha de cañones que cruce
-        //    (igual que la lupa, pero la linterna emite su propio haz direccional).
+        // 3. Haz de LINTERNA encendida -> ACTIVA una Lupa que su haz cruce (como el
+        //    foco, pero por haz direccional en vez de proximidad). La linterna NO
+        //    enciende cañones directamente: la luz debe pasar por una lupa.
         for (auto* e : entidades) {
             auto* lin = dynamic_cast<Linterna*>(e);
             if (!lin || !lin->get_encendida()) continue;
             Vector2D origen = lin->get_punto_boca();
             Vector2D fin = lin->get_punto_final();
             for (auto* e2 : entidades) {
-                auto* canon = dynamic_cast<Canon*>(e2);
-                if (!canon || canon->get_ya_disparo()) continue;
-                if (segmento_cruza_aabb(origen, fin, canon->get_min(), canon->get_max()))
-                    canon->encender_mecha();
+                auto* lupa = dynamic_cast<Lupa*>(e2);
+                if (!lupa) continue;
+                if (segmento_cruza_aabb(origen, fin, lupa->get_min(), lupa->get_max())) {
+                    // El haz de la lupa sale alejandose de la linterna (segun el lado).
+                    lupa->set_dir_haz(lupa->get_posicion().x - origen.x);
+                    lupa->activar();
+                }
             }
         }
     }
