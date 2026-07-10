@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>TIM — Motor de Física</title>
   <meta name="description" content="TIM: The Incredible Machine Remastered — simulador de física 2D interactivo." />
   <style>
@@ -17,9 +17,16 @@
       font-family: 'Segoe UI', system-ui, sans-serif;
       color: #c8c8dc;
       overflow: hidden;
+      touch-action: none;
+    }
+    #canvas-wrapper {
+      display: none;
+      position: relative;
+      /* transform-origin top-left so scaling math is simple */
+      transform-origin: top left;
     }
     #canvas {
-      display: none;
+      display: block;
       border: 2px solid #2e2e50;
       box-shadow: 0 0 60px rgba(100, 80, 255, 0.25);
       image-rendering: pixelated;
@@ -102,7 +109,9 @@
     <div id="error-box"></div>
   </div>
 
-  <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+  <div id="canvas-wrapper">
+    <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+  </div>
 
   <script>
     var Module = {
@@ -117,7 +126,9 @@
 
       onRuntimeInitialized: function() {
         document.getElementById('loading-screen').style.display = 'none';
-        document.getElementById('canvas').style.display = 'block';
+        var wrapper = document.getElementById('canvas-wrapper');
+        wrapper.style.display = 'block';
+        scaleCanvas();
       },
 
       setStatus: function(text) {
@@ -148,6 +159,32 @@
       },
       doNotCaptureKeyboard: false,
     };
+
+    function scaleCanvas() {
+      var canvas  = document.getElementById('canvas');
+      var wrapper = document.getElementById('canvas-wrapper');
+      if (!canvas.width || !canvas.height) return;
+
+      var availW = window.innerWidth;
+      var availH = window.innerHeight;
+      var scale  = Math.min(availW / canvas.width, availH / canvas.height);
+
+      wrapper.style.width  = canvas.width  + 'px';
+      wrapper.style.height = canvas.height + 'px';
+      wrapper.style.transform = 'scale(' + scale + ')';
+
+      /* centre the scaled wrapper */
+      var offsetX = (availW - canvas.width  * scale) / 2;
+      var offsetY = (availH - canvas.height * scale) / 2;
+      wrapper.style.position = 'fixed';
+      wrapper.style.left = offsetX + 'px';
+      wrapper.style.top  = offsetY + 'px';
+    }
+
+    window.addEventListener('resize', scaleCanvas);
+    window.addEventListener('orientationchange', function() {
+      setTimeout(scaleCanvas, 200); /* small delay for orientation to settle */
+    });
   </script>
   <script async src="index.js"></script>
 </body>
