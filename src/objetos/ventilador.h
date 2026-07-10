@@ -124,13 +124,10 @@ public:
 
     std::string serializar() const override {
         std::stringstream ss;
-        ss << "ent VENTILADOR id=" << get_id()
-           << " x=" << posicion.x << " y=" << posicion.y
+        ss << "ent VENTILADOR id=" << get_id() << serializar_base()
            << " w=" << ancho << " h=" << alto
            << " der=" << (mira_derecha() ? 1 : 0)
-           << " banda=" << (controlado_por_banda ? 1 : 0)
-           << " fijo=" << (es_fijo ? 1 : 0)
-           << " tipo_menu=" << static_cast<int>(tipo_menu);
+           << " banda=" << (controlado_por_banda ? 1 : 0);
         return ss.str();
     }
 

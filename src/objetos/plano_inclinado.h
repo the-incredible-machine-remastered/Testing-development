@@ -104,12 +104,9 @@ public:
 
     std::string serializar() const override {
         std::stringstream ss;
-        ss << "ent RAMPA id=" << get_id()
-           << " x=" << posicion.x << " y=" << posicion.y
+        ss << "ent RAMPA id=" << get_id() << serializar_base()
            << " b=" << base_ancho << " h=" << altura_alto
-           << " inv=" << (es_invertido ? 1 : 0)
-           << " fijo=" << (es_fijo ? 1 : 0)
-           << " tipo_menu=" << tipo_objeto_menu_a_string(tipo_menu);
+           << " inv=" << (es_invertido ? 1 : 0);
         return ss.str();
     }
 

@@ -87,11 +87,8 @@ public:
 
     std::string serializar() const override {
         std::stringstream ss;
-        ss << "ent BARRIL id=" << get_id()
-           << " x=" << posicion.x << " y=" << posicion.y
-           << " w=" << ancho << " h=" << alto
-           << " fijo=" << (es_fijo ? 1 : 0)
-           << " tipo_menu=" << tipo_objeto_menu_a_string(tipo_menu);
+        ss << "ent BARRIL id=" << get_id() << serializar_base()
+           << " w=" << ancho << " h=" << alto;
         return ss.str();
     }
 
