@@ -160,26 +160,46 @@
       doNotCaptureKeyboard: false,
     };
 
+    /* ── Tamaños estándar de referencia ──────────────────────────────────
+       Se usan como placeholder ANTES de que Emscripten asigne dimensiones
+       reales al canvas. Una vez que el juego carga, ResizeObserver recalcula
+       con las dimensiones verdaderas automáticamente.
+       Desktop estándar : 1280 × 720  (HD)
+       Mobile estándar  : 390  × 844  (iPhone 12/13/14 — referencia común)
+    ──────────────────────────────────────────────────────────────────── */
+    var DEFAULT_DESKTOP_W = 1280, DEFAULT_DESKTOP_H = 720;
+    var DEFAULT_MOBILE_W  = 390,  DEFAULT_MOBILE_H  = 844;
+
+    function isMobileDevice() {
+      return window.innerWidth < 768 || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    }
+
     function scaleCanvas() {
       var canvas  = document.getElementById('canvas');
       var wrapper = document.getElementById('canvas-wrapper');
-      /* canvas.width/height are the logical pixels Emscripten sets;
-         they differ from the CSS clientWidth/clientHeight */
-      if (!canvas.width || !canvas.height) return;
+
+      /* Usa dimensiones reales del canvas si Emscripten ya las seteó;
+         de lo contrario usa el tamaño estándar según el dispositivo. */
+      var logW = canvas.width  || (isMobileDevice() ? DEFAULT_MOBILE_W  : DEFAULT_DESKTOP_W);
+      var logH = canvas.height || (isMobileDevice() ? DEFAULT_MOBILE_H  : DEFAULT_DESKTOP_H);
 
       var availW = window.innerWidth;
       var availH = window.innerHeight;
-      var scale  = Math.min(availW / canvas.width, availH / canvas.height);
+      var scale  = Math.min(availW / logW, availH / logH);
 
-      wrapper.style.width     = canvas.width  + 'px';
-      wrapper.style.height    = canvas.height + 'px';
+      wrapper.style.width     = logW + 'px';
+      wrapper.style.height    = logH + 'px';
       wrapper.style.transform = 'scale(' + scale + ')';
 
       /* centre the scaled wrapper */
       wrapper.style.position = 'fixed';
-      wrapper.style.left = ((availW - canvas.width  * scale) / 2) + 'px';
-      wrapper.style.top  = ((availH - canvas.height * scale) / 2) + 'px';
+      wrapper.style.left = ((availW - logW * scale) / 2) + 'px';
+      wrapper.style.top  = ((availH - logH * scale) / 2) + 'px';
     }
+
+    /* Aplica el tamaño placeholder inmediatamente al cargar la página,
+       sin esperar a Emscripten ni a ningún evento de resize. */
+    scaleCanvas();
 
     /* ResizeObserver fires the moment Emscripten sets canvas dimensions,
        no matter when that happens — fixes the "needs a resize/rotate first" bug. */
